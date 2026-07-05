@@ -24,6 +24,6 @@ export async function POST(request) {
     return Response.json({ uspeh: true });
   } catch (e) {
     console.error("Napaka pri shranjevanju v Redis:", e);
-    return Response.json({ napaka: "Napaka pri shranjevanju.", podrobnosti: String(e && e.message ? e.message : e) }, { status: 500 });
+    return Response.json({ napaka: "Napaka pri shranjevanju." }, { status: 500 });
   }
 }

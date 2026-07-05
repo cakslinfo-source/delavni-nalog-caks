@@ -31,6 +31,7 @@ function novaPostavka() {
     debelina: "",
     kolicina: "1",
     cena: "",
+    popust: "",
   };
 }
 
@@ -141,7 +142,8 @@ function izracunajCenoPostavke(p) {
   if (!skupina) return null;
   const sirina = parseFloat(String(p.sirina).replace(",", "."));
   if (!sirina || sirina <= 0 || sirina > 50) return null;
-  const bracket = skupina.brackets.find((b) => sirina >= b.min && sirina <= b.max);
+  const sirinaZaokrozena = Math.ceil(sirina - 1e-9);
+  const bracket = skupina.brackets.find((b) => sirinaZaokrozena >= b.min && sirinaZaokrozena <= b.max);
   if (!bracket) return null;
   const debelina = Math.round(parseFloat(String(p.debelina).replace(",", ".")));
   if (debelina !== 2 && debelina !== 3) return null;
@@ -150,7 +152,12 @@ function izracunajCenoPostavke(p) {
   const kolicina = parseFloat(String(p.kolicina).replace(",", ".")) || 1;
   if (!dolzina || dolzina <= 0) return null;
   const dolzinaM = (dolzina / 100) * kolicina;
-  return Math.round(dolzinaM * cenaZaM * 100) / 100;
+  let cena = dolzinaM * cenaZaM;
+  const popust = parseFloat(String(p.popust).replace(",", "."));
+  if (popust && popust > 0) {
+    cena = cena * (1 - popust / 100);
+  }
+  return Math.round(cena * 100) / 100;
 }
 
 function m2Postavke(p) {
@@ -464,7 +471,7 @@ export default function DelovniNalogi() {
     const posodobljenePostavke = obrazec.postavke.map((p) => {
       if (p.id !== id) return p;
       const posodobljena = { ...p, [polje]: vrednost };
-      if (["material", "dolzina", "sirina", "debelina", "kolicina"].includes(polje)) {
+      if (["material", "dolzina", "sirina", "debelina", "kolicina", "popust"].includes(polje)) {
         const izracunana = izracunajCenoPostavke(posodobljena);
         if (izracunana !== null) posodobljena.cena = String(izracunana);
       }
@@ -1262,6 +1269,15 @@ export default function DelovniNalogi() {
                       style={{ width: "110px" }}
                       value={p.cena}
                       onChange={(e) => posodobiPostavko(p.id, "cena", e.target.value.replace(/[^0-9.,]/g, ""))}
+                      placeholder="0"
+                      inputMode="decimal"
+                    />
+                    <span className="text-xs text-stone-400 ml-2">Popust (%):</span>
+                    <input
+                      className="postavka-input"
+                      style={{ width: "70px" }}
+                      value={p.popust || ""}
+                      onChange={(e) => posodobiPostavko(p.id, "popust", e.target.value.replace(/[^0-9.,]/g, ""))}
                       placeholder="0"
                       inputMode="decimal"
                     />
