@@ -266,6 +266,15 @@ function obvestiloMailto(nalog) {
   return `mailto:${nalog.email}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besedilo)}`;
 }
 
+function obvestiloSMS(nalog) {
+  const stevilkaCista = (nalog.telefon || "").replace(/[^0-9+]/g, "");
+  const besedilo =
+    `Pozdravljeni ${nalog.stranka}, vaše naročilo (${nalog.stevilka || ""}) v Kamnoseštvu Čakš je pripravljeno za prevzem. Odprto vsak dan 7.00-15.00 ali po dogovoru na 031 235 146. Lep pozdrav, Kamnoseštvo Čakš`;
+  const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const locilo = jeIOS ? "&" : "?";
+  return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besedilo)}`;
+}
+
 function izracunajRazredePolic(nalog) {
   const postavke = (nalog.postavke || []).filter((p) => p.naziv || p.material || p.dolzina);
   const skupine = {};
@@ -653,6 +662,13 @@ export default function DelovniNalogi() {
   const edinstveneStranke = [...new Set(nalogi.map((n) => n.stranka).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "sl")
   );
+
+  function najdiPodatkeStranke(imeStranke) {
+    const ujemanja = nalogi
+      .filter((n) => n.stranka === imeStranke && (n.telefon || n.email))
+      .sort((a, b) => (b.datumVnosa || "").localeCompare(a.datumVnosa || ""));
+    return ujemanja.length ? { telefon: ujemanja[0].telefon || "", email: ujemanja[0].email || "" } : null;
+  }
 
 
   const filtrirani = nalogi.filter((n) => {
@@ -1175,7 +1191,16 @@ export default function DelovniNalogi() {
                 <label className="block text-xs font-medium text-stone-500 mb-1">Stranka *</label>
                 <input
                   value={obrazec.stranka}
-                  onChange={(e) => setObrazec({ ...obrazec, stranka: e.target.value })}
+                  onChange={(e) => {
+                    const ime = e.target.value;
+                    const podatki = najdiPodatkeStranke(ime);
+                    setObrazec({
+                      ...obrazec,
+                      stranka: ime,
+                      telefon: podatki && !obrazec.telefon ? podatki.telefon : obrazec.telefon,
+                      email: podatki && !obrazec.email ? podatki.email : obrazec.email,
+                    });
+                  }}
                   className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
                   placeholder="Ime in priimek / podjetje"
                   list="seznam-strank"
@@ -1612,23 +1637,35 @@ export default function DelovniNalogi() {
               </div>
             )}
 
-            {aktivniNalog.status === "Pripravljeno" && aktivniNalog.email && (
+            {aktivniNalog.status === "Pripravljeno" && (aktivniNalog.email || aktivniNalog.telefon) && (
               <div className="mt-5 bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-red-800 text-sm">
                   <Mail size={16} />
-                  <span>Naročilo je pripravljeno — obvesti stranko po e-pošti.</span>
+                  <span>Naročilo je pripravljeno — obvesti stranko.</span>
                 </div>
-                <a
-                  href={obvestiloMailto(aktivniNalog)}
-                  className="bg-red-500 hover:bg-red-400 text-stone-900 text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center shrink-0"
-                >
-                  Pošlji e-mail
-                </a>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {aktivniNalog.email && (
+                    <a
+                      href={obvestiloMailto(aktivniNalog)}
+                      className="bg-red-500 hover:bg-red-400 text-stone-900 text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+                    >
+                      Pošlji e-mail
+                    </a>
+                  )}
+                  {aktivniNalog.telefon && (
+                    <a
+                      href={obvestiloSMS(aktivniNalog)}
+                      className="bg-stone-800 hover:bg-stone-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+                    >
+                      Pošlji SMS
+                    </a>
+                  )}
+                </div>
               </div>
             )}
-            {aktivniNalog.status === "Pripravljeno" && !aktivniNalog.email && (
+            {aktivniNalog.status === "Pripravljeno" && !aktivniNalog.email && !aktivniNalog.telefon && (
               <div className="mt-5 bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 text-sm text-stone-500">
-                Naročilo je pripravljeno. Za pošiljanje obvestila po e-pošti dodaj e-mail stranke (uredi nalog).
+                Naročilo je pripravljeno. Za pošiljanje obvestila dodaj e-mail ali telefon stranke (uredi nalog).
               </div>
             )}
 
