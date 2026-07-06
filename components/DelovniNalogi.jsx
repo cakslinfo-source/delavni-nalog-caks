@@ -52,6 +52,7 @@ function prazenObrazec() {
     placano: "Ne",
     popustSkupaj: "",
     vrsta: "narocilo",
+    veljavnostPonudbe: "",
     postavke: [novaPostavka()],
   };
 }
@@ -275,6 +276,36 @@ function obvestiloSMS(nalog) {
   const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const locilo = jeIOS ? "&" : "?";
   return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besedilo)}`;
+}
+
+function besediloPonudbe(nalog) {
+  const neto = parseFloat(String(nalog.cena).replace(",", ".")) || 0;
+  const popust = parseFloat(String(nalog.popustSkupaj).replace(",", ".")) || 0;
+  const netoPoPopustu = neto * (1 - popust / 100);
+  const bruto = netoPoPopustu * 1.22;
+  const veljavnost = nalog.veljavnostPonudbe
+    ? `Ponudba velja do ${new Date(nalog.veljavnostPonudbe).toLocaleDateString("sl-SI")}.`
+    : "";
+  return (
+    `Pozdravljeni ${nalog.stranka},\n\n` +
+    `pošiljamo vam ponudbo ${nalog.stevilka || ""} za: ${nalog.opis || ""}.\n\n` +
+    `Skupna vrednost: ${netoPoPopustu.toFixed(2)} € (z DDV: ${bruto.toFixed(2)} €).\n` +
+    (veljavnost ? `${veljavnost}\n\n` : "\n") +
+    `Za vsa vprašanja smo dosegljivi na 031 235 146.\n\n` +
+    `Lep pozdrav,\nKamnoseštvo Čakš`
+  );
+}
+
+function ponudbaMailto(nalog) {
+  const zadeva = `Ponudba ${nalog.stevilka || ""} — Kamnoseštvo Čakš`;
+  return `mailto:${nalog.email}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besediloPonudbe(nalog))}`;
+}
+
+function ponudbaSMS(nalog) {
+  const stevilkaCista = (nalog.telefon || "").replace(/[^0-9+]/g, "");
+  const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const locilo = jeIOS ? "&" : "?";
+  return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besediloPonudbe(nalog))}`;
 }
 
 function izracunajRazredePolic(nalog) {
@@ -540,6 +571,7 @@ export default function DelovniNalogi() {
       placano: nalog.placano || "Ne",
       popustSkupaj: nalog.popustSkupaj || "",
       rokUra: nalog.rokUra || "",
+      veljavnostPonudbe: nalog.veljavnostPonudbe || "",
       postavke: nalog.postavke.length ? nalog.postavke : [novaPostavka()],
     });
     setAktivniId(nalog.id);
@@ -1281,6 +1313,17 @@ export default function DelovniNalogi() {
                   className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
                 />
               </div>
+              {obrazec.vrsta === "ponudba" && (
+                <div>
+                  <label className="block text-xs font-medium text-blue-700 mb-1">Ponudba velja do</label>
+                  <input
+                    type="date"
+                    value={obrazec.veljavnostPonudbe}
+                    onChange={(e) => setObrazec({ ...obrazec, veljavnostPonudbe: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-blue-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                </div>
+              )}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-stone-500 mb-1">Opis dela *</label>
                 <textarea
@@ -1801,31 +1844,66 @@ export default function DelovniNalogi() {
               </div>
             )}
 
+            {aktivniNalog.vrsta === "ponudba" && (aktivniNalog.email || aktivniNalog.telefon) && (
+              <div className="mt-4 bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-sm text-stone-600">Pošlji ponudbo stranki v predogled:</span>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {aktivniNalog.email && (
+                    <a
+                      href={ponudbaMailto(aktivniNalog)}
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+                    >
+                      Pošlji e-mail
+                    </a>
+                  )}
+                  {aktivniNalog.telefon && (
+                    <a
+                      href={ponudbaSMS(aktivniNalog)}
+                      className="bg-stone-800 hover:bg-stone-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+                    >
+                      Pošlji SMS
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2 mt-5">
-              <button
-                onClick={() => izvoziDonatoniCSV(aktivniNalog)}
-                className="bg-red-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-red-500 transition-colors flex items-center gap-2"
-              >
-                <Download size={15} /> CSV Donatoni
-              </button>
-              <button
-                onClick={() => setPogled("izracunPolic")}
-                className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
-              >
-                <Ruler size={15} /> Izračun polic
-              </button>
-              <button
-                onClick={() => setPogled("tisk")}
-                className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
-              >
-                <Printer size={15} /> Natisni delovni nalog
-              </button>
-              <button
-                onClick={() => setPogled("dobavnica")}
-                className="bg-emerald-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-500 transition-colors flex items-center gap-2"
-              >
-                <FileText size={15} /> Izdaj dobavnico
-              </button>
+              {aktivniNalog.vrsta === "ponudba" ? (
+                <button
+                  onClick={() => setPogled("tiskPonudbe")}
+                  className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
+                >
+                  <Printer size={15} /> Natisni ponudbo
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => izvoziDonatoniCSV(aktivniNalog)}
+                    className="bg-red-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-red-500 transition-colors flex items-center gap-2"
+                  >
+                    <Download size={15} /> CSV Donatoni
+                  </button>
+                  <button
+                    onClick={() => setPogled("izracunPolic")}
+                    className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
+                  >
+                    <Ruler size={15} /> Izračun polic
+                  </button>
+                  <button
+                    onClick={() => setPogled("tisk")}
+                    className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
+                  >
+                    <Printer size={15} /> Natisni delovni nalog
+                  </button>
+                  <button
+                    onClick={() => setPogled("dobavnica")}
+                    className="bg-emerald-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-500 transition-colors flex items-center gap-2"
+                  >
+                    <FileText size={15} /> Izdaj dobavnico
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => odpriUredi(aktivniNalog)}
                 className="bg-stone-800 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors flex items-center gap-2"
@@ -1834,7 +1912,7 @@ export default function DelovniNalogi() {
               </button>
               <button
                 onClick={() => {
-                  if (window.confirm(`Ali res želiš izbrisati delovni nalog ${aktivniNalog.stevilka || ""} (${aktivniNalog.stranka})? Tega dejanja ni mogoče razveljaviti.`)) {
+                  if (window.confirm(`Ali res želiš izbrisati ${aktivniNalog.vrsta === "ponudba" ? "ponudbo" : "delovni nalog"} ${aktivniNalog.stevilka || ""} (${aktivniNalog.stranka})? Tega dejanja ni mogoče razveljaviti.`)) {
                     izbrisiNalog(aktivniNalog.id);
                   }
                 }}
@@ -1852,6 +1930,10 @@ export default function DelovniNalogi() {
 
         {pogled === "tisk" && aktivniNalog && (
           <TiskNaloga nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
+        )}
+
+        {pogled === "tiskPonudbe" && aktivniNalog && (
+          <TiskPonudbe nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
         )}
 
         {pogled === "izracunPolic" && aktivniNalog && (
@@ -2000,6 +2082,150 @@ function TiskNaloga({ nalog, onZapri }) {
           <p className="text-sm text-stone-700">
             <span className="text-xs font-medium text-stone-400 uppercase mr-1">Opombe:</span>
             {nalog.opombe}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TiskPonudbe({ nalog, onZapri }) {
+  const postavkeZaPrikaz = (nalog.postavke || []).filter(
+    (p) => p.naziv || p.material || p.dolzina
+  );
+  const skupajM2 = postavkeZaPrikaz.reduce((v, p) => v + m2Postavke(p), 0);
+  const danes = new Date().toLocaleDateString("sl-SI");
+  const neto = parseFloat(String(nalog.cena).replace(",", ".")) || 0;
+  const popust = parseFloat(String(nalog.popustSkupaj).replace(",", ".")) || 0;
+  const netoPoPopustu = neto * (1 - popust / 100);
+  const bruto = netoPoPopustu * 1.22;
+
+  return (
+    <div>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .ponudba-list, .ponudba-list * { visibility: visible; }
+          .ponudba-list { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
+          .ponudba-brez { display: none !important; }
+        }
+      `}</style>
+
+      <div className="ponudba-brez flex flex-wrap gap-2 mb-2">
+        <button
+          onClick={() => prenesiHTMLDokument(".ponudba-list", `Ponudba ${nalog.stevilka || ""}`, `ponudba-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`)}
+          className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
+        >
+          <FileText size={15} /> Prenesi datoteko
+        </button>
+        <button
+          onClick={onZapri}
+          className="px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
+        >
+          Nazaj
+        </button>
+      </div>
+
+      <div className="ponudba-list bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
+        <div className="flex items-center justify-between gap-3 border-b-2 border-stone-800 pb-2 mb-3">
+          <img src={CAKS_LOGO} alt="Čakš logo" className="h-8 w-auto object-contain shrink-0" />
+          <p className="carved text-sm uppercase text-stone-700 shrink-0">Ponudba</p>
+        </div>
+
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-3 text-sm border-b border-stone-200 pb-2">
+          <span><span className="text-xs text-stone-400 uppercase mr-1">Št.</span><span className="font-semibold text-stone-800">{nalog.stevilka}</span></span>
+          <span><span className="text-xs text-stone-400 uppercase mr-1">Stranka</span><span className="font-semibold text-stone-800">{nalog.stranka}</span></span>
+          {nalog.telefon && (
+            <span><span className="text-xs text-stone-400 uppercase mr-1">Tel</span><span className="text-stone-700">{nalog.telefon}</span></span>
+          )}
+          {nalog.email && (
+            <span><span className="text-xs text-stone-400 uppercase mr-1">E-mail</span><span className="text-stone-700">{nalog.email}</span></span>
+          )}
+          <span><span className="text-xs text-stone-400 uppercase mr-1">Datum</span><span className="text-stone-700">{danes}</span></span>
+          {nalog.veljavnostPonudbe && (
+            <span><span className="text-xs text-stone-400 uppercase mr-1">Velja do</span><span className="font-semibold text-blue-700">{new Date(nalog.veljavnostPonudbe).toLocaleDateString("sl-SI")}</span></span>
+          )}
+        </div>
+
+        {nalog.opis && (
+          <div className="mb-3 pb-2 border-b border-stone-200">
+            <span className="text-xs text-stone-400 uppercase mr-1">Opis dela</span>
+            <span className="text-sm text-stone-700">{nalog.opis}</span>
+          </div>
+        )}
+
+        {postavkeZaPrikaz.length > 0 && (
+          <div className="overflow-x-auto mb-3">
+            <table className="w-full border-collapse table-fixed" style={{ minWidth: "560px" }}>
+              <colgroup>
+                <col style={{ width: "4%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "26%" }} />
+                <col style={{ width: "8%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "12%" }} />
+              </colgroup>
+              <thead>
+                <tr className="border-b-2 border-stone-300 text-left text-xs uppercase text-stone-500">
+                  <th className="py-2 pr-1">#</th>
+                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Naziv</th>
+                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Material</th>
+                  <th className="py-2 pr-1 pl-2 border-l border-stone-200 normal-case">Mere (cm)</th>
+                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Kos.</th>
+                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Popust</th>
+                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Cena (€)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {postavkeZaPrikaz.map((p, idx) => (
+                  <tr key={p.id} className="border-b border-stone-100">
+                    <td className="py-2 pr-1 text-xs text-stone-400 align-top">{idx + 1}</td>
+                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
+                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
+                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top whitespace-nowrap">
+                      {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
+                    </td>
+                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.kolicina || "1"}</td>
+                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.popust ? `${p.popust}%` : "—"}</td>
+                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs font-semibold text-stone-800 align-top">{p.cena ? `${p.cena} €` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {skupajM2 > 0 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan="5" className="pt-2 text-right text-xs font-medium text-stone-500">
+                      Skupaj m²
+                    </td>
+                    <td colSpan="2" className="pt-2 text-sm font-semibold text-stone-800">{skupajM2.toFixed(2)} m²</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        )}
+
+        {nalog.cena && (
+          <div className="mb-3 pt-2 border-t-2 border-stone-200 flex flex-col items-end gap-0.5 text-sm">
+            <span className="text-stone-600">Skupna cena neto: <span className="font-semibold text-stone-800">{neto.toFixed(2)} €</span></span>
+            {popust > 0 && (
+              <span className="text-stone-600">Popust: <span className="font-semibold text-stone-800">{popust}%</span> → <span className="font-semibold text-stone-800">{netoPoPopustu.toFixed(2)} €</span></span>
+            )}
+            <span className="text-stone-800 font-bold text-base">Skupna cena z DDV (22%): {bruto.toFixed(2)} €</span>
+          </div>
+        )}
+
+        {nalog.opombe && (
+          <p className="text-sm text-stone-700 mb-2">
+            <span className="text-xs font-medium text-stone-400 uppercase mr-1">Opombe:</span>
+            {nalog.opombe}
+          </p>
+        )}
+
+        {nalog.veljavnostPonudbe && (
+          <p className="text-xs text-stone-500 mt-3 pt-2 border-t border-stone-200">
+            Ta ponudba velja do {new Date(nalog.veljavnostPonudbe).toLocaleDateString("sl-SI")}. Cene so informativne narave in se lahko spremenijo po tem datumu.
           </p>
         )}
       </div>
