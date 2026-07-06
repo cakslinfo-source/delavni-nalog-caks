@@ -1885,6 +1885,13 @@ function TiskNaloga({ nalog, onZapri }) {
           )}
         </div>
 
+        {nalog.opis && (
+          <div className="mb-3 pb-2 border-b border-stone-200">
+            <span className="text-xs text-stone-400 uppercase mr-1">Opis dela</span>
+            <span className="text-sm text-stone-700">{nalog.opis}</span>
+          </div>
+        )}
+
         {postavkeZaPrikaz.length > 0 && (
           <div className="mb-3">
             <table className="w-full border-collapse table-fixed">
