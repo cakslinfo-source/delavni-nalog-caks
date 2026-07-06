@@ -51,13 +51,14 @@ function prazenObrazec() {
     utori: "",
     placano: "Ne",
     popustSkupaj: "",
+    vrsta: "narocilo",
     postavke: [novaPostavka()],
   };
 }
 
-function praznoStevilo() {
+function praznoStevilo(predpona = "DN") {
   const d = new Date();
-  return `DN-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}-`;
+  return `${predpona}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}-`;
 }
 
 const CENIK = {
@@ -525,6 +526,12 @@ export default function DelovniNalogi() {
     setPogled("nov");
   }
 
+  function odpriNovoPonudbo() {
+    setObrazec({ ...prazenObrazec(), vrsta: "ponudba" });
+    setAktivniId(null);
+    setPogled("nov");
+  }
+
   function odpriUredi(nalog) {
     setObrazec({
       ...nalog,
@@ -604,11 +611,12 @@ export default function DelovniNalogi() {
       setAktivniId(aktivniId);
       setPogled("podrobnosti");
     } else {
-      const stevilkaIndex = nalogi.length + 1;
+      const predpona = obrazec.vrsta === "ponudba" ? "PO" : "DN";
+      const stevilkaIndex = nalogi.filter((n) => (n.vrsta || "narocilo") === (obrazec.vrsta || "narocilo")).length + 1;
       const novNalog = {
         ...obrazecZaShranjevanje,
         id: `${Date.now()}`,
-        stevilka: `${praznoStevilo()}${String(stevilkaIndex).padStart(3, "0")}`,
+        stevilka: `${praznoStevilo(predpona)}${String(stevilkaIndex).padStart(3, "0")}`,
         datumVnosa: new Date().toISOString(),
       };
       const posodobljeni = [novNalog, ...nalogi];
@@ -616,6 +624,19 @@ export default function DelovniNalogi() {
       setAktivniId(novNalog.id);
       setPogled("podrobnosti");
     }
+  }
+
+  async function pretvoriVDelovniNalog(id) {
+    const nalog = nalogi.find((n) => n.id === id);
+    if (!nalog) return;
+    const potrdi = window.confirm(`Ali želiš ponudbo ${nalog.stevilka} pretvoriti v pravi delovni nalog? Dobila bo novo številko delovnega naloga.`);
+    if (!potrdi) return;
+    const stevilkaIndex = nalogi.filter((n) => (n.vrsta || "narocilo") === "narocilo").length + 1;
+    const novaStevilka = `${praznoStevilo("DN")}${String(stevilkaIndex).padStart(3, "0")}`;
+    const posodobljeni = nalogi.map((n) =>
+      n.id === id ? { ...n, vrsta: "narocilo", stevilka: novaStevilka, status: "Sprejeto" } : n
+    );
+    await shraniNalogi(posodobljeni);
   }
 
   async function izbrisiNalog(id) {
@@ -994,6 +1015,11 @@ export default function DelovniNalogi() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
+                          {n.vrsta === "ponudba" && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-medium">
+                              Ponudba
+                            </span>
+                          )}
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BARVE[n.status]}`}>
                             {n.status}
                           </span>
@@ -1135,7 +1161,9 @@ export default function DelovniNalogi() {
         {pogled === "nov" && (
           <div className="bg-white border border-stone-200 rounded-xl p-5">
             <h2 className="carved text-lg uppercase text-stone-700 mb-4">
-              {aktivniId ? "Uredi nalog" : "Nov delovni nalog"}
+              {aktivniId
+                ? (obrazec.vrsta === "ponudba" ? "Uredi ponudbo" : "Uredi nalog")
+                : (obrazec.vrsta === "ponudba" ? "Nova ponudba" : "Nov delovni nalog")}
             </h2>
 
             <div className="bg-stone-100 border border-stone-300 rounded-lg px-4 py-3 mb-5">
@@ -1531,9 +1559,16 @@ export default function DelovniNalogi() {
                 <span className="text-xs font-semibold text-stone-400">{aktivniNalog.stevilka}</span>
                 <h2 className="carved text-xl uppercase text-stone-800">{aktivniNalog.stranka}</h2>
               </div>
-              <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_BARVE[aktivniNalog.status]}`}>
-                {aktivniNalog.status}
-              </span>
+              <div className="flex items-center gap-2">
+                {aktivniNalog.vrsta === "ponudba" && (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-medium">
+                    Ponudba
+                  </span>
+                )}
+                <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_BARVE[aktivniNalog.status]}`}>
+                  {aktivniNalog.status}
+                </span>
+              </div>
             </div>
 
             <div className="space-y-4 text-sm">
@@ -1754,6 +1789,18 @@ export default function DelovniNalogi() {
               </div>
             )}
 
+            {aktivniNalog.vrsta === "ponudba" && (
+              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-sm text-blue-800">To je ponudba — še ni pravi delovni nalog.</span>
+                <button
+                  onClick={() => pretvoriVDelovniNalog(aktivniNalog.id)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shrink-0"
+                >
+                  Pretvori v delovni nalog
+                </button>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2 mt-5">
               <button
                 onClick={() => izvoziDonatoniCSV(aktivniNalog)}
@@ -1813,13 +1860,24 @@ export default function DelovniNalogi() {
       </main>
 
       {pogled === "seznam" && !naloziLoading && (
-        <button
-          onClick={odpriNov}
-          className="fixed bottom-6 right-6 bg-red-500 hover:bg-red-400 text-stone-900 rounded-full w-14 h-14 shadow-lg flex items-center justify-center transition-colors"
-          aria-label="Nov delovni nalog"
-        >
-          <Plus size={26} />
-        </button>
+        <>
+          <button
+            onClick={odpriNovoPonudbo}
+            className="fixed bottom-24 right-6 bg-blue-600 hover:bg-blue-500 text-white rounded-full w-14 h-14 shadow-lg flex items-center justify-center transition-colors"
+            aria-label="Nova ponudba"
+            title="Nova ponudba"
+          >
+            <Plus size={26} />
+          </button>
+          <button
+            onClick={odpriNov}
+            className="fixed bottom-6 right-6 bg-red-500 hover:bg-red-400 text-stone-900 rounded-full w-14 h-14 shadow-lg flex items-center justify-center transition-colors"
+            aria-label="Nov delovni nalog"
+            title="Nov delovni nalog"
+          >
+            <Plus size={26} />
+          </button>
+        </>
       )}
     </div>
   );
