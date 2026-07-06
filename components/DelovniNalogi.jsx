@@ -42,6 +42,7 @@ function prazenObrazec() {
     email: "",
     opis: "",
     rok: "",
+    rokUra: "",
     cena: "",
     status: "Sprejeto",
     opombe: "",
@@ -531,6 +532,7 @@ export default function DelovniNalogi() {
       utori: nalog.utori || "",
       placano: nalog.placano || "Ne",
       popustSkupaj: nalog.popustSkupaj || "",
+      rokUra: nalog.rokUra || "",
       postavke: nalog.postavke.length ? nalog.postavke : [novaPostavka()],
     });
     setAktivniId(nalog.id);
@@ -1242,6 +1244,15 @@ export default function DelovniNalogi() {
                   className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Ura prevzema</label>
+                <input
+                  type="time"
+                  value={obrazec.rokUra}
+                  onChange={(e) => setObrazec({ ...obrazec, rokUra: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                />
+              </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-stone-500 mb-1">Opis dela *</label>
                 <textarea
@@ -1551,6 +1562,7 @@ export default function DelovniNalogi() {
                       <Calendar size={14} className="text-stone-400" />
                       <span className={jeZamujen(aktivniNalog) ? "text-red-600 font-semibold" : ""}>
                         {new Date(aktivniNalog.rok).toLocaleDateString("sl-SI")}
+                        {aktivniNalog.rokUra ? ` ob ${aktivniNalog.rokUra}` : ""}
                       </span>
                       {jeZamujen(aktivniNalog) && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-red-600 text-white font-medium">
@@ -1863,7 +1875,7 @@ function TiskNaloga({ nalog, onZapri }) {
             <span><span className="text-xs text-stone-400 uppercase mr-1">Oddal</span><span className="text-stone-700">{nalog.oddal}</span></span>
           )}
           {nalog.rok && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">Do kdaj pripravljeno</span><span className="font-semibold text-red-700">{new Date(nalog.rok).toLocaleDateString("sl-SI")}</span></span>
+            <span><span className="text-xs text-stone-400 uppercase mr-1">Do kdaj pripravljeno</span><span className="font-semibold text-red-700">{new Date(nalog.rok).toLocaleDateString("sl-SI")}{nalog.rokUra ? ` ob ${nalog.rokUra}` : ""}</span></span>
           )}
           {nalog.tip && (
             <span><span className="text-xs text-stone-400 uppercase mr-1">Police</span><span className="font-semibold text-stone-800">{nalog.tip}</span></span>
