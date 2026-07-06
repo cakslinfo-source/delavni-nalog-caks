@@ -49,6 +49,7 @@ function prazenObrazec() {
     tip: "",
     utori: "",
     placano: "Ne",
+    popustSkupaj: "",
     postavke: [novaPostavka()],
   };
 }
@@ -480,6 +481,7 @@ export default function DelovniNalogi() {
       email: nalog.email || "",
       utori: nalog.utori || "",
       placano: nalog.placano || "Ne",
+      popustSkupaj: nalog.popustSkupaj || "",
       postavke: nalog.postavke.length ? nalog.postavke : [novaPostavka()],
     });
     setAktivniId(nalog.id);
@@ -1172,11 +1174,36 @@ export default function DelovniNalogi() {
                 />
               </div>
               <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Popust na skupno ceno (%)</label>
+                <input
+                  inputMode="decimal"
+                  value={obrazec.popustSkupaj}
+                  onChange={(e) => setObrazec({ ...obrazec, popustSkupaj: e.target.value.replace(/[^0-9.,]/g, "") })}
+                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                  placeholder="npr. 10"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Neto po popustu (€)</label>
+                <div className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-stone-50 text-sm text-stone-700">
+                  {(() => {
+                    const neto = parseFloat(String(obrazec.cena).replace(",", "."));
+                    if (!neto || isNaN(neto)) return "—";
+                    const popust = parseFloat(String(obrazec.popustSkupaj).replace(",", ".")) || 0;
+                    const netoPoPopustu = neto * (1 - popust / 100);
+                    return `${netoPoPopustu.toFixed(2)} €`;
+                  })()}
+                </div>
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1">Skupna cena – bruto (z 22% DDV)</label>
                 <div className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-stone-50 text-sm text-stone-700">
                   {(() => {
                     const neto = parseFloat(String(obrazec.cena).replace(",", "."));
-                    return !neto || isNaN(neto) ? "—" : `${(neto * 1.22).toFixed(2)} €`;
+                    if (!neto || isNaN(neto)) return "—";
+                    const popust = parseFloat(String(obrazec.popustSkupaj).replace(",", ".")) || 0;
+                    const netoPoPopustu = neto * (1 - popust / 100);
+                    return `${(netoPoPopustu * 1.22).toFixed(2)} €`;
                   })()}
                 </div>
               </div>
@@ -1415,7 +1442,15 @@ export default function DelovniNalogi() {
                 label="Cena"
                 vrednost={
                   aktivniNalog.cena
-                    ? `${aktivniNalog.cena} € neto · ${(parseFloat(String(aktivniNalog.cena).replace(",", ".")) * 1.22).toFixed(2)} € bruto (22% DDV)`
+                    ? (() => {
+                        const neto = parseFloat(String(aktivniNalog.cena).replace(",", "."));
+                        const popust = parseFloat(String(aktivniNalog.popustSkupaj).replace(",", ".")) || 0;
+                        const netoPoPopustu = neto * (1 - popust / 100);
+                        const bruto = netoPoPopustu * 1.22;
+                        return popust > 0
+                          ? `${neto.toFixed(2)} € neto · popust ${popust}% · ${netoPoPopustu.toFixed(2)} € po popustu · ${bruto.toFixed(2)} € bruto (22% DDV)`
+                          : `${neto.toFixed(2)} € neto · ${bruto.toFixed(2)} € bruto (22% DDV)`;
+                      })()
                     : ""
                 }
               />
