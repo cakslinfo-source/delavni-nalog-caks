@@ -1673,7 +1673,11 @@ export default function DelovniNalogi() {
                 <Pencil size={15} /> Uredi
               </button>
               <button
-                onClick={() => izbrisiNalog(aktivniNalog.id)}
+                onClick={() => {
+                  if (window.confirm(`Ali res želiš izbrisati delovni nalog ${aktivniNalog.stevilka || ""} (${aktivniNalog.stranka})? Tega dejanja ni mogoče razveljaviti.`)) {
+                    izbrisiNalog(aktivniNalog.id);
+                  }
+                }}
                 className="px-4 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
               >
                 <Trash2 size={15} /> Izbriši
