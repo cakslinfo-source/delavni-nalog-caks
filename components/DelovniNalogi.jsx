@@ -1863,19 +1863,19 @@ export default function DelovniNalogi() {
         <>
           <button
             onClick={odpriNovoPonudbo}
-            className="fixed bottom-24 right-6 bg-blue-600 hover:bg-blue-500 text-white rounded-full w-14 h-14 shadow-lg flex items-center justify-center transition-colors"
-            aria-label="Nova ponudba"
-            title="Nova ponudba"
+            className="fixed bottom-24 right-6 bg-blue-600 hover:bg-blue-500 text-white rounded-full pl-4 pr-5 h-14 shadow-lg flex items-center gap-2 transition-colors"
+            aria-label="Izdelaj ponudbo"
           >
-            <Plus size={26} />
+            <Plus size={22} />
+            <span className="text-sm font-medium whitespace-nowrap">Izdelaj ponudbo</span>
           </button>
           <button
             onClick={odpriNov}
-            className="fixed bottom-6 right-6 bg-red-500 hover:bg-red-400 text-stone-900 rounded-full w-14 h-14 shadow-lg flex items-center justify-center transition-colors"
-            aria-label="Nov delovni nalog"
-            title="Nov delovni nalog"
+            className="fixed bottom-6 right-6 bg-red-500 hover:bg-red-400 text-stone-900 rounded-full pl-4 pr-5 h-14 shadow-lg flex items-center gap-2 transition-colors"
+            aria-label="Izdelaj delovni list"
           >
-            <Plus size={26} />
+            <Plus size={22} />
+            <span className="text-sm font-medium whitespace-nowrap">Izdelaj delovni list</span>
           </button>
         </>
       )}
