@@ -265,6 +265,47 @@ function obvestiloMailto(nalog) {
   return `mailto:${nalog.email}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besedilo)}`;
 }
 
+function izracunajRazredePolic(nalog) {
+  const postavke = (nalog.postavke || []).filter((p) => p.naziv || p.material || p.dolzina);
+  const skupine = {};
+
+  postavke.forEach((p) => {
+    const skupinaPodatki = najdiSkupinoMateriala(p.material);
+    const sirina = parseFloat(String(p.sirina).replace(",", "."));
+    const dolzina = parseFloat(String(p.dolzina).replace(",", "."));
+    const kolicina = parseFloat(String(p.kolicina).replace(",", ".")) || 1;
+    const debelina = Math.round(parseFloat(String(p.debelina).replace(",", ".")));
+    if (!sirina || sirina <= 0 || !dolzina || dolzina <= 0) return;
+
+    let oznakaRazreda, materialIme;
+    if (skupinaPodatki) {
+      const sirinaZaokrozena = Math.ceil(sirina - 1e-9);
+      const bracket = skupinaPodatki.brackets.find((b) => sirinaZaokrozena >= b.min && sirinaZaokrozena <= b.max);
+      oznakaRazreda = bracket ? `${bracket.min}-${bracket.max} cm` : "izven cenika";
+      materialIme = p.material;
+    } else {
+      oznakaRazreda = "ni v ceniku";
+      materialIme = p.material || "—";
+    }
+    const debelinaOznaka = debelina ? `${debelina} cm` : "—";
+    const kljuc = `${materialIme}|${oznakaRazreda}|${debelinaOznaka}`;
+
+    if (!skupine[kljuc]) {
+      skupine[kljuc] = {
+        material: materialIme,
+        razred: oznakaRazreda,
+        debelina: debelinaOznaka,
+        tekociMetri: 0,
+        stevilo: 0,
+      };
+    }
+    skupine[kljuc].tekociMetri += (dolzina / 100) * kolicina;
+    skupine[kljuc].stevilo += kolicina;
+  });
+
+  return Object.values(skupine).sort((a, b) => a.material.localeCompare(b.material, "sl"));
+}
+
 function izvoziDonatoniCSV(nalog) {
   const postavke = (nalog.postavke || []).filter((p) => p.naziv || p.material || p.dolzina);
   const glave = ["Numero", "Larghezza", "Altezza", "Nome", "Spessore"];
@@ -1573,6 +1614,12 @@ export default function DelovniNalogi() {
                 <Download size={15} /> CSV Donatoni
               </button>
               <button
+                onClick={() => setPogled("izracunPolic")}
+                className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
+              >
+                <Ruler size={15} /> Izračun polic
+              </button>
+              <button
                 onClick={() => setPogled("tisk")}
                 className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
               >
@@ -1606,6 +1653,10 @@ export default function DelovniNalogi() {
 
         {pogled === "tisk" && aktivniNalog && (
           <TiskNaloga nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
+        )}
+
+        {pogled === "izracunPolic" && aktivniNalog && (
+          <IzracunPolic nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
         )}
       </main>
 
@@ -1735,6 +1786,60 @@ function TiskNaloga({ nalog, onZapri }) {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+function IzracunPolic({ nalog, onZapri }) {
+  const razredi = izracunajRazredePolic(nalog);
+  const skupajTM = razredi.reduce((v, r) => v + r.tekociMetri, 0);
+
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="carved text-lg uppercase text-stone-700">Izračun polic — tekoči metri</h2>
+        <button
+          onClick={onZapri}
+          className="text-sm text-stone-500 hover:text-stone-700"
+        >
+          ← Nazaj
+        </button>
+      </div>
+
+      {razredi.length === 0 ? (
+        <p className="text-sm text-stone-500">Ni postavk za izračun.</p>
+      ) : (
+        <>
+          <div className="overflow-x-auto -mx-1">
+            <table className="w-full text-sm" style={{ minWidth: "480px" }}>
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-stone-400 border-b-2 border-stone-200">
+                  <th className="font-medium py-2 px-2">Material</th>
+                  <th className="font-medium py-2 px-2">Širinski razred</th>
+                  <th className="font-medium py-2 px-2">Debelina</th>
+                  <th className="font-medium py-2 px-2">Kos.</th>
+                  <th className="font-medium py-2 px-2">Skupaj tekočih metrov</th>
+                </tr>
+              </thead>
+              <tbody>
+                {razredi.map((r, idx) => (
+                  <tr key={idx} className="border-b border-stone-100">
+                    <td className="py-2 px-2 text-stone-700">{r.material}</td>
+                    <td className="py-2 px-2 text-stone-600">{r.razred}</td>
+                    <td className="py-2 px-2 text-stone-600">{r.debelina}</td>
+                    <td className="py-2 px-2 text-stone-600">{r.stevilo}</td>
+                    <td className="py-2 px-2 font-semibold text-stone-800">{r.tekociMetri.toFixed(2)} tm</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between mt-4 pt-3 border-t-2 border-stone-200">
+            <span className="text-sm text-stone-500">Skupaj vseh tekočih metrov</span>
+            <span className="text-lg font-bold text-red-600">{skupajTM.toFixed(2)} tm</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
