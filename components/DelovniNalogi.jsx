@@ -346,6 +346,46 @@ function izvoziDonatoniCSV(nalog) {
   URL.revokeObjectURL(url);
 }
 
+function prenesiVarnostnoKopijo(nalogi) {
+  const danes = new Date().toISOString().slice(0, 10);
+  const vsebina = JSON.stringify(nalogi, null, 2);
+  const blob = new Blob([vsebina], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `varnostna-kopija-delovni-nalogi-${danes}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function obnoviIzDatoteke(event, shraniNalogi) {
+  const datoteka = event.target.files && event.target.files[0];
+  if (!datoteka) return;
+  const bralnik = new FileReader();
+  bralnik.onload = async (e) => {
+    try {
+      const podatki = JSON.parse(e.target.result);
+      if (!Array.isArray(podatki)) {
+        alert("Datoteka ni veljavna varnostna kopija (pričakovan je seznam naročil).");
+        return;
+      }
+      const potrdi = window.confirm(
+        `Ali res želiš obnoviti podatke iz te datoteke? Vsebuje ${podatki.length} naročil in bo PREPISALA trenutni seznam. Tega dejanja ni mogoče razveljaviti.`
+      );
+      if (potrdi) {
+        await shraniNalogi(podatki);
+        alert("Podatki so bili uspešno obnovljeni.");
+      }
+    } catch (err) {
+      alert("Napaka pri branju datoteke — preveri, da je to prava .json varnostna kopija.");
+    }
+  };
+  bralnik.readAsText(datoteka);
+  event.target.value = "";
+}
+
 function strankaZaIme(nalog) {
   return (nalog.stranka || "").replace(/[\\/:*?"<>|]/g, "").trim();
 }
@@ -824,6 +864,30 @@ export default function DelovniNalogi() {
                 >
                   Pregled po strankah →
                 </button>
+
+                <div className="border-t border-stone-700 pt-3 mt-3">
+                  <p className="text-xs font-medium text-stone-400 uppercase mb-2">Varnostna kopija</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => prenesiVarnostnoKopijo(nalogi)}
+                      className="text-sm px-3 py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors flex items-center gap-1.5"
+                    >
+                      <Download size={14} /> Prenesi kopijo zdaj
+                    </button>
+                    <label className="text-sm px-3 py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors flex items-center gap-1.5 cursor-pointer">
+                      <FileText size={14} /> Obnovi iz datoteke
+                      <input
+                        type="file"
+                        accept="application/json"
+                        className="hidden"
+                        onChange={(e) => obnoviIzDatoteke(e, shraniNalogi)}
+                      />
+                    </label>
+                  </div>
+                  <p className="text-xs text-stone-500 mt-2">
+                    Samodejna varnostna kopija se shrani vsak dan ob 3h zjutraj. Priporočamo tudi ročni prenos vsake toliko časa.
+                  </p>
+                </div>
               </div>
             )}
 
