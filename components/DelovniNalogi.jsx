@@ -1834,16 +1834,30 @@ function IzracunPolic({ nalog, onZapri }) {
   const skupajTM = razredi.reduce((v, r) => v + r.tekociMetri, 0);
 
   return (
-    <div className="bg-white border border-stone-200 rounded-xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="carved text-lg uppercase text-stone-700">Izračun polic — tekoči metri</h2>
+    <div>
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          onClick={() => prenesiHTMLDokument(".izracun-polic-list", `Izračun polic ${nalog.stevilka || ""}`, `izracun-polic-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`)}
+          className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
+        >
+          <FileText size={15} /> Prenesi datoteko
+        </button>
         <button
           onClick={onZapri}
-          className="text-sm text-stone-500 hover:text-stone-700"
+          className="px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
         >
-          ← Nazaj
+          Nazaj
         </button>
       </div>
+
+      <div className="izracun-polic-list bg-white border border-stone-200 rounded-xl p-5">
+        <div className="flex items-center justify-between gap-3 border-b-2 border-stone-800 pb-2 mb-4">
+          <img src={CAKS_LOGO} alt="Čakš logo" className="h-8 w-auto object-contain shrink-0" />
+          <div className="text-right">
+            <p className="carved text-sm uppercase text-stone-700">Izračun polic — tekoči metri</p>
+            <p className="text-xs text-stone-500">Št. {nalog.stevilka} · {nalog.stranka}</p>
+          </div>
+        </div>
 
       {razredi.length === 0 ? (
         <p className="text-sm text-stone-500">Ni postavk za izračun.</p>
@@ -1879,6 +1893,7 @@ function IzracunPolic({ nalog, onZapri }) {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
