@@ -782,6 +782,12 @@ export default function DelovniNalogi() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <a
+              href="/pulti"
+              className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
+            >
+              Pulti
+            </a>
             {adminOdklenjen ? (
               <button
                 onClick={zapriAdmin}
