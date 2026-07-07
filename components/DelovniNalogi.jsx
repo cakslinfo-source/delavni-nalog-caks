@@ -359,6 +359,7 @@ function izvoziDonatoniCSV(nalog) {
     }
     return s;
   };
+  const prveTriCrkeStranke = (nalog.stranka || "").trim().slice(0, 3).toUpperCase();
   const vrstice = postavke.map((p, idx) => {
     const mm = (v) => {
       const n = parseFloat(String(v).replace(",", "."));
@@ -371,7 +372,7 @@ function izvoziDonatoniCSV(nalog) {
       p.kolicina || "1",
       dolzinaMM,
       sirinaMM,
-      `${imePolice} ${dolzinaMM}x${sirinaMM}`,
+      `${prveTriCrkeStranke} ${imePolice} ${dolzinaMM}x${sirinaMM}`,
       mm(p.debelina),
     ];
   });
