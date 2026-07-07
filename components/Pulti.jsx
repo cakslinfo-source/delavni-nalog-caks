@@ -1,439 +1,193 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download } from "lucide-react";
+import { useState, useEffect } from "react";
 
-const STATUSI = ["Sprejeto", "V izdelavi", "Pripravljeno", "Prevzeto"];
-const DELAVCI = ["Luka", "Miha", "Rok", "Mersad", "Patrik"];
-const ODDAL_NAROCILO = ["Luka", "Miha", "Jože", "Timea", "Žan", "Žiga"];
-const CAKS_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAA7CAYAAAA+XsUpAAAAAXNSR0IArs4c6QAAAIRlWElmTU0AKgAAAAgABQESAAMAAAABAAEAAAEaAAUAAAABAAAASgEbAAUAAAABAAAAUgEoAAMAAAABAAIAAIdpAAQAAAABAAAAWgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAAMigAwAEAAAAAQAAADsAAAAAZ/V6GwAAAAlwSFlzAAALEwAACxMBAJqcGAAAABxpRE9UAAAAAgAAAAAAAAAeAAAAKAAAAB4AAAAdAAAJYuN0pxMAAAkuSURBVHgB7Fx5bBRVGC/iHcR4YJR2d2Z2Zmemroh0Zor1QEABNfHASIgmGuORiEckSjz+8IyJMfGIB1FB4klE4q0Yg9LZBVoFWhBRYjxArAZRlKDGFrHU37ftLrPt7Pa9NzPrVrbJZGan733vm9/3/d7xvW+mpiaiPyMWG51UlAlqXLlGleUH1bi8SJWUj3C9OiHJ61RJbsfvlZokvatK0rxEXL4N5+lqTD1BluWDI1KLWazrJE9K2/rXadv4I+0Y25gO29iB8ttdS7+QuaFqQSEE0pZxJ7D+C8cvTLYhG9pGV8YxPlgxZswRQo0GraSqagwOfx2c/004+9c4/42jh/PYDgJ9guMRyJisadpBQfUSrZ+266cA1F9x9LAermVcK9petR47Am2WdQA6sMdZ7dJXbk2m0VDYWwmhJDmwElemaJK8EETYyUmGQckDuZ9ipJlD5AtBXW4R6KkmAdxfGAzRhZHjau4GqhUCIYDR4zEG21AHt2pZk14bqDHeylliyPJSkGJX2MQYIC8ufw+i3A9CjuLVM2h519HPAsClRpI9aUe/Jmg71fr8CDCOJGvck02ZX7pgjURdItm7ppC7Bzgy/5Rq0FGkXxvfJSTpyok1E/cXVF+oWsYyp4Ik2316q13VaZUQpKFWwkg/18c2NHKsyThlnH1oknI1HHZrP6fldfLg5WX5bUOSyjqfbG4wp2FI/63AEJYxK1RLV4UJIfBFKnWgD0naVzh6QkggbyVMbUZi0Tz/PydGwQgldWA0OZf3WYKUx8LwHBBkJ5HEtc0bgsiq1g0XgZ6ammFpy5zX14GtWzauXgq3hSLSEolEHMRwK4sc+ejYXwgl31hE9Uhuo6eakbH16yMRXhUaCIFPxmsj0XHdQ2H6QIJYK6t1qgZirK9QcuSnaggvVx2W1ajVcuEgQHP8vk29vCNWIlEQCt6IzcXy9BjhQFuVMtQRMGtrj8Ku9/JKJEShTtKGOoxyQx3vqv5DDAEsyF8sdMT8nL9iRpMkpn6jFcUYYtBW1R3qCCRkeXalk4N22CVPmHf9KeoxzY5+5uIZNcN58M+GBxvNJtrLcB1zTtrSb47iwD7KLSTfHa/VefXL2Mb5ace8I4w2s21Y+u2ZhmS9t42or1daqThF9BC8mMVyENaka7NtnFpKN2QmHA1szkP+1E1UPgyMmGXYxq2+m7/YBBwDcvxcyQQBOdbGYjE1By6RAvsTCwH8y7l7LGcYwERI8B0clPTGnG8VoGw3HGiSVzcQ5LUA8orpvIRCnt52oryG/gsEnuHPTIMxuZheadu8BCH1zyF3j4DsYrjw3v+xv37DMHq8U8nkgG7toxF2zimOVIND0Ss8lwURMfDc/cHOzY36WNTpKDP4/2Sc5ASvbq5tLIpGB/0ybztRXfcldHbxP4P5cDGdgMlsfnkRdHCWsblARyzKZ0ZDDmk31jQdkL0MbbyQkJS5OD+D36/joBAyU5IjdvHbvNOq1qa6Q2jkyIPJSBDK30HPnc7XK8/oQb1XGQlifNZyonpMgYFD/oFRaj/09B8K4LhpuVV/nJ86Gcc8BfJ+F5DJOzqwlN+U1zE1KjWC0szhrGEuwreCDE9qsjwNm42H5xsrvBiOEK1Jm31oO120fbxHUlu7d/5OG0KYrrxaACQjQWCEiwrq/T8J0oNd5XsLoQ73FzqZq0RwLJW7BsK9ICIzojp7CRLy6IHsXukJzbNOYDENvSiFetNBkoKNSS0urzpOUfJpA21W4nAMw28NAIWVILbx6IC65SFJOUcQ6iF3uHb9CSzY85ah1HHI/1IAxxY3lRrh1x7dh7xvBGSyjAYiZfIEGQanfL9o7803qmwJmh+VzfuKy0+TPkQOLMhH5wBtbUodmbHN93xBZCQI6r7kWz96kpSbIOQUL+WwC/OMUfgBAQy7KZetmB40JYRMv4xpEecOo04vQRRFGQtn7AxOEGmDFo8fXwwAnvsgyUGUORz3yGtD2M+19aVFDVMliJ9T/F3KKXlskivbF+DIJmwWtYV/Z1OSrMvHaaMg72dOmX7PHNa9XoLgffC7gpND3pKUpMji7y3Y5wBwbknwhgBBmh3zjJyj0ZkzikUhz90lMfB3zFYKaHjbDXKNdcIr3DrgnfDBpnsVSJDvCKfhIIcbkCDdWlw5LwjopepiQV4Hg7QMapToCYLe2NgleJBjd6Yb9NO9z8pJkD/xduPzkMO9bxNWaj5t3KH9f3Bw9dKUYet9br/rAATB1M2gULOobfzq7UEQ6KsamhKBHMFegIrLT/k9cBj3aJcWD76aySDREaQL4eT7el+9rZ+CXd2pIofrGGfTGsqLCydB8PaifhqiU28w4VHoxJuCfrCgN6yufyzQ9pe0K+59br9rQYJsxKsHl9Omo4hNitWhaWl2zwoh2AsCjh5bw1p39AdtmaWpMEY7s0EiIgiI8VB/3cL6zUmQbiKI21B/MjDhn2rhAwdB9M6mkxSSjmkUQYrNFSztChBkd/8pK0s7XGVAkDuCEAT7HM9yNchYeEWjqaOn/IKZHDAcnO1pFvGQyRfFatSns8gVKcNLkFx6Bj0rDzZ9ZTtpI05ETxp9IGMTb5v0HSrKd2NpU4AgHcVCxiztMZVBXtOCIATRYsr5TA1xFKLFHAyxkdcYmDPOZWkGcrkIAme8mEWuSBleglBCJrXjNqQ0PMcWboxsY4k7kf+DF5hisn5exzuq7O6fe1YKIxGCrDzVOKyUzMD/wwhCn+0R3T3fFvZnePpCiN8KGB47x/sOQcjw2cxUgSkP5t2X8jhOs5UcD3sIBAbYRvScLgIE6STdcvUjOYMcawMQpDXMz+8st/VGOPlmIXKQo+xjBMkmauKDaAJ4bWD9/GY2U7o349k7MrBcd9A0mcdpBQhCeqyjBTXNOjK2Nk7kQF5YAzqNMa6TOhb5ZYVZ0CDH5gAEeYMHgFJls9EZ2/hRwNh7jbWPEYTwTGN9BMwozLkXB4ZrRH7uLmWP3P8yjj6TVzaVz1jGbTkZrGdBguSem/aIRA+SQRh2YCo5H75o5nUGOX4QJQjWLwvzggJcUAiQd0FORhhw7IMEIdhh1MUDsPDDp+Ce/lOzc3yqlNlofg+56KF9sC59r11k8RyQIAP9obSOpcpvpZA+YfMvAAAA//8b9nWZAAAJS0lEQVTtXAlsFFUYXhBP8IgKRbrtzB6dmbJQaWemBYxS44XGoKKIisYg8Y7EC68QMUSjiMZoIiZ4AokHiDFqNArd2S2l3GoUJCoCosiNiqCC0vr97U47nZ3dznuz2w52N3mdmd03/3v/9//fvP+9908DEUHchNLMWRYGcvRJ6NLNCU3ej9LMXVT5RTfdgfx5LG0YmnyVG7k8dSD7bYa+HI7r0nn2dgy9bBhk/M4gx8R4rl2W9Tqpyg9yyGxO6vLVVjluz+sro/3R3k6eNvNwz+YluhQORAXxS05ygFShBih/lFsAOquXVJXroOgBbmV7KEEI16SuPMmBW1NSky5xsgtsMTShyj+zykxq8rvzx/H5RIogu1jbzGP9GQE4+WJ+gojbgsHgqU4A836X1KXxUHgfl9I9mCANlfIgYLaeA7cln1ZU9LXby1ClhzhkNXsZbY1YrB/a3MjTbp7u+SoQKRXf8ECQpogojraD6/UaxrkcCrOTpAcThDDH0/smLkdRlbvsNquvkisgayuzPF2e3xwI9LbLc3ud0KQ3mdv0EpZnvVfaTiPIVA8EaQ4LIVdxv1uAzHow9hgA9SsTWD2cIBTaJDRlERNmrQ6yxaiJBk3szSNkPcIhy9soosuj0eYhnnZzfo8u7wiEBeFKLwTBCLQlEoxETVBzeYxXKRdB6d2uFe/hBCHsk3rZOcCLeR6HB9Jzdtstr4mehHnIl67xTz2NMUlf7RS22eVnuk7o8nTWNvNTHyNIOBgeCoLs9EQSQZiZSVmv3y/TpfOhvLuVjQJBWuBOqMpsDofZl6hWRtjtlZoTmqteLMcpdlks15jL3A0dunnCDoJEo9FjI4KwxBtBxIPh0tK05UcWQLLVbdSVUQDsl06NfgQShFZ9OtWrPU5uolE1G1b0W50ajSCW384gt9XxdelDzB96WeUbtbV9kpryEbMsTd6SrCkvs8piPW9QY6XAZxLanoFw71lDl57hKXR/ajmdcRsBBKEP5iFPeCRIM5aL10cikRJWENzWX6XJZ0HRbVkNdQQSxFDl26DTPBjwlWwFdV5F6PFysqqs3A1mhq7cnxWrdtJ1GBVoqd0u36gqHw5Zf7LKg3O/ZJfVndcg+q1sOqQIEgqFqkGQQ15JgvuXQZaQCxBqA7V9ygRhrCAIIVNeoyZVw4k2Z1QyTwSJa8qVZh+OlKMxTDwFOK3MiFUGgqD+17QfYdcT5HyeQ9Y/cYz+dlnddb1IDZ/MtreTIgg63BvOHc8BQWhHfm1UFId7AUFV1aPbR7XQ4uLi4tNMeWtqFBWG+tHRWAWCmDC1HLF5ONYRp8zkaBlNMKpN7SAIF7SrDOfaxCHvk9Wwp11ed1w3jggej/5nfsCm4dJOkAD2M27MEUFAEuGPcKk4DaNJESMQvUGuUehLvbUvZdjMHDiw/am2Uo8Ng6LfphkrTwTB03MWox6+qQ6MFqThlOYIaek9u51CORBkMocskE66wQ+AUNYA+v+vex0sBKEd8bAgfmF1zBycbwBZpodLwhqNCplAIiJhuXkClozfR5sHndu1k2RwDIp2JEm+CNICqvQChVoI8a6Co4zzWzE06ZqEVn6BfZJdr5ZXAac97p2ijSzz7PbCSHAC5KzgkPXN4mqlLQogudgMVjDC3ULkyX9Rrk3oysOwGWPqjIUg1OmwKE50dk7uZEYKuaj8hbIWJFiA0OkZGl1wfBzkmY3vDZQdKE0oZn3HIxYCDOuo1AiQ4bBftRksfwQxJ7JNaMuvhfr4V6JKOptsaf3AAZ9ow6jz0cPU9ZDTihkm3rSBy/AUbiWcoSmPWftUXxMdDDnsO/Xu+2/q4eFoI0hr7C/Wdeao3fy7URSJDDDBXt2ypJkiSf4J4gHstidzvmV8gFGkQ6rH0orIAJDke2aS6HL9uljsGBNr84gn8TvMsrDsTKQwZdARMqawy+kyHGEnG0Go0zTBBgF+62YSOI4gbX3CHAWrW2dQf+mzoloOYSShRL3XWr/J/hf1mNLd/W3EdIdxWnVLvU7ATE7E7Xfa0Uyl17PnymnKHKssDyEbsx58NnQgCCmA8MdTflabI3cSMnmqB5JYw601NXIFrXPbn55Wg5jnAGsuH2DpzuhHOcBhuVErHmfqS0e6xmJDHUd/N9RVlgtWWXQOOU9zyDpsD9tSIdthDlldQZKddr3N615w3vc8OXA+yZGSjTnJ0uLi9iQ7t+8h4EWgmT41SM6M7vjk15Ra6M2eCIg9ENMxzGPdCKkYsjoukribH6Sl12OX/C1f2kOVvzP1TTvKJSWD4IAeXqbKPuHOIfkareFWmiIOXxhVyqW+NIg7B3NHIhjXMUMXu/Ecuh+Iq2U1dih5wzbKHrDKiutYkdTlvRz9cocFL67IabP2M+08UhIZgpWm73PozNnnFpyjTpkorgwGw67zfigMwwTsM98ZhNeQGe6jtwztRqX8KOj9E7PuyNOivCyrvJb0er6w7YfFNUM67JFhxJvG3KcMeudIzi56J8aqr+N5VBAqsT+y0e8kweLCPY4KZPjS0MqHYDVmU47AzO+TjNcR8FSm/QY7BNzvmjvkaSF360JgeJAVRwpzrf0iwiALeR2rnDzV/xsp+xOs/ct6jpyochDkc3+SRPgH+yqPQoEOS5tZFUr9SE9TTBIpm5bnHx74kxQ2MpF+dizoXQ3ovIrDuTYaemygXV5ClV7nkLUfD6hzrbLIKTnk5NIO9B5NHHs2tdZ+uTpHpu4AEGShn0iCOdKeaGnoelcKZKjUms4drSTjtOzs0n9X+b8UVb4dsf3EhrPkE+3qG9WyBse+F7re4bZgtLjPKYXdGK6IcPbJbuW01MMeCPAeae0X2QKh78X4fiy9dt1VJVEtXRHX5MvQL/1jvP5h7RPreW+kgzwAkuzzAVESWOY9k1WBQv0CAnlHAPOSKsT8n3UHSWjUwD7NlFj/WL+8K1pooIAALwK1eF8DWbfjscq1CkQ53AVk2QtyzJIt74fw9r1wXwGBLkOgoqioLxEFE+VPQZIMmbie9kQ2Y7R6Klpa2iGPp8sULDRUQCBHCPSifwBBK0ogioFCGbo8+x6U+bsOpJuDCfi4cDh8co76VxBTQMAfCFBWMCbQcrQkNAaEeRCh0asIxRbhSDvzm1C2ovyM8i1KIwrSWoSZmNtMwnGkNEg63R+aFHrR0xH4D+WbqXSvKSQ5AAAAAElFTkSuQmCC";
-const STATUS_BARVE = {
-  "Sprejeto": "bg-stone-200 text-stone-700 border-stone-300",
-  "V izdelavi": "bg-amber-100 text-amber-800 border-amber-300",
-  "Pripravljeno": "bg-sky-100 text-sky-800 border-sky-300",
-  "Prevzeto": "bg-emerald-100 text-emerald-800 border-emerald-300",
-};
-const STATUS_HEX = {
-  "Sprejeto": "#a8a29e",
-  "V izdelavi": "#f59e0b",
-  "Pripravljeno": "#0ea5e9",
-  "Prevzeto": "#10b981",
+// ===================== NASTAVITVE =====================
+
+const ADMIN_PIN = "1991";
+
+const ZAPOSLENI_PROIZVODNJA = ["Luka", "Miha", "Rok", "Mersad", "Patrik"];
+const ZAPOSLENI_SPREJEM = ["Luka", "Miha", "Jože", "Timea", "Žan", "Žiga"];
+
+const STATUSI = [
+  { id: "ponudba", naziv: "Ponudba", barva: "bg-gray-500" },
+  { id: "izmera", naziv: "Izmera", barva: "bg-blue-500" },
+  { id: "cad", naziv: "Priprava CAD", barva: "bg-indigo-500" },
+  { id: "razrez", naziv: "Razrez", barva: "bg-yellow-500" },
+  { id: "izrezi", naziv: "Obdelava izrezov", barva: "bg-orange-500" },
+  { id: "brusenje", naziv: "Brušenje", barva: "bg-purple-500" },
+  { id: "montaza", naziv: "Montaža", barva: "bg-red-600" },
+  { id: "zakljuceno", naziv: "Zaključeno", barva: "bg-green-600" },
+];
+
+const DDV = 0.22;
+
+// Privzeti cenik — prenešen iz obstoječega Excel cenika ("ROSA BETA" list kot osnova)
+const PRIVZETI_CENIK = {
+  materiali: [
+    { id: "rosa-beta", naziv: "Rosa Beta", tip: "m2", cena2cm: 120, cena3cm: 155 },
+    { id: "giandone", naziv: "Giandone", tip: "m2", cena2cm: 150, cena3cm: 195 },
+    { id: "bianco-sardo", naziv: "Bianco Sardo", tip: "m2", cena2cm: 150, cena3cm: 195 },
+    { id: "azul-tragal", naziv: "Azul Tragal", tip: "m2", cena2cm: 150, cena3cm: 195 },
+    { id: "rosa-porino", naziv: "Rosa Porino", tip: "m2", cena2cm: 150, cena3cm: 195 },
+    { id: "juporama-columbo", naziv: "Juporama Columbo", tip: "m2", cena2cm: 195, cena3cm: 250 },
+    { id: "multicolor", naziv: "Multicolor", tip: "m2", cena2cm: 195, cena3cm: 250 },
+    { id: "nero-inpala", naziv: "Nero Inpala", tip: "m2", cena2cm: 195, cena3cm: 250 },
+    { id: "wiscont-white", naziv: "Wiscont White", tip: "m2", cena2cm: 195, cena3cm: 250 },
+    { id: "tonalit", naziv: "Tonalit", tip: "m2", cena2cm: 195, cena3cm: 250 },
+    { id: "steel-gray", naziv: "Steel Gray", tip: "m2", cena2cm: 195, cena3cm: 250 },
+    { id: "iwory-brown", naziv: "Iwory Brown", tip: "m2", cena2cm: 290, cena3cm: 370 },
+    { id: "siwakashi", naziv: "Siwakashi", tip: "m2", cena2cm: 290, cena3cm: 370 },
+    { id: "paradiso", naziv: "Paradiso", tip: "m2", cena2cm: 290, cena3cm: 370 },
+    { id: "black-galaxi", naziv: "Black Galaxi", tip: "m2", cena2cm: 320, cena3cm: 410 },
+    { id: "jet-black", naziv: "Jet Black", tip: "m2", cena2cm: 320, cena3cm: 410 },
+    { id: "nero-soluto", naziv: "Nero Soluto", tip: "m2", cena2cm: 320, cena3cm: 410 },
+    { id: "keramika", naziv: "Keramika 1.5cm", tip: "plosca", cenaPlosca: 900 },
+  ],
+  storitve: [
+    { id: "luknja-10-20", naziv: "Luknja fi 10-20mm", enota: "KOM", cena: 12 },
+    { id: "luknja-25-35", naziv: "Luknja fi 25-35mm", enota: "KOM", cena: 15 },
+    { id: "luknja-40-60", naziv: "Luknja fi 40-60mm", enota: "KOM", cena: 20 },
+    { id: "luknja-100-150", naziv: "Luknja fi 100-150mm", enota: "KOM", cena: 30 },
+    { id: "luknja-60-85", naziv: "Luknja fi 60-85mm", enota: "KOM", cena: 25 },
+    { id: "izrez-nasadno-korito", naziv: "Izrez za nasadno korito", enota: "KOM", cena: 65 },
+    { id: "izrez-vticnica-nasadno", naziv: "Izrez za vtičnico nasadno", enota: "KOM", cena: 38 },
+    { id: "izrez-steklokeramika-nasadno", naziv: "Izrez za steklokeramiko nasadno", enota: "KOM", cena: 75 },
+    { id: "izrez-podpultno-korito-poliran", naziv: "Izrez podpultnega korita s poliranim izrezom", enota: "KOM", cena: 130 },
+    { id: "izrez-steklokeramika-inline", naziv: "Izrez steklokeramike inline", enota: "KOM", cena: 250 },
+    { id: "pomivalno-korito-inline", naziv: "Pomivalno korito inline", enota: "KOM", cena: 250 },
+    { id: "vticnica-inline", naziv: "Vtičnica inline", enota: "KOM", cena: 130 },
+    { id: "odcejevalnik-40", naziv: "Izdelava odcejevalnika do dolžine 40cm", enota: "KOM", cena: 390 },
+    { id: "poglobljene-odcejevalne-crte", naziv: "Izdelava poglobljenih odcejevalnih črt", enota: "KOM", cena: 230 },
+    { id: "armiranje", naziv: "Armiranje pultov", enota: "TM", cena: 35 },
+    { id: "izrez-vogala", naziv: "Izrez vogala", enota: "KOM", cena: 30 },
+    { id: "impregnacija", naziv: "Impregnacija", enota: "KOS", cena: 25 },
+    { id: "montaza-korita", naziv: "Montaža korita", enota: "KOM", cena: 30 },
+    { id: "montaza-steklokeramike", naziv: "Montaža steklokeramike", enota: "KOM", cena: 50 },
+    { id: "montaza-vticnice", naziv: "Montaža vtičnice", enota: "KOM", cena: 25 },
+    { id: "izrez-led-trak", naziv: "Izrez za LED trak", enota: "TM", cena: 15 },
+    { id: "rez-45-do-8", naziv: "Rez pod kotom 45° z lepljenjem do 8cm", enota: "TM", cena: 80 },
+    { id: "rez-45-do-10", naziv: "Rez pod kotom 45° z lepljenjem do 10cm", enota: "TM", cena: 110 },
+    { id: "poliranje-c-rob", naziv: "Poliranje C rob", enota: "TM", cena: 40 },
+    { id: "poliranje-klasicno", naziv: "Poliranje klasično", enota: "TM", cena: 10 },
+    { id: "dvostransko-poliranje", naziv: "Dvostransko poliranje", enota: "M2", cena: 150 },
+    { id: "poliranje-spodnji-rob", naziv: "Poliranje do 5cm spodnjega roba", enota: "TM", cena: 30 },
+    { id: "montaza-kuhinje", naziv: "Montaža kuhinje", enota: "KOS", cena: 500 },
+    { id: "tezja-montaza-kuhinje", naziv: "Težja montaža kuhinje", enota: "KOS", cena: 700 },
+  ],
 };
 
-function novaPostavka() {
+// ===================== IZRAČUNI =====================
+
+function n(x) {
+  const v = parseFloat(String(x).replace(",", "."));
+  return isNaN(v) ? 0 : v;
+}
+
+function najdiMaterial(cenik, materialId) {
+  return cenik.materiali.find((m) => m.id === materialId) || null;
+}
+
+function skupnaKvadratura(kosi) {
+  return (kosi || []).reduce((s, k) => s + (n(k.dolzina) * n(k.sirina)) / 10000, 0);
+}
+
+function izracunMateriala(nalog, cenik) {
+  const material = najdiMaterial(cenik, nalog.materialId);
+  if (!material) return { m2: 0, cena: 0, naziv: "" };
+  if (material.tip === "plosca") {
+    return { steviloPlosc: n(nalog.steviloPlosc), cena: n(nalog.steviloPlosc) * n(material.cenaPlosca), naziv: material.naziv };
+  }
+  const m2 = skupnaKvadratura(nalog.kosi);
+  const cenaM2 = nalog.debelina === "3" ? material.cena3cm : material.cena2cm;
+  return { m2, cena: m2 * n(cenaM2), naziv: material.naziv };
+}
+
+function izracunStoritev(nalog, cenik) {
+  return cenik.storitve.map((s) => {
+    const kolicina = n(nalog.storitve?.[s.id]);
+    return { ...s, kolicina, skupaj: kolicina * n(s.cena) };
+  });
+}
+
+function izracunNaloga(nalog, cenik) {
+  const materialRes = izracunMateriala(nalog, cenik);
+  const storitveRes = izracunStoritev(nalog, cenik);
+  const storitveSkupaj = storitveRes.reduce((s, x) => s + x.skupaj, 0);
+  const osnova = materialRes.cena + storitveSkupaj;
+  const popust = osnova * (n(nalog.popust) / 100);
+  const brezDdv = osnova - popust;
+  const ddv = brezDdv * DDV;
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    naziv: "",
-    material: "",
-    dolzina: "",
-    sirina: "",
-    debelina: "",
-    kolicina: "1",
-    cena: "",
-    popust: "",
+    material: materialRes,
+    storitve: storitveRes,
+    storitveSkupaj,
+    osnova,
+    popust,
+    brezDdv,
+    ddv,
+    zDdv: brezDdv + ddv,
   };
 }
 
-function prazenObrazec() {
-  return {
-    stranka: "",
-    telefon: "",
-    email: "",
-    opis: "",
-    rok: "",
-    rokUra: "",
-    cena: "",
-    status: "Sprejeto",
-    opombe: "",
-    oddal: "",
-    tip: "",
-    utori: "",
-    placano: "Ne",
-    popustSkupaj: "",
-    vrsta: "narocilo",
-    veljavnostPonudbe: "",
-    postavke: [novaPostavka()],
-  };
-}
-
-function praznoStevilo(predpona = "DN") {
-  const d = new Date();
-  return `${predpona}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}-`;
-}
-
-const CENIK = {
-  "Rosa Beta": {
-    materiali: ["Rosa Beta"],
-    brackets: [
-      { min: 1, max: 15, cena2: 12.30, cena3: 16.20 },
-      { min: 16, max: 20, cena2: 16.40, cena3: 21.60 },
-      { min: 21, max: 25, cena2: 20.50, cena3: 27.00 },
-      { min: 26, max: 30, cena2: 24.60, cena3: 32.40 },
-      { min: 31, max: 35, cena2: 28.70, cena3: 37.80 },
-      { min: 36, max: 40, cena2: 32.80, cena3: 43.20 },
-      { min: 41, max: 45, cena2: 36.90, cena3: 48.60 },
-      { min: 46, max: 50, cena2: 41.00, cena3: 54.00 },
-    ],
-  },
-  "Giandone, Bianco Sardo, Azul Tragal, Rosa Porino, Umetni marmor": {
-    materiali: ["Giandone", "Bianco Sardo", "Azul Tragal", "Rosa Porino", "Umetni marmor bela z piko", "Umetni marmor bela z liso"],
-    brackets: [
-      { min: 1, max: 15, cena2: 16.05, cena3: 19.20 },
-      { min: 16, max: 20, cena2: 21.40, cena3: 25.60 },
-      { min: 21, max: 25, cena2: 26.75, cena3: 32.00 },
-      { min: 26, max: 30, cena2: 32.10, cena3: 38.40 },
-      { min: 31, max: 35, cena2: 37.45, cena3: 44.80 },
-      { min: 36, max: 40, cena2: 42.80, cena3: 51.20 },
-      { min: 41, max: 45, cena2: 48.15, cena3: 57.60 },
-      { min: 46, max: 50, cena2: 53.50, cena3: 64.00 },
-    ],
-  },
-  "Juparana Columbo, Multicolor, Nero Impala, Wiscont White, Tonalit, Steel Gray": {
-    materiali: ["Juparana Columbo", "Multicolor", "Nero Impala", "Wiscont White", "Tonalit", "Steel Gray"],
-    brackets: [
-      { min: 1, max: 15, cena2: 23.35, cena3: 27.00 },
-      { min: 16, max: 20, cena2: 29.80, cena3: 36.00 },
-      { min: 21, max: 25, cena2: 37.25, cena3: 45.00 },
-      { min: 26, max: 30, cena2: 44.70, cena3: 54.00 },
-      { min: 31, max: 35, cena2: 52.15, cena3: 63.00 },
-      { min: 36, max: 40, cena2: 59.60, cena3: 72.00 },
-      { min: 41, max: 45, cena2: 67.05, cena3: 81.00 },
-      { min: 46, max: 50, cena2: 74.50, cena3: 90.00 },
-    ],
-  },
-  "Ivory Brown, Siwakashi, Paradiso": {
-    materiali: ["Ivory Brown", "Siwakashi", "Paradiso"],
-    brackets: [
-      { min: 1, max: 15, cena2: 30.00, cena3: 33.75 },
-      { min: 16, max: 20, cena2: 40.00, cena3: 45.00 },
-      { min: 21, max: 25, cena2: 50.00, cena3: 56.25 },
-      { min: 26, max: 30, cena2: 60.00, cena3: 67.50 },
-      { min: 31, max: 35, cena2: 70.00, cena3: 78.75 },
-      { min: 36, max: 40, cena2: 80.00, cena3: 90.00 },
-      { min: 41, max: 45, cena2: 90.00, cena3: 101.25 },
-      { min: 46, max: 50, cena2: 100.00, cena3: 112.50 },
-    ],
-  },
-  "Black Galaxy, Nero Assoluto, Jet Black": {
-    materiali: ["Black Galaxy", "Nero Assoluto", "Jet Black"],
-    brackets: [
-      { min: 1, max: 15, cena2: 33.00, cena3: 38.25 },
-      { min: 16, max: 20, cena2: 44.00, cena3: 51.00 },
-      { min: 21, max: 25, cena2: 55.00, cena3: 63.75 },
-      { min: 26, max: 30, cena2: 66.00, cena3: 76.50 },
-      { min: 31, max: 35, cena2: 77.00, cena3: 89.25 },
-      { min: 36, max: 40, cena2: 88.00, cena3: 102.00 },
-      { min: 41, max: 45, cena2: 99.00, cena3: 114.75 },
-      { min: 46, max: 50, cena2: 110.00, cena3: 127.50 },
-    ],
-  },
-};
-
-const MATERIALI_SEZNAM = Object.values(CENIK).flatMap((s) => s.materiali);
-
-function najdiSkupinoMateriala(material) {
-  if (!material) return null;
-  const m = material.trim().toLowerCase();
-  for (const podatki of Object.values(CENIK)) {
-    if (podatki.materiali.some((ime) => ime.toLowerCase() === m)) return podatki;
-  }
-  return null;
-}
-
-function izracunajCenoPostavke(p) {
-  const skupina = najdiSkupinoMateriala(p.material);
-  if (!skupina) return null;
-  const sirina = parseFloat(String(p.sirina).replace(",", "."));
-  if (!sirina || sirina <= 0 || sirina > 50) return null;
-  const sirinaZaokrozena = Math.ceil(sirina - 1e-9);
-  const bracket = skupina.brackets.find((b) => sirinaZaokrozena >= b.min && sirinaZaokrozena <= b.max);
-  if (!bracket) return null;
-  const debelina = Math.round(parseFloat(String(p.debelina).replace(",", ".")));
-  if (debelina !== 2 && debelina !== 3) return null;
-  const cenaZaM = debelina === 2 ? bracket.cena2 : bracket.cena3;
-  const dolzina = parseFloat(String(p.dolzina).replace(",", "."));
-  const kolicina = parseFloat(String(p.kolicina).replace(",", ".")) || 1;
-  if (!dolzina || dolzina <= 0) return null;
-  const dolzinaM = (dolzina / 100) * kolicina;
-  let cena = dolzinaM * cenaZaM;
-  const popust = parseFloat(String(p.popust).replace(",", "."));
-  if (popust && popust > 0) {
-    cena = cena * (1 - popust / 100);
-  }
-  return Math.round(cena * 100) / 100;
-}
-
-function m2Postavke(p) {
-  const d = parseFloat(String(p.dolzina).replace(",", "."));
-  const s = parseFloat(String(p.sirina).replace(",", "."));
-  const k = parseFloat(String(p.kolicina).replace(",", ".")) || 1;
-  if (!d || !s) return 0;
-  return (d * s / 10000) * k;
-}
-
-function jeZamujen(nalog) {
-  if (!nalog.rok || nalog.status === "Prevzeto") return false;
-  const danes = new Date();
-  danes.setHours(0, 0, 0, 0);
-  const rok = new Date(nalog.rok);
-  return rok < danes;
-}
-
-function ponedeljekTedna(datumStr) {
-  const d = new Date(datumStr);
-  const dan = d.getDay();
-  const razlika = (dan === 0 ? -6 : 1) - dan;
-  const ponedeljek = new Date(d);
-  ponedeljek.setDate(d.getDate() + razlika);
-  return ponedeljek.toISOString().slice(0, 10);
-}
-
-function kljucObdobja(datumVnosa, obdobje) {
-  if (!datumVnosa) return null;
-  if (obdobje === "dan") return datumVnosa.slice(0, 10);
-  if (obdobje === "teden") return ponedeljekTedna(datumVnosa);
-  if (obdobje === "mesec") return datumVnosa.slice(0, 7);
-  return datumVnosa.slice(0, 4);
-}
-
-function nazivObdobja(kljuc, obdobje) {
-  if (obdobje === "dan") {
-    return new Date(kljuc).toLocaleDateString("sl-SI", { weekday: "short", day: "numeric", month: "numeric", year: "numeric" });
-  }
-  if (obdobje === "teden") {
-    return "Teden od " + new Date(kljuc).toLocaleDateString("sl-SI");
-  }
-  if (obdobje === "mesec") {
-    return new Date(kljuc + "-01").toLocaleDateString("sl-SI", { month: "long", year: "numeric" });
-  }
-  return kljuc;
-}
-
-function izracunajPorocilo(nalogi, obdobje) {
-  const dnevneVsote = {};
-  nalogi.forEach((n) => {
-    const cena = parseFloat(String(n.cena).replace(",", "."));
-    if (!cena || isNaN(cena) || !n.datumVnosa) return;
-    const dan = n.datumVnosa.slice(0, 10);
-    dnevneVsote[dan] = (dnevneVsote[dan] || 0) + cena;
-  });
-
-  if (obdobje === "teden" || obdobje === "mesec") {
-    const danesObj = new Date();
-    danesObj.setHours(0, 0, 0, 0);
-    let dnevi = [];
-    if (obdobje === "teden") {
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(danesObj);
-        d.setDate(d.getDate() - i);
-        dnevi.push(d);
-      }
-    } else {
-      const prviDanMeseca = new Date(danesObj.getFullYear(), danesObj.getMonth(), 1);
-      const zadnjiDanMeseca = new Date(danesObj.getFullYear(), danesObj.getMonth() + 1, 0);
-      for (let d = new Date(prviDanMeseca); d <= zadnjiDanMeseca; d.setDate(d.getDate() + 1)) {
-        dnevi.push(new Date(d));
-      }
-    }
-    return dnevi.map((d) => {
-      const kljuc = d.toISOString().slice(0, 10);
-      return {
-        kljuc,
-        naziv: d.toLocaleDateString("sl-SI", { weekday: "short", day: "numeric", month: "numeric" }),
-        vsota: dnevneVsote[kljuc] || 0,
-      };
-    });
-  }
-
-  const skupine = {};
-  nalogi.forEach((n) => {
-    const cena = parseFloat(String(n.cena).replace(",", "."));
-    if (!cena || isNaN(cena) || !n.datumVnosa) return;
-    const kljuc = kljucObdobja(n.datumVnosa, obdobje);
-    if (!kljuc) return;
-    skupine[kljuc] = (skupine[kljuc] || 0) + cena;
-  });
-  return Object.entries(skupine)
-    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-    .map(([kljuc, vsota]) => ({ kljuc, naziv: nazivObdobja(kljuc, obdobje), vsota }));
-}
-
-function obvestiloMailto(nalog) {
-  const zadeva = `Vaše naročilo ${nalog.stevilka || ""} je pripravljeno`;
-  const besedilo =
-    `Pozdravljeni ${nalog.stranka},\n\n` +
-    `obveščamo vas, da je vaše naročilo v Kamnoseštvu Čakš (${nalog.stevilka || ""} – ${nalog.opis || ""}) pripravljeno za prevzem.\n\n` +
-    `Prevzamete ga lahko vsak dan od 7.00 do 15.00 ali po dogovoru na številki 031 235 146.\n\n` +
-    `Lep pozdrav,\nKamnoseštvo Čakš`;
-  return `mailto:${nalog.email}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besedilo)}`;
-}
-
-function obvestiloSMS(nalog) {
-  const stevilkaCista = (nalog.telefon || "").replace(/[^0-9+]/g, "");
-  const besedilo =
-    `Pozdravljeni ${nalog.stranka}, vaše naročilo (${nalog.stevilka || ""}) v Kamnoseštvu Čakš je pripravljeno za prevzem. Odprto vsak dan 7.00-15.00 ali po dogovoru na 031 235 146. Lep pozdrav, Kamnoseštvo Čakš`;
-  const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const locilo = jeIOS ? "&" : "?";
-  return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besedilo)}`;
-}
-
-function besediloPonudbe(nalog) {
-  const neto = parseFloat(String(nalog.cena).replace(",", ".")) || 0;
-  const popust = parseFloat(String(nalog.popustSkupaj).replace(",", ".")) || 0;
-  const netoPoPopustu = neto * (1 - popust / 100);
-  const bruto = netoPoPopustu * 1.22;
-  const veljavnost = nalog.veljavnostPonudbe
-    ? `Ponudba velja do ${new Date(nalog.veljavnostPonudbe).toLocaleDateString("sl-SI")}.`
-    : "";
+function eur(x) {
   return (
-    `Pozdravljeni ${nalog.stranka},\n\n` +
-    `pošiljamo vam ponudbo ${nalog.stevilka || ""} za: ${nalog.opis || ""}.\n\n` +
-    `Skupna vrednost: ${netoPoPopustu.toFixed(2)} € (z DDV: ${bruto.toFixed(2)} €).\n` +
-    (veljavnost ? `${veljavnost}\n\n` : "\n") +
+    (x || 0).toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+    " €"
+  );
+}
+
+function datotekaVBase64(file) {
+  return new Promise((resolve, reject) => {
+    const bralnik = new FileReader();
+    bralnik.onload = () => resolve({ ime: file.name, tip: file.type, podatki: bralnik.result });
+    bralnik.onerror = reject;
+    bralnik.readAsDataURL(file);
+  });
+}
+
+const MAX_DATOTEKA_MB = 4;
+
+async function obravnavajNalozenoDatoteko(event, nastavi) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  if (file.size > MAX_DATOTEKA_MB * 1024 * 1024) {
+    alert(`Datoteka je prevelika (max ${MAX_DATOTEKA_MB} MB). Poskusi manjšo/stisnjeno datoteko.`);
+    event.target.value = "";
+    return;
+  }
+  try {
+    const rezultat = await datotekaVBase64(file);
+    nastavi(rezultat);
+  } catch (e) {
+    alert("Napaka pri nalaganju datoteke.");
+  }
+  event.target.value = "";
+}
+
+function besediloPonudbePulti(nalog, izr) {
+  return (
+    `Pozdravljeni ${nalog.stranka?.ime || ""},\n\n` +
+    `pošiljamo vam ponudbo ${nalog.stevilka || ""} za izdelavo pulta.\n\n` +
+    `Skupna vrednost: ${izr.zDdv.toFixed(2)} € (z DDV).\n\n` +
     `Za vsa vprašanja smo dosegljivi na 031 235 146.\n\n` +
     `Lep pozdrav,\nKamnoseštvo Čakš`
   );
 }
 
-function ponudbaMailto(nalog) {
+function ponudbaPultiMailto(nalog, izr) {
   const zadeva = `Ponudba ${nalog.stevilka || ""} — Kamnoseštvo Čakš`;
-  return `mailto:${nalog.email}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besediloPonudbe(nalog))}`;
+  return `mailto:${nalog.stranka?.email || ""}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besediloPonudbePulti(nalog, izr))}`;
 }
 
-function ponudbaSMS(nalog) {
-  const stevilkaCista = (nalog.telefon || "").replace(/[^0-9+]/g, "");
+function ponudbaPultiSMS(nalog, izr) {
+  const stevilkaCista = (nalog.stranka?.telefon || "").replace(/[^0-9+]/g, "");
   const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const locilo = jeIOS ? "&" : "?";
-  return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besediloPonudbe(nalog))}`;
+  return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besediloPonudbePulti(nalog, izr))}`;
 }
 
-function izracunajRazredePolic(nalog) {
-  const postavke = (nalog.postavke || []).filter((p) => p.naziv || p.material || p.dolzina);
-  const skupine = {};
-
-  postavke.forEach((p) => {
-    const skupinaPodatki = najdiSkupinoMateriala(p.material);
-    const sirina = parseFloat(String(p.sirina).replace(",", "."));
-    const dolzina = parseFloat(String(p.dolzina).replace(",", "."));
-    const kolicina = parseFloat(String(p.kolicina).replace(",", ".")) || 1;
-    const debelina = Math.round(parseFloat(String(p.debelina).replace(",", ".")));
-    if (!sirina || sirina <= 0 || !dolzina || dolzina <= 0) return;
-
-    let oznakaRazreda, materialIme;
-    if (skupinaPodatki) {
-      const sirinaZaokrozena = Math.ceil(sirina - 1e-9);
-      const bracket = skupinaPodatki.brackets.find((b) => sirinaZaokrozena >= b.min && sirinaZaokrozena <= b.max);
-      oznakaRazreda = bracket ? `${bracket.min}-${bracket.max} cm` : "izven cenika";
-      materialIme = p.material;
-    } else {
-      oznakaRazreda = "ni v ceniku";
-      materialIme = p.material || "—";
-    }
-    const debelinaOznaka = debelina ? `${debelina} cm` : "—";
-    const kljuc = `${materialIme}|${oznakaRazreda}|${debelinaOznaka}`;
-
-    if (!skupine[kljuc]) {
-      skupine[kljuc] = {
-        material: materialIme,
-        razred: oznakaRazreda,
-        debelina: debelinaOznaka,
-        tekociMetri: 0,
-        stevilo: 0,
-      };
-    }
-    skupine[kljuc].tekociMetri += (dolzina / 100) * kolicina;
-    skupine[kljuc].stevilo += kolicina;
-  });
-
-  return Object.values(skupine).sort((a, b) => a.material.localeCompare(b.material, "sl"));
-}
-
-function izvoziDonatoniCSV(nalog) {
-  const postavke = (nalog.postavke || []).filter((p) => p.naziv || p.material || p.dolzina);
-  const glave = ["Numero", "Larghezza", "Altezza", "Nome", "Spessore"];
-  const ubezi = (val) => {
-    const s = String(val ?? "");
-    if (s.includes(";") || s.includes('"') || s.includes("\n")) {
-      return '"' + s.replace(/"/g, '""') + '"';
-    }
-    return s;
-  };
-  const prveTriCrkeStranke = (nalog.stranka || "").trim().slice(0, 3).toUpperCase();
-  const vrstice = postavke.map((p, idx) => {
-    const mm = (v) => {
-      const n = parseFloat(String(v).replace(",", "."));
-      return isNaN(n) ? "" : n * 10;
-    };
-    const imePolice = p.naziv && p.naziv.trim() ? p.naziv.trim() : `Polica ${idx + 1}`;
-    const dolzinaMM = mm(p.dolzina);
-    const sirinaMM = mm(p.sirina);
-    return [
-      p.kolicina || "1",
-      dolzinaMM,
-      sirinaMM,
-      `${prveTriCrkeStranke} ${imePolice} ${dolzinaMM}x${sirinaMM}`,
-      mm(p.debelina),
-    ];
-  });
-  const csv = [glave, ...vrstice].map((r) => r.map(ubezi).join(";")).join("\r\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  const strankaVarno = (nalog.stranka || "").replace(/[\\/:*?"<>|]/g, "").trim();
-  a.download = `csv donatoni ${nalog.stevilka || "nalog"}${strankaVarno ? " " + strankaVarno : ""}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function prenesiVarnostnoKopijo(nalogi) {
-  const danes = new Date().toISOString().slice(0, 10);
-  const vsebina = JSON.stringify(nalogi, null, 2);
-  const blob = new Blob([vsebina], { type: "application/json;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `varnostna-kopija-delovni-nalogi-${danes}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function obnoviIzDatoteke(event, shraniNalogi) {
-  const datoteka = event.target.files && event.target.files[0];
-  if (!datoteka) return;
-  const bralnik = new FileReader();
-  bralnik.onload = async (e) => {
-    try {
-      const podatki = JSON.parse(e.target.result);
-      if (!Array.isArray(podatki)) {
-        alert("Datoteka ni veljavna varnostna kopija (pričakovan je seznam naročil).");
-        return;
-      }
-      const potrdi = window.confirm(
-        `Ali res želiš obnoviti podatke iz te datoteke? Vsebuje ${podatki.length} naročil in bo PREPISALA trenutni seznam. Tega dejanja ni mogoče razveljaviti.`
-      );
-      if (potrdi) {
-        await shraniNalogi(podatki);
-        alert("Podatki so bili uspešno obnovljeni.");
-      }
-    } catch (err) {
-      alert("Napaka pri branju datoteke — preveri, da je to prava .json varnostna kopija.");
-    }
-  };
-  bralnik.readAsText(datoteka);
-  event.target.value = "";
-}
-
-function strankaZaIme(nalog) {
-  return (nalog.stranka || "").replace(/[\\/:*?"<>|]/g, "").trim();
-}
-
-function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
+function prenesiHTMLDokumentPulti(selector, naslov, imeDatoteke) {
   const el = document.querySelector(selector);
   if (!el) {
     alert("Ni bilo mogoče najti vsebine za izpis.");
@@ -444,11 +198,7 @@ function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
     "<title>" + naslov + "</title>" +
     "<script src=\"https://cdn.tailwindcss.com\"></script>" +
-    "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">" +
-    "<link href=\"https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap\" rel=\"stylesheet\">" +
-    "<style>" +
-    "body{font-family:'Inter',system-ui,sans-serif;background:#f5f5f4;margin:0;padding:24px;}" +
-    ".carved{font-family:'Oswald',sans-serif;letter-spacing:0.04em;}" +
+    "<style>body{font-family:system-ui,sans-serif;background:#f5f5f4;margin:0;padding:24px;}" +
     ".navodilo{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:14px;max-width:800px;margin-left:auto;margin-right:auto;}" +
     ".ovoj{max-width:800px;margin:0 auto;}" +
     "@media print { .navodilo{ display:none !important; } body{ background:#fff !important; padding:0 !important; } .ovoj{ max-width:100% !important; } }" +
@@ -456,7 +206,6 @@ function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
     "<div class=\"navodilo\">To je prenesena datoteka za tiskanje. Uporabi Ctrl+P (Cmd+P na Mac) ali meni brskalnika &rarr; Natisni / Shrani kot PDF.</div>" +
     "<div class=\"ovoj\">" + el.outerHTML + "</div>" +
     "</body></html>";
-
   const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -468,1968 +217,1224 @@ function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
   URL.revokeObjectURL(url);
 }
 
-const ADMIN_PIN = "1991";
+function prazenKos() {
+  return { naziv: "", dolzina: "", sirina: "" };
+}
 
-export default function DelovniNalogi() {
+function prazenNalog() {
+  return {
+    id: Date.now(),
+    stevilka: "",
+    datum: new Date().toISOString().slice(0, 10),
+    stranka: { ime: "", telefon: "", naslov: "" },
+    sprejel: "",
+    status: "ponudba",
+    materialId: "",
+    debelina: "2",
+    steviloPlosc: "",
+    kosi: [prazenKos()],
+    storitve: {},
+    popust: "",
+    ponudbenaCena: null,
+    dxf: "",
+    dxfDatoteka: null,
+    skica: null,
+    datumMontaze: "",
+    opombe: "",
+    zgodovina: [],
+    placano: false,
+  };
+}
+
+// ===================== GLAVNA KOMPONENTA =====================
+
+export default function Pulti() {
   const [nalogi, setNalogi] = useState([]);
-  const [naloziLoading, setNaloziLoading] = useState(true);
+  const [cenik, setCenik] = useState(null);
+  const [nalaganje, setNalaganje] = useState(true);
   const [napaka, setNapaka] = useState("");
   const [pogled, setPogled] = useState("seznam");
-  const [aktivniId, setAktivniId] = useState(null);
-  const [obrazec, setObrazec] = useState(prazenObrazec());
-  const [iskanje, setIskanje] = useState("");
-  const [filterStatus, setFilterStatus] = useState("Vsi");
-  const [shranjujem, setShranjujem] = useState(false);
-  const [adminOdklenjen, setAdminOdklenjen] = useState(false);
-  const [pokaziPinVnos, setPokaziPinVnos] = useState(false);
-  const [pinVnos, setPinVnos] = useState("");
-  const [pinNapaka, setPinNapaka] = useState("");
-  const [izbranaStranka, setIzbranaStranka] = useState(null);
-
-  const [rocniMaterial, setRocniMaterial] = useState({});
+  const [filter, setFilter] = useState("vsi");
+  const [obrazec, setObrazec] = useState(null);
+  const [izbran, setIzbran] = useState(null);
+  const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
-    try {
-      const shranjeno = localStorage.getItem("admin-odklenjen");
-      if (shranjeno === "da") setAdminOdklenjen(true);
-    } catch (e) {
-      // localStorage ni na voljo
-    }
+    Promise.all([
+      fetch("/api/pulti").then((r) => r.json()),
+      fetch("/api/cenik-pulti").then((r) => r.json()),
+    ])
+      .then(([p, c]) => {
+        setNalogi(Array.isArray(p) ? p : []);
+        const veljaven = c && Array.isArray(c.materiali) && Array.isArray(c.storitve);
+        setCenik(veljaven ? c : PRIVZETI_CENIK);
+      })
+      .catch(() => setNapaka("Napaka pri nalaganju podatkov."))
+      .finally(() => setNalaganje(false));
   }, []);
 
-  function potrdiPin() {
-    if (pinVnos === ADMIN_PIN) {
-      setAdminOdklenjen(true);
-      setPokaziPinVnos(false);
-      setPinVnos("");
-      setPinNapaka("");
-      try { localStorage.setItem("admin-odklenjen", "da"); } catch (e) {}
-    } else {
-      setPinNapaka("Napačna koda.");
-    }
-  }
-
-  function zapriAdmin() {
-    setAdminOdklenjen(false);
-    try { localStorage.setItem("admin-odklenjen", "ne"); } catch (e) {}
-  }
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/nalogi");
-        const podatki = await res.json();
-        if (Array.isArray(podatki)) {
-          const popravljeni = podatki.map((n) => ({
-            ...n,
-            postavke: Array.isArray(n.postavke) && n.postavke.length ? n.postavke : [novaPostavka()],
-          }));
-          setNalogi(popravljeni);
-        }
-      } catch (e) {
-        setNalogi([]);
-      } finally {
-        setNaloziLoading(false);
-      }
-    })();
-  }, []);
-
-  async function shraniNalogi(noviSeznam) {
-    setNalogi(noviSeznam);
-    setShranjujem(true);
+  async function shraniNaloge(novi) {
+    setNalogi(novi);
     try {
-      const res = await fetch("/api/nalogi", {
+      const r = await fetch("/api/pulti", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(noviSeznam),
+        body: JSON.stringify(novi),
       });
-      if (!res.ok) setNapaka("Shranjevanje ni uspelo. Poskusi znova.");
-      else setNapaka("");
-    } catch (e) {
-      setNapaka("Napaka pri shranjevanju. Preveri povezavo in poskusi znova.");
-    } finally {
-      setShranjujem(false);
+      if (!r.ok) throw new Error();
+    } catch {
+      setNapaka("Napaka pri shranjevanju! Preveri povezavo.");
     }
   }
 
-  function odpriNov() {
-    setObrazec(prazenObrazec());
-    setAktivniId(null);
-    setPogled("nov");
-  }
-
-  function odpriNovoPonudbo() {
-    setObrazec({ ...prazenObrazec(), vrsta: "ponudba" });
-    setAktivniId(null);
-    setPogled("nov");
-  }
-
-  function odpriUredi(nalog) {
-    setObrazec({
-      ...nalog,
-      email: nalog.email || "",
-      utori: nalog.utori || "",
-      placano: nalog.placano || "Ne",
-      popustSkupaj: nalog.popustSkupaj || "",
-      rokUra: nalog.rokUra || "",
-      veljavnostPonudbe: nalog.veljavnostPonudbe || "",
-      postavke: nalog.postavke.length ? nalog.postavke : [novaPostavka()],
-    });
-    setAktivniId(nalog.id);
-    setPogled("nov");
-  }
-
-  function odpriPodrobnosti(id) {
-    setAktivniId(id);
-    setPogled("podrobnosti");
-  }
-
-  function dodajPostavko() {
-    setObrazec({ ...obrazec, postavke: [...obrazec.postavke, novaPostavka()] });
-  }
-
-  function dodajVecPostavk(stevilo) {
-    const nove = Array.from({ length: stevilo }, () => novaPostavka());
-    setObrazec({ ...obrazec, postavke: [...obrazec.postavke, ...nove] });
-  }
-
-  function vsotaPostavk(postavke) {
-    const v = postavke.reduce((vsota, p) => {
-      const c = parseFloat(String(p.cena).replace(",", "."));
-      return vsota + (isNaN(c) ? 0 : c);
-    }, 0);
-    return v > 0 ? v.toFixed(2) : "";
-  }
-
-  function posodobiPostavko(id, polje, vrednost) {
-    const posodobljenePostavke = obrazec.postavke.map((p) => {
-      if (p.id !== id) return p;
-      const posodobljena = { ...p, [polje]: vrednost };
-      if (["material", "dolzina", "sirina", "debelina", "kolicina", "popust"].includes(polje)) {
-        const izracunana = izracunajCenoPostavke(posodobljena);
-        if (izracunana !== null) posodobljena.cena = String(izracunana);
-      }
-      return posodobljena;
-    });
-    setObrazec({
-      ...obrazec,
-      postavke: posodobljenePostavke,
-      cena: vsotaPostavk(posodobljenePostavke),
-    });
-  }
-
-  function izbrisiPostavko(id) {
-    const posodobljenePostavke = obrazec.postavke.filter((p) => p.id !== id);
-    setObrazec({
-      ...obrazec,
-      postavke: posodobljenePostavke,
-      cena: vsotaPostavk(posodobljenePostavke),
-    });
-  }
-
-  async function shraniObrazec() {
-    if (!obrazec.stranka.trim() || !obrazec.opis.trim()) {
-      setNapaka("Vnesi vsaj ime stranke in opis dela.");
-      return;
+  async function shraniCenik(nov) {
+    setCenik(nov);
+    try {
+      await fetch("/api/cenik-pulti", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nov),
+      });
+    } catch {
+      setNapaka("Napaka pri shranjevanju cenika!");
     }
-    setNapaka("");
-    const ocisceniPostavki = obrazec.postavke.filter(
-      (p) => p.naziv.trim() || p.material.trim() || p.dolzina || p.sirina || p.debelina
+  }
+
+  function vprasajPin() {
+    if (admin) return true;
+    const pin = prompt("Vnesi admin PIN:");
+    if (pin === ADMIN_PIN) {
+      setAdmin(true);
+      return true;
+    }
+    if (pin !== null) alert("Napačen PIN.");
+    return false;
+  }
+
+  function novaStevilka() {
+    const leto = new Date().getFullYear();
+    const letos = nalogi.filter((x) => (x.stevilka || "").includes(`P-${leto}`)).length;
+    return `P-${leto}-${String(letos + 1).padStart(3, "0")}`;
+  }
+
+  if (nalaganje)
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center text-gray-500">
+        Nalagam ...
+      </div>
     );
-    const obrazecZaShranjevanje = { ...obrazec, postavke: ocisceniPostavki.length ? ocisceniPostavki : [novaPostavka()] };
 
-    if (aktivniId) {
-      const posodobljeni = nalogi.map((n) => (n.id === aktivniId ? { ...obrazecZaShranjevanje, id: aktivniId } : n));
-      await shraniNalogi(posodobljeni);
-      setAktivniId(aktivniId);
-      setPogled("podrobnosti");
-    } else {
-      const predpona = obrazec.vrsta === "ponudba" ? "PO" : "DN";
-      const stevilkaIndex = nalogi.filter((n) => (n.vrsta || "narocilo") === (obrazec.vrsta || "narocilo")).length + 1;
-      const novNalog = {
-        ...obrazecZaShranjevanje,
-        id: `${Date.now()}`,
-        stevilka: `${praznoStevilo(predpona)}${String(stevilkaIndex).padStart(3, "0")}`,
-        datumVnosa: new Date().toISOString(),
-      };
-      const posodobljeni = [novNalog, ...nalogi];
-      await shraniNalogi(posodobljeni);
-      setAktivniId(novNalog.id);
-      setPogled("podrobnosti");
-    }
-  }
-
-  async function pretvoriVDelovniNalog(id) {
-    const nalog = nalogi.find((n) => n.id === id);
-    if (!nalog) return;
-    const potrdi = window.confirm(`Ali želiš ponudbo ${nalog.stevilka} pretvoriti v pravi delovni nalog? Dobila bo novo številko delovnega naloga.`);
-    if (!potrdi) return;
-    const stevilkaIndex = nalogi.filter((n) => (n.vrsta || "narocilo") === "narocilo").length + 1;
-    const novaStevilka = `${praznoStevilo("DN")}${String(stevilkaIndex).padStart(3, "0")}`;
-    const posodobljeni = nalogi.map((n) =>
-      n.id === id ? { ...n, vrsta: "narocilo", stevilka: novaStevilka, status: "Sprejeto" } : n
+  if (!cenik)
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center text-red-600 p-4 text-center">
+        Cenika ni bilo mogoče naložiti. Osveži stran ali preveri povezavo.
+      </div>
     );
-    await shraniNalogi(posodobljeni);
-  }
-
-  async function izbrisiNalog(id) {
-    const posodobljeni = nalogi.filter((n) => n.id !== id);
-    await shraniNalogi(posodobljeni);
-    setPogled("seznam");
-  }
-
-  async function spremeniStatus(id, status) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, status } : n));
-    await shraniNalogi(posodobljeni);
-  }
-
-  async function spremeniPlacano(id, placano) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, placano } : n));
-    await shraniNalogi(posodobljeni);
-  }
-
-  async function shraniPrevzel(id, prevzel) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, prevzel } : n));
-    await shraniNalogi(posodobljeni);
-  }
-
-  async function shraniIzvajalca(id, izvajalec) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, izvajalec } : n));
-    await shraniNalogi(posodobljeni);
-  }
-
-  async function shraniOddal(id, oddal) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, oddal } : n));
-    await shraniNalogi(posodobljeni);
-  }
-
-  const aktivniNalog = nalogi.find((n) => n.id === aktivniId);
-
-  const podatkiGrafa = STATUSI.map((s) => ({
-    name: s,
-    value: nalogi.filter((n) => n.status === s).length,
-  })).filter((d) => d.value > 0);
-
-  const skupnaVrednostVseh = nalogi.reduce((v, n) => {
-    const c = parseFloat(String(n.cena).replace(",", "."));
-    return v + (isNaN(c) ? 0 : c);
-  }, 0);
-
-  const edinstveneStranke = [...new Set(nalogi.map((n) => n.stranka).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, "sl")
-  );
-
-  function najdiPodatkeStranke(imeStranke) {
-    const ujemanja = nalogi
-      .filter((n) => n.stranka === imeStranke && (n.telefon || n.email))
-      .sort((a, b) => (b.datumVnosa || "").localeCompare(a.datumVnosa || ""));
-    return ujemanja.length ? { telefon: ujemanja[0].telefon || "", email: ujemanja[0].email || "" } : null;
-  }
-
-
-  const filtrirani = nalogi.filter((n) => {
-    const ujemaIskanje =
-      n.stranka.toLowerCase().includes(iskanje.toLowerCase()) ||
-      n.opis.toLowerCase().includes(iskanje.toLowerCase()) ||
-      (n.stevilka || "").toLowerCase().includes(iskanje.toLowerCase());
-    const ujemaStatus = filterStatus === "Vsi" || n.status === filterStatus;
-    return ujemaIskanje && ujemaStatus;
-  });
-
-  const skupajM2Obrazec = obrazec.postavke.reduce((vsota, p) => vsota + m2Postavke(p), 0);
 
   return (
-    <div className="min-h-screen bg-stone-100 text-stone-800" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
-        .carved {
-          font-family: 'Oswald', sans-serif;
-          letter-spacing: 0.04em;
-          text-shadow: 0 1px 0 rgba(255,255,255,0.6), 0 -1px 0 rgba(0,0,0,0.15);
-        }
-        .chisel-line {
-          background-image: repeating-linear-gradient(135deg, transparent, transparent 7px, rgba(0,0,0,0.04) 7px, rgba(0,0,0,0.04) 8px);
-        }
-        .postavka-input {
-          width: 100%;
-          padding: 6px 8px;
-          border-radius: 6px;
-          border: 1px solid #d6d3d1;
-          font-size: 13px;
-          background: white;
-        }
-        .postavka-input:focus {
-          outline: none;
-          border-color: #f59e0b;
-          box-shadow: 0 0 0 2px rgba(245,158,11,0.25);
-        }
-        @media (min-width: 640px) {
-          .postavka-row {
-            grid-template-columns: 2fr 1.6fr 1fr 1fr 1fr 0.8fr auto;
-          }
-        }
-      `}</style>
-
-      <header className="bg-black text-stone-100 chisel-line">
-        <div className="max-w-4xl mx-auto px-5 py-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-11 rounded bg-white flex items-center justify-center border border-stone-700 px-1.5 py-1">
-              <img src={CAKS_LOGO} alt="Čakš logo" className="w-full h-full object-contain" />
-            </div>
-            <div>
-              <h1 className="carved text-2xl uppercase tracking-wide text-stone-50">Delovni nalogi</h1>
-              <p className="text-stone-400 text-xs">Kamnoseštvo Čakš</p>
-            </div>
+    <div className="min-h-screen bg-gray-100 pb-24">
+      <div className="bg-black text-white px-4 py-3 flex items-center justify-between sticky top-0 z-20">
+        <div>
+          <div className="font-bold text-lg leading-tight">
+            ČAKŠ <span className="text-red-500">· Pulti</span>
           </div>
-          <div className="flex items-center gap-2">
-            <a
-              href="/pulti"
-              className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
-            >
-              Pulti
-            </a>
-            {adminOdklenjen ? (
-              <button
-                onClick={zapriAdmin}
-                className="text-emerald-400 hover:text-emerald-300 text-xs flex items-center gap-1 border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
-                title="Admin odklenjen — klikni za zaklep"
-              >
-                <Unlock size={14} /> Admin
-              </button>
-            ) : (
-              <button
-                onClick={() => { setPokaziPinVnos(!pokaziPinVnos); setPinNapaka(""); }}
-                className="text-stone-400 hover:text-white text-xs flex items-center gap-1 border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
-                title="Odkleni admin"
-              >
-                <Lock size={14} />
-              </button>
-            )}
-            {pogled !== "seznam" && (
-              <button
-                onClick={() => setPogled("seznam")}
-                className="text-stone-300 hover:text-white text-sm flex items-center gap-1 border border-stone-700 rounded px-3 py-1.5 hover:bg-stone-800 transition-colors"
-              >
-                <X size={16} /> Zapri
-              </button>
-            )}
-          </div>
+          <div className="text-xs text-gray-400">Delovni nalogi — proizvodnja pultov</div>
         </div>
-        {pokaziPinVnos && !adminOdklenjen && (
-          <div className="max-w-4xl mx-auto px-5 pb-4 -mt-2">
-            <div className="bg-stone-800 border border-stone-700 rounded-lg px-3 py-2.5 flex items-center gap-2">
-              <input
-                type="password"
-                inputMode="numeric"
-                value={pinVnos}
-                onChange={(e) => setPinVnos(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") potrdiPin(); }}
-                placeholder="Vnesi admin kodo"
-                className="flex-1 px-2.5 py-1.5 rounded bg-stone-900 border border-stone-600 text-stone-100 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-              />
-              <button
-                onClick={potrdiPin}
-                className="bg-red-600 hover:bg-red-500 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
-              >
-                Odkleni
-              </button>
-            </div>
-            {pinNapaka && <p className="text-red-400 text-xs mt-1.5">{pinNapaka}</p>}
-          </div>
-        )}
-      </header>
+        <div className="flex gap-2">
+          <a href="/" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">
+            Police
+          </a>
+          <button
+            onClick={() => {
+              if (vprasajPin()) setPogled("cenik");
+            }}
+            className="text-xs bg-gray-800 px-3 py-2 rounded-lg"
+          >
+            Cenik
+          </button>
+        </div>
+      </div>
 
-      <main className="max-w-4xl mx-auto px-5 py-6 pb-24">
-        {napaka && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-            {napaka}
-          </div>
-        )}
+      {napaka && (
+        <div
+          className="bg-red-600 text-white text-sm px-4 py-2 cursor-pointer"
+          onClick={() => setNapaka("")}
+        >
+          {napaka} (tapni za zapiranje)
+        </div>
+      )}
 
-        {naloziLoading && (
-          <div className="text-center text-stone-500 py-16">Nalagam naloge…</div>
-        )}
+      {pogled === "seznam" && (
+        <Seznam
+          nalogi={nalogi}
+          cenik={cenik}
+          filter={filter}
+          setFilter={setFilter}
+          odpri={(nal) => {
+            setIzbran(nal.id);
+            setPogled("podrobnosti");
+          }}
+        />
+      )}
 
-        {!naloziLoading && pogled === "seznam" && (
-          <div>
-            {adminOdklenjen && nalogi.length > 0 && (
-              <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-xs font-medium text-stone-400 uppercase mb-1 flex items-center gap-1.5">
-                      <Unlock size={12} /> Skupna vrednost vseh naročil
-                    </p>
-                    <p className="text-2xl font-bold text-white">{skupnaVrednostVseh.toFixed(2)} €</p>
-                  </div>
-                </div>
+      {pogled === "obrazec" && (
+        <Obrazec
+          zacetni={obrazec}
+          cenik={cenik}
+          preklici={() => setPogled(obrazec && obrazec._urejanje ? "podrobnosti" : "seznam")}
+          shrani={(nal) => {
+            const izr = izracunNaloga(nal, cenik);
+            let novi;
+            if (nal._urejanje) {
+              delete nal._urejanje;
+              novi = nalogi.map((x) => (x.id === nal.id ? nal : x));
+            } else {
+              nal.stevilka = novaStevilka();
+              nal.ponudbenaCena = izr.zDdv;
+              nal.zgodovina = [
+                { status: "ponudba", datum: new Date().toISOString(), kdo: nal.sprejel || "" },
+              ];
+              novi = [nal, ...nalogi];
+            }
+            shraniNaloge(novi);
+            setIzbran(nal.id);
+            setPogled("podrobnosti");
+          }}
+        />
+      )}
 
-                <div className="border-t border-stone-700 pt-3">
-                  {(() => {
-                    const skupajVse = nalogi.reduce((v, n) => {
-                      const c = parseFloat(String(n.cena).replace(",", "."));
-                      return v + (isNaN(c) ? 0 : c);
-                    }, 0);
-                    const skupajPlacano = nalogi.reduce((v, n) => {
-                      if ((n.placano || "Ne") !== "Da") return v;
-                      const c = parseFloat(String(n.cena).replace(",", "."));
-                      return v + (isNaN(c) ? 0 : c);
-                    }, 0);
-                    const skupajNeplacano = skupajVse - skupajPlacano;
-                    const podatkiPlacil = [
-                      { naziv: "Skupaj", vsota: skupajVse, barva: "#7f1d1d" },
-                      { naziv: "Plačano", vsota: skupajPlacano, barva: "#10b981" },
-                      { naziv: "Neplačano", vsota: skupajNeplacano, barva: "#facc15" },
-                    ];
-                    return (
-                      <div style={{ width: "100%", height: 120 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={podatkiPlacil} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#44403c" vertical={false} />
-                            <XAxis dataKey="naziv" tick={{ fill: "#a8a29e", fontSize: 11 }} />
-                            <YAxis tick={{ fill: "#a8a29e", fontSize: 10 }} />
-                            <Tooltip
-                              contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
-                              labelStyle={{ color: "#fff" }}
-                              formatter={(value) => [`${value.toFixed(2)} €`, "Vsota"]}
-                            />
-                            <Bar dataKey="vsota" radius={[4, 4, 0, 0]}>
-                              {podatkiPlacil.map((entry) => (
-                                <Cell key={entry.naziv} fill={entry.barva} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    );
-                  })()}
-                </div>
+      {pogled === "podrobnosti" && (
+        <Podrobnosti
+          nalog={nalogi.find((x) => x.id === izbran)}
+          cenik={cenik}
+          nazaj={() => setPogled("seznam")}
+          uredi={(nal) => {
+            setObrazec({ ...nal, _urejanje: true });
+            setPogled("obrazec");
+          }}
+          spremeniStatus={(nal, novStatus, kdo) => {
+            const posodobljen = {
+              ...nal,
+              status: novStatus,
+              zgodovina: [
+                ...(nal.zgodovina || []),
+                { status: novStatus, datum: new Date().toISOString(), kdo: kdo || "" },
+              ],
+            };
+            shraniNaloge(nalogi.map((x) => (x.id === nal.id ? posodobljen : x)));
+          }}
+          preklopiPlacano={(nal) => {
+            shraniNaloge(
+              nalogi.map((x) => (x.id === nal.id ? { ...x, placano: !x.placano } : x))
+            );
+          }}
+          izbrisi={(nal) => {
+            if (!vprasajPin()) return;
+            if (!confirm(`Res izbrišem nalog ${nal.stevilka}?`)) return;
+            shraniNaloge(nalogi.filter((x) => x.id !== nal.id));
+            setPogled("seznam");
+          }}
+          natisni={(nal) => {
+            setIzbran(nal.id);
+            setPogled("tiskPonudbe");
+          }}
+        />
+      )}
 
-                {(() => {
-                  const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da");
-                  const skupajNeplacano = neplacana.reduce((v, n) => {
-                    const c = parseFloat(String(n.cena).replace(",", "."));
-                    return v + (isNaN(c) ? 0 : c);
-                  }, 0);
-                  return (
-                    <div className="border-t border-stone-700 pt-3 mt-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-medium text-stone-400 uppercase">Neplačana delovna naročila</p>
-                        <span className="text-sm font-semibold text-red-400">{skupajNeplacano.toFixed(2)} €</span>
-                      </div>
-                      {neplacana.length === 0 ? (
-                        <p className="text-xs text-stone-500">Vse je plačano. 🎉</p>
-                      ) : (
-                        <div className="max-h-56 overflow-y-auto space-y-1">
-                          {neplacana.map((n) => (
-                            <button
-                              key={n.id}
-                              onClick={() => odpriPodrobnosti(n.id)}
-                              className="w-full flex items-center justify-between text-sm py-1.5 border-b border-stone-800 hover:bg-stone-800 px-1 rounded transition-colors text-left"
-                            >
-                              <span className="text-stone-300 truncate">{n.stevilka} · {n.stranka}</span>
-                              <span className="font-semibold text-red-400 shrink-0 ml-2">{n.cena ? `${n.cena} €` : "brez cene"}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+      {pogled === "tiskPonudbe" && (
+        <TiskPonudbePulti
+          nalog={nalogi.find((x) => x.id === izbran)}
+          cenik={cenik}
+          nazaj={() => setPogled("podrobnosti")}
+        />
+      )}
 
-                <button
-                  onClick={() => setPogled("stranke")}
-                  className="mt-3 w-full text-sm text-center px-3 py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors"
-                >
-                  Pregled po strankah →
-                </button>
+      {pogled === "cenik" && (
+        <CenikAdmin cenik={cenik} shrani={shraniCenik} nazaj={() => setPogled("seznam")} />
+      )}
 
-                <div className="border-t border-stone-700 pt-3 mt-3">
-                  <p className="text-xs font-medium text-stone-400 uppercase mb-2">Varnostna kopija</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => prenesiVarnostnoKopijo(nalogi)}
-                      className="text-sm px-3 py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors flex items-center gap-1.5"
-                    >
-                      <Download size={14} /> Prenesi kopijo zdaj
-                    </button>
-                    <label className="text-sm px-3 py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors flex items-center gap-1.5 cursor-pointer">
-                      <FileText size={14} /> Obnovi iz datoteke
-                      <input
-                        type="file"
-                        accept="application/json"
-                        className="hidden"
-                        onChange={(e) => obnoviIzDatoteke(e, shraniNalogi)}
-                      />
-                    </label>
-                  </div>
-                  <p className="text-xs text-stone-500 mt-2">
-                    Samodejna varnostna kopija se shrani vsak dan ob 3h zjutraj. Priporočamo tudi ročni prenos vsake toliko časa.
-                  </p>
-                </div>
-              </div>
-            )}
+      {pogled === "seznam" && (
+        <button
+          onClick={() => {
+            setObrazec(prazenNalog());
+            setPogled("obrazec");
+          }}
+          className="fixed bottom-6 right-6 bg-red-600 text-white rounded-full w-14 h-14 text-3xl shadow-lg flex items-center justify-center"
+        >
+          +
+        </button>
+      )}
+    </div>
+  );
+}
 
-            {nalogi.length > 0 && (
-              <div className="bg-white border border-stone-200 rounded-xl p-4 mb-5">
-                <p className="text-xs font-medium text-stone-500 uppercase mb-1">Stanje naročil</p>
-                <div className="flex items-center">
-                  <div style={{ width: "140px", height: "140px" }} className="shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={podatkiGrafa}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius={35}
-                          outerRadius={60}
-                          paddingAngle={2}
-                        >
-                          {podatkiGrafa.map((d) => (
-                            <Cell key={d.name} fill={STATUS_HEX[d.name]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex flex-col gap-1.5 ml-2">
-                    {podatkiGrafa.map((d) => (
-                      <div key={d.name} className="flex items-center gap-2 text-sm">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: STATUS_HEX[d.name] }} />
-                        <span className="text-stone-600">{d.name}</span>
-                        <span className="font-semibold text-stone-800">{d.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+// ===================== SEZNAM =====================
 
-            <div className="flex flex-col sm:flex-row gap-3 mb-5">
-              <div className="relative flex-1">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                <input
-                  value={iskanje}
-                  onChange={(e) => setIskanje(e.target.value)}
-                  placeholder="Išči po stranki, opisu, številki…"
-                  className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-stone-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500"
-                />
-              </div>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-2.5 rounded-lg border border-stone-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-              >
-                <option>Vsi</option>
-                {STATUSI.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-            </div>
+function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
+  const filtrirani =
+    filter === "vsi" ? nalogi : nalogi.filter((x) => x.status === filter);
 
-            {filtrirani.length === 0 ? (
-              <div className="text-center py-16 border-2 border-dashed border-stone-300 rounded-xl bg-white/50">
-                <Hammer size={28} className="mx-auto text-stone-400 mb-3" />
-                <p className="text-stone-500 text-sm">
-                  {nalogi.length === 0
-                    ? "Ni še nobenega delovnega naloga. Dodaj prvega."
-                    : "Ni naročil, ki bi ustrezala iskanju."}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {filtrirani.map((n) => {
-                  const steviloPostavk = (n.postavke || []).filter(p => p.naziv || p.material || p.dolzina).length;
-                  const zamujen = jeZamujen(n);
-                  return (
-                    <button
-                      key={n.id}
-                      onClick={() => odpriPodrobnosti(n.id)}
-                      className={`w-full text-left rounded-xl px-4 py-3.5 hover:shadow-sm transition-all flex items-center justify-between gap-3 ${
-                        zamujen
-                          ? "bg-red-50 border-2 border-red-400 hover:border-red-500"
-                          : "bg-white border border-stone-200 hover:border-red-400"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
-                          {n.vrsta === "ponudba" && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-medium">
-                              Ponudba
-                            </span>
-                          )}
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BARVE[n.status]}`}>
-                            {n.status}
-                          </span>
-                          {steviloPostavk > 0 && (
-                            <span className="text-xs text-stone-400">· {steviloPostavk} postavk</span>
-                          )}
-                          {zamujen && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-red-600 text-white font-medium">
-                              Zamujeno
-                            </span>
-                          )}
-                          {(n.placano || "Ne") === "Da" ? (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                              Plačano
-                            </span>
-                          ) : (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                              Ne plačano
-                            </span>
-                          )}
-                        </div>
-                        <div className="font-semibold text-stone-800 truncate">{n.stranka}</div>
-                        <div className="text-sm text-stone-500 truncate">{n.opis}</div>
-                      </div>
-                      <ChevronRight size={18} className="text-stone-300 shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {pogled === "stranke" && (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="carved text-lg uppercase text-stone-700">Stranke</h2>
-              <button
-                onClick={() => setPogled("seznam")}
-                className="text-sm text-stone-500 hover:text-stone-700"
-              >
-                ← Nazaj na seznam
-              </button>
-            </div>
-            {edinstveneStranke.length === 0 ? (
-              <p className="text-sm text-stone-500">Ni še nobene stranke.</p>
-            ) : (
-              <div className="space-y-2">
-                {edinstveneStranke.map((stranka) => {
-                  const naroceilaStranke = nalogi.filter((n) => n.stranka === stranka);
-                  const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da");
-                  const odprtaVsota = odprta.reduce((v, n) => {
-                    const c = parseFloat(String(n.cena).replace(",", "."));
-                    return v + (isNaN(c) ? 0 : c);
-                  }, 0);
-                  return (
-                    <button
-                      key={stranka}
-                      onClick={() => { setIzbranaStranka(stranka); setPogled("strankaDetalji"); }}
-                      className="w-full text-left bg-white border border-stone-200 rounded-xl px-4 py-3.5 hover:border-red-400 hover:shadow-sm transition-all flex items-center justify-between gap-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="font-semibold text-stone-800 truncate">{stranka}</div>
-                        <div className="text-sm text-stone-500">
-                          {naroceilaStranke.length} naročil
-                          {adminOdklenjen && odprta.length > 0 && (
-                            <span className="text-red-600 font-medium"> · {odprta.length} odprtih ({odprtaVsota.toFixed(2)} €)</span>
-                          )}
-                          {adminOdklenjen && odprta.length === 0 && (
-                            <span className="text-emerald-600 font-medium"> · vse plačano</span>
-                          )}
-                        </div>
-                      </div>
-                      <ChevronRight size={18} className="text-stone-300 shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {pogled === "strankaDetalji" && izbranaStranka && (() => {
-          const naroceilaStranke = nalogi.filter((n) => n.stranka === izbranaStranka);
-          const neplacana = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da");
-          const skupajNeplacano = neplacana.reduce((v, n) => {
-            const c = parseFloat(String(n.cena).replace(",", "."));
-            return v + (isNaN(c) ? 0 : c);
-          }, 0);
+  return (
+    <div className="p-3">
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        {STATUSI.map((s) => {
+          const st = nalogi.filter((x) => x.status === s.id).length;
           return (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="carved text-lg uppercase text-stone-700">{izbranaStranka}</h2>
-                <button
-                  onClick={() => setPogled("stranke")}
-                  className="text-sm text-stone-500 hover:text-stone-700"
-                >
-                  ← Nazaj na stranke
-                </button>
-              </div>
+            <button
+              key={s.id}
+              onClick={() => setFilter(filter === s.id ? "vsi" : s.id)}
+              className={`rounded-lg p-2 text-center text-white ${s.barva} ${
+                filter === s.id ? "ring-2 ring-black" : ""
+              }`}
+            >
+              <div className="text-lg font-bold leading-none">{st}</div>
+              <div className="text-[10px] leading-tight mt-1">{s.naziv}</div>
+            </button>
+          );
+        })}
+      </div>
 
-              {adminOdklenjen && (
-                <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mb-4 flex items-center justify-between">
-                  <span className="text-sm text-stone-300">Skupaj neplačano ({neplacana.length} naročil)</span>
-                  <span className="text-xl font-bold text-red-400">{skupajNeplacano.toFixed(2)} €</span>
+      {filter !== "vsi" && (
+        <button
+          onClick={() => setFilter("vsi")}
+          className="text-xs text-red-600 mb-2 underline"
+        >
+          Prikaži vse
+        </button>
+      )}
+
+      {filtrirani.length === 0 && (
+        <div className="text-center text-gray-400 py-12">
+          Ni nalogov. Dodaj prvega z gumbom +
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {filtrirani.map((nal) => {
+          const s = STATUSI.find((x) => x.id === nal.status) || STATUSI[0];
+          const izr = izracunNaloga(nal, cenik);
+          return (
+            <div
+              key={nal.id}
+              onClick={() => odpri(nal)}
+              className="bg-white rounded-xl p-3 shadow-sm cursor-pointer"
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="font-bold">{nal.stevilka}</div>
+                  <div className="text-sm text-gray-600">{nal.stranka?.ime}</div>
                 </div>
-              )}
-
-              {neplacana.length === 0 ? (
-                <p className="text-sm text-emerald-600">Vse je plačano. 🎉</p>
-              ) : (
-                <div className="space-y-2">
-                  {neplacana.map((n) => (
-                    <button
-                      key={n.id}
-                      onClick={() => odpriPodrobnosti(n.id)}
-                      className="w-full text-left bg-white border border-stone-200 rounded-xl px-4 py-3.5 hover:border-red-400 hover:shadow-sm transition-all flex items-center justify-between gap-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BARVE[n.status]}`}>
-                            {n.status}
-                          </span>
-                        </div>
-                        <div className="text-sm text-stone-600 truncate">{n.opis}</div>
-                      </div>
-                      {adminOdklenjen && (
-                        <span className="font-semibold text-red-600 shrink-0">{n.cena ? `${n.cena} €` : "brez cene"}</span>
-                      )}
-                    </button>
-                  ))}
+                <span className={`text-white text-xs px-2 py-1 rounded-full ${s.barva}`}>
+                  {s.naziv}
+                </span>
+              </div>
+              <div className="flex justify-between items-end mt-2 text-sm">
+                <span className="text-gray-400">{nal.datum}</span>
+                <span className="font-semibold">
+                  {eur(izr.zDdv)}
+                  {nal.placano && <span className="text-green-600 ml-1">✓</span>}
+                </span>
+              </div>
+              {nal.datumMontaze && nal.status !== "zakljuceno" && (
+                <div className="text-xs text-red-600 mt-1">
+                  Montaža: {nal.datumMontaze}
                 </div>
               )}
             </div>
           );
-        })()}
+        })}
+      </div>
+    </div>
+  );
+}
 
-        {pogled === "nov" && (
-          <div className="bg-white border border-stone-200 rounded-xl p-5">
-            <h2 className="carved text-lg uppercase text-stone-700 mb-4">
-              {aktivniId
-                ? (obrazec.vrsta === "ponudba" ? "Uredi ponudbo" : "Uredi nalog")
-                : (obrazec.vrsta === "ponudba" ? "Nova ponudba" : "Nov delovni nalog")}
-            </h2>
+// ===================== OBRAZEC =====================
 
-            <div className="bg-stone-100 border border-stone-300 rounded-lg px-4 py-3 mb-5">
-              <label className="block text-xs font-medium text-stone-600 mb-1.5">Kdo je oddal naročilo</label>
-              <div className="flex flex-wrap gap-2">
-                {ODDAL_NAROCILO.map((ime) => (
-                  <button
-                    key={ime}
-                    type="button"
-                    onClick={() => setObrazec({ ...obrazec, oddal: ime })}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      obrazec.oddal === ime
-                        ? "bg-stone-700 text-white border-stone-700 font-medium"
-                        : "bg-white text-stone-600 border-stone-300 hover:border-stone-500"
-                    }`}
-                  >
-                    {ime}
-                  </button>
-                ))}
-              </div>
-            </div>
+function Obrazec({ zacetni, cenik, shrani, preklici }) {
+  const [nal, setNal] = useState(zacetni);
+  const [odpreteSkupine, setOdpreteSkupine] = useState({});
+  const izr = izracunNaloga(nal, cenik);
+  const material = najdiMaterial(cenik, nal.materialId);
 
-            <div className="bg-stone-100 border border-stone-300 rounded-lg px-4 py-3 mb-5">
-              <label className="block text-xs font-medium text-stone-600 mb-1.5">Police</label>
-              <div className="flex flex-wrap items-center gap-2">
-                {["Zunanje", "Notranje"].map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setObrazec({ ...obrazec, tip: obrazec.tip === t ? "" : t })}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      obrazec.tip === t
-                        ? "bg-stone-700 text-white border-stone-700 font-medium"
-                        : "bg-white text-stone-600 border-stone-300 hover:border-stone-500"
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-                <div className="flex items-center gap-1.5 ml-1">
-                  <Ruler size={14} className="text-stone-400 shrink-0" />
-                  <input
-                    value={obrazec.utori}
-                    onChange={(e) => setObrazec({ ...obrazec, utori: e.target.value })}
-                    placeholder="Utori: cm od roba"
-                    inputMode="decimal"
-                    className="px-2.5 py-1.5 rounded-lg border border-stone-300 text-xs w-36 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  />
-                </div>
-              </div>
-            </div>
+  function nastaviKos(i, polje, vrednost) {
+    const kosi = nal.kosi.map((k, j) => (j === i ? { ...k, [polje]: vrednost } : k));
+    setNal({ ...nal, kosi });
+  }
 
-            <div className="grid sm:grid-cols-2 gap-4 mb-6">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-stone-500 mb-1">Stranka *</label>
-                <input
-                  value={obrazec.stranka}
-                  onChange={(e) => {
-                    const ime = e.target.value;
-                    const podatki = najdiPodatkeStranke(ime);
-                    setObrazec({
-                      ...obrazec,
-                      stranka: ime,
-                      telefon: podatki && !obrazec.telefon ? podatki.telefon : obrazec.telefon,
-                      email: podatki && !obrazec.email ? podatki.email : obrazec.email,
-                    });
-                  }}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  placeholder="Ime in priimek / podjetje"
-                  list="seznam-strank"
-                  autoComplete="off"
-                />
-                <datalist id="seznam-strank">
-                  {edinstveneStranke.map((s) => (
-                    <option key={s} value={s} />
-                  ))}
-                </datalist>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Telefon</label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={obrazec.telefon}
-                  onChange={(e) => setObrazec({ ...obrazec, telefon: e.target.value.replace(/[^0-9 ]/g, "") })}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  placeholder="041 123 456"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">E-mail</label>
-                <input
-                  type="email"
-                  value={obrazec.email}
-                  onChange={(e) => setObrazec({ ...obrazec, email: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  placeholder="stranka@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Rok izvedbe</label>
-                <input
-                  type="date"
-                  value={obrazec.rok}
-                  onChange={(e) => setObrazec({ ...obrazec, rok: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Ura prevzema</label>
-                <input
-                  type="time"
-                  value={obrazec.rokUra}
-                  onChange={(e) => setObrazec({ ...obrazec, rokUra: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                />
-              </div>
-              {obrazec.vrsta === "ponudba" && (
-                <div>
-                  <label className="block text-xs font-medium text-blue-700 mb-1">Ponudba velja do</label>
-                  <input
-                    type="date"
-                    value={obrazec.veljavnostPonudbe}
-                    onChange={(e) => setObrazec({ ...obrazec, veljavnostPonudbe: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-blue-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                  />
-                </div>
-              )}
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-stone-500 mb-1">Opis dela *</label>
-                <textarea
-                  value={obrazec.opis}
-                  onChange={(e) => setObrazec({ ...obrazec, opis: e.target.value })}
-                  rows={2}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  placeholder="npr. izdelava in montaža polic, kuhinjski pult…"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Skupna cena – neto (€, samodejno iz postavk)</label>
-                <input
-                  inputMode="decimal"
-                  value={obrazec.cena}
-                  onChange={(e) => setObrazec({ ...obrazec, cena: e.target.value.replace(/[^0-9.,]/g, "") })}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  placeholder="npr. 1250"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Popust na skupno ceno (%)</label>
-                <input
-                  inputMode="decimal"
-                  value={obrazec.popustSkupaj}
-                  onChange={(e) => setObrazec({ ...obrazec, popustSkupaj: e.target.value.replace(/[^0-9.,]/g, "") })}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  placeholder="npr. 10"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Neto po popustu (€)</label>
-                <div className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-stone-50 text-sm text-stone-700">
-                  {(() => {
-                    const neto = parseFloat(String(obrazec.cena).replace(",", "."));
-                    if (!neto || isNaN(neto)) return "—";
-                    const popust = parseFloat(String(obrazec.popustSkupaj).replace(",", ".")) || 0;
-                    const netoPoPopustu = neto * (1 - popust / 100);
-                    return `${netoPoPopustu.toFixed(2)} €`;
-                  })()}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Skupna cena – bruto (z 22% DDV)</label>
-                <div className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-stone-50 text-sm text-stone-700">
-                  {(() => {
-                    const neto = parseFloat(String(obrazec.cena).replace(",", "."));
-                    if (!neto || isNaN(neto)) return "—";
-                    const popust = parseFloat(String(obrazec.popustSkupaj).replace(",", ".")) || 0;
-                    const netoPoPopustu = neto * (1 - popust / 100);
-                    return `${(netoPoPopustu * 1.22).toFixed(2)} €`;
-                  })()}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Status</label>
-                <select
-                  value={obrazec.status}
-                  onChange={(e) => setObrazec({ ...obrazec, status: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                >
-                  {STATUSI.map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+  function nastaviStoritev(id, vrednost) {
+    setNal({ ...nal, storitve: { ...nal.storitve, [id]: vrednost } });
+  }
 
-            <div className="border-t border-stone-200 pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="carved text-sm uppercase text-stone-600">Postavke (mere kosov)</h3>
-                <span className="text-xs text-stone-400">
-                  {obrazec.postavke.length} kosov{skupajM2Obrazec > 0 ? ` · ${skupajM2Obrazec.toFixed(2)} m²` : ""}
-                </span>
-              </div>
+  const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white";
+  const lbl = "text-xs text-gray-500 mb-1 block";
 
-              <div
-                className="hidden sm:grid gap-2 px-1 mb-1.5 text-xs font-medium text-stone-400 uppercase tracking-wide"
-                style={{ gridTemplateColumns: "2fr 1.6fr 1fr 1fr 1fr 0.8fr auto" }}
+  // Skupine storitev za pregledno prikazovanje
+  const skupine = [
+    { naziv: "Luknje", ids: ["luknja-10-20", "luknja-25-35", "luknja-40-60", "luknja-100-150", "luknja-60-85"] },
+    { naziv: "Izrezi", ids: ["izrez-nasadno-korito", "izrez-vticnica-nasadno", "izrez-steklokeramika-nasadno", "izrez-podpultno-korito-poliran", "izrez-steklokeramika-inline", "pomivalno-korito-inline", "vticnica-inline", "izrez-vogala", "izrez-led-trak"] },
+    { naziv: "Odcejevalniki in armiranje", ids: ["odcejevalnik-40", "poglobljene-odcejevalne-crte", "armiranje"] },
+    { naziv: "Rezi in poliranje", ids: ["rez-45-do-8", "rez-45-do-10", "poliranje-c-rob", "poliranje-klasicno", "dvostransko-poliranje", "poliranje-spodnji-rob"] },
+    { naziv: "Montaža in ostalo", ids: ["impregnacija", "montaza-korita", "montaza-steklokeramike", "montaza-vticnice", "montaza-kuhinje", "tezja-montaza-kuhinje"] },
+  ];
+
+  return (
+    <div className="p-3 space-y-4">
+      <h2 className="font-bold text-lg">
+        {nal._urejanje ? `Urejanje ${nal.stevilka}` : "Nov nalog za pult"}
+      </h2>
+
+      {/* STRANKA */}
+      <div className="bg-white rounded-xl p-3 space-y-2">
+        <div className="font-semibold text-sm">Stranka</div>
+        <div>
+          <label className={lbl}>Ime in priimek / podjetje *</label>
+          <input
+            className={inp}
+            value={nal.stranka.ime}
+            onChange={(e) =>
+              setNal({ ...nal, stranka: { ...nal.stranka, ime: e.target.value } })
+            }
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className={lbl}>Telefon</label>
+            <input
+              className={inp}
+              value={nal.stranka.telefon}
+              onChange={(e) =>
+                setNal({ ...nal, stranka: { ...nal.stranka, telefon: e.target.value } })
+              }
+            />
+          </div>
+          <div>
+            <label className={lbl}>Naslov (montaža)</label>
+            <input
+              className={inp}
+              value={nal.stranka.naslov}
+              onChange={(e) =>
+                setNal({ ...nal, stranka: { ...nal.stranka, naslov: e.target.value } })
+              }
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className={lbl}>Sprejel</label>
+            <select
+              className={inp}
+              value={nal.sprejel}
+              onChange={(e) => setNal({ ...nal, sprejel: e.target.value })}
+            >
+              <option value="">— izberi —</option>
+              {ZAPOSLENI_SPREJEM.map((z) => (
+                <option key={z}>{z}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={lbl}>Datum</label>
+            <input
+              type="date"
+              className={inp}
+              value={nal.datum}
+              onChange={(e) => setNal({ ...nal, datum: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* MATERIAL */}
+      <div className="bg-white rounded-xl p-3 space-y-2">
+        <div className="font-semibold text-sm">Material</div>
+        <select
+          className={inp}
+          value={nal.materialId}
+          onChange={(e) => setNal({ ...nal, materialId: e.target.value })}
+        >
+          <option value="">— izberi material —</option>
+          {cenik.materiali.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.naziv} {m.tip === "plosca" ? `(${eur(m.cenaPlosca)}/plošča)` : `(${eur(m.cena2cm)}/${eur(m.cena3cm)} m²)`}
+            </option>
+          ))}
+        </select>
+
+        {material && material.tip === "m2" && (
+          <div className="grid grid-cols-2 gap-2 items-center">
+            <div>
+              <label className={lbl}>Debelina</label>
+              <select
+                className={inp}
+                value={nal.debelina}
+                onChange={(e) => setNal({ ...nal, debelina: e.target.value })}
               >
-                <span>Naziv / pozicija</span>
-                <span>Material</span>
-                <span>Dolžina (cm)</span>
-                <span>Širina (cm)</span>
-                <span>Debelina (cm)</span>
-                <span>Kos.</span>
-                <span></span>
-              </div>
-
-              <div className="space-y-2">
-                {obrazec.postavke.map((p, idx) => (
-                  <div key={p.id} className="bg-stone-50 sm:bg-transparent rounded-lg p-2 sm:p-0">
-                  <div
-                    className="postavka-row grid grid-cols-2 gap-2 items-center"
-                  >
-                    <input
-                      className="postavka-input col-span-2 sm:col-span-1"
-                      value={p.naziv}
-                      onChange={(e) => posodobiPostavko(p.id, "naziv", e.target.value)}
-                      placeholder={`Polica ${idx + 1}`}
-                    />
-                    {rocniMaterial[p.id] || (p.material && !MATERIALI_SEZNAM.includes(p.material)) ? (
-                      <div className="flex flex-col gap-0.5">
-                        <input
-                          className="postavka-input"
-                          value={p.material}
-                          onChange={(e) => posodobiPostavko(p.id, "material", e.target.value)}
-                          placeholder="Material (ročni vnos)"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => { setRocniMaterial({ ...rocniMaterial, [p.id]: false }); posodobiPostavko(p.id, "material", ""); }}
-                          className="text-[11px] text-stone-400 underline text-left"
-                        >
-                          ← Izberi iz cenika
-                        </button>
-                      </div>
-                    ) : (
-                      <select
-                        className="postavka-input"
-                        value={p.material}
-                        onChange={(e) => {
-                          if (e.target.value === "__rocno__") {
-                            setRocniMaterial({ ...rocniMaterial, [p.id]: true });
-                            posodobiPostavko(p.id, "material", "");
-                          } else {
-                            posodobiPostavko(p.id, "material", e.target.value);
-                          }
-                        }}
-                      >
-                        <option value="">Izberi material…</option>
-                        {Object.entries(CENIK).map(([skupina, podatki]) => (
-                          <optgroup key={skupina} label={skupina}>
-                            {podatki.materiali.map((m) => (
-                              <option key={m} value={m}>{m}</option>
-                            ))}
-                          </optgroup>
-                        ))}
-                        <option value="__rocno__">Drugo (ročni vnos)…</option>
-                      </select>
-                    )}
-                    <input
-                      className="postavka-input"
-                      value={p.dolzina}
-                      onChange={(e) => posodobiPostavko(p.id, "dolzina", e.target.value)}
-                      placeholder="dolžina"
-                      inputMode="decimal"
-                    />
-                    <input
-                      className="postavka-input"
-                      value={p.sirina}
-                      onChange={(e) => posodobiPostavko(p.id, "sirina", e.target.value)}
-                      placeholder="širina"
-                      inputMode="decimal"
-                    />
-                    <input
-                      className="postavka-input"
-                      value={p.debelina}
-                      onChange={(e) => posodobiPostavko(p.id, "debelina", e.target.value)}
-                      placeholder="debelina"
-                      inputMode="decimal"
-                    />
-                    <input
-                      className="postavka-input"
-                      value={p.kolicina}
-                      onChange={(e) => posodobiPostavko(p.id, "kolicina", e.target.value)}
-                      placeholder="1"
-                      inputMode="decimal"
-                    />
-                    <button
-                      onClick={() => izbrisiPostavko(p.id)}
-                      className="text-stone-400 hover:text-red-600 transition-colors justify-self-end sm:justify-self-center"
-                      aria-label="Izbriši postavko"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-2 pl-0.5">
-                    <span className="text-xs text-stone-400">Cena postavke (€, samodejno):</span>
-                    <input
-                      className="postavka-input"
-                      style={{ width: "110px" }}
-                      value={p.cena}
-                      onChange={(e) => posodobiPostavko(p.id, "cena", e.target.value.replace(/[^0-9.,]/g, ""))}
-                      placeholder="0"
-                      inputMode="decimal"
-                    />
-                    <span className="text-xs text-stone-400 ml-2">Popust (%):</span>
-                    <input
-                      className="postavka-input"
-                      style={{ width: "70px" }}
-                      value={p.popust || ""}
-                      onChange={(e) => posodobiPostavko(p.id, "popust", e.target.value.replace(/[^0-9.,]/g, ""))}
-                      placeholder="0"
-                      inputMode="decimal"
-                    />
-                  </div>
-                  </div>
-                ))}
-              </div>
-
-
-              <div className="flex flex-wrap gap-2 mt-3">
-                <button
-                  onClick={dodajPostavko}
-                  className="text-sm px-3 py-1.5 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 transition-colors flex items-center gap-1.5"
-                >
-                  <Plus size={14} /> Dodaj postavko
-                </button>
-                <button
-                  onClick={() => dodajVecPostavk(5)}
-                  className="text-sm px-3 py-1.5 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 transition-colors flex items-center gap-1.5"
-                >
-                  <ListPlus size={14} /> Dodaj 5 vrstic
-                </button>
-                <button
-                  onClick={() => dodajVecPostavk(20)}
-                  className="text-sm px-3 py-1.5 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 transition-colors flex items-center gap-1.5"
-                >
-                  <ListPlus size={14} /> Dodaj 20 vrstic
-                </button>
-              </div>
+                <option value="2">2 cm</option>
+                <option value="3">3 cm</option>
+              </select>
             </div>
-
-            <div className="border-t border-stone-200 pt-4 mt-4">
-              <label className="block text-xs font-medium text-stone-500 mb-1">Opombe</label>
-              <textarea
-                value={obrazec.opombe}
-                onChange={(e) => setObrazec({ ...obrazec, opombe: e.target.value })}
-                rows={2}
-                className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                placeholder="dodatne informacije…"
-              />
-            </div>
-
-            <div className="flex gap-2 mt-5">
-              <button
-                onClick={shraniObrazec}
-                disabled={shranjujem}
-                className="bg-stone-800 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors flex items-center gap-2 disabled:opacity-60"
-              >
-                <Check size={16} /> {shranjujem ? "Shranjujem…" : "Shrani nalog"}
-              </button>
-              <button
-                onClick={() => setPogled(aktivniId ? "podrobnosti" : "seznam")}
-                className="px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
-              >
-                Prekliči
-              </button>
+            <div className="text-sm text-gray-500 pt-4">
+              Skupna kvadratura: <span className="font-semibold text-black">{skupnaKvadratura(nal.kosi).toFixed(2)} m²</span>
             </div>
           </div>
         )}
 
-        {pogled === "podrobnosti" && aktivniNalog && (
-          <div className="bg-white border border-stone-200 rounded-xl p-5">
-            <div className="bg-stone-100 border border-stone-300 rounded-lg px-4 py-3 mb-4">
-              <label className="block text-xs font-medium text-stone-600 mb-1.5">Kdo je oddal naročilo</label>
-              <div className="flex flex-wrap gap-2">
-                {ODDAL_NAROCILO.map((ime) => (
-                  <button
-                    key={ime}
-                    onClick={() => shraniOddal(aktivniNalog.id, ime)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      aktivniNalog.oddal === ime
-                        ? "bg-stone-700 text-white border-stone-700 font-medium"
-                        : "bg-white text-stone-600 border-stone-300 hover:border-stone-500"
-                    }`}
-                  >
-                    {ime}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <span className="text-xs font-semibold text-stone-400">{aktivniNalog.stevilka}</span>
-                <h2 className="carved text-xl uppercase text-stone-800">{aktivniNalog.stranka}</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                {aktivniNalog.vrsta === "ponudba" && (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-medium">
-                    Ponudba
-                  </span>
-                )}
-                <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_BARVE[aktivniNalog.status]}`}>
-                  {aktivniNalog.status}
-                </span>
-              </div>
-            </div>
+        {material && material.tip === "plosca" && (
+          <div>
+            <label className={lbl}>Število plošč</label>
+            <input
+              className={inp}
+              inputMode="numeric"
+              value={nal.steviloPlosc}
+              onChange={(e) => setNal({ ...nal, steviloPlosc: e.target.value })}
+            />
+          </div>
+        )}
+      </div>
 
-            <div className="space-y-4 text-sm">
-              <Vrstica label="Opis dela" vrednost={aktivniNalog.opis} />
-              <Vrstica
-                label="Cena"
-                vrednost={
-                  aktivniNalog.cena
-                    ? (() => {
-                        const neto = parseFloat(String(aktivniNalog.cena).replace(",", "."));
-                        const popust = parseFloat(String(aktivniNalog.popustSkupaj).replace(",", ".")) || 0;
-                        const netoPoPopustu = neto * (1 - popust / 100);
-                        const bruto = netoPoPopustu * 1.22;
-                        return popust > 0
-                          ? `${neto.toFixed(2)} € neto · popust ${popust}% · ${netoPoPopustu.toFixed(2)} € po popustu · ${bruto.toFixed(2)} € bruto (22% DDV)`
-                          : `${neto.toFixed(2)} € neto · ${bruto.toFixed(2)} € bruto (22% DDV)`;
-                      })()
-                    : ""
-                }
-              />
-              {aktivniNalog.rok && (
-                <Vrstica
-                  label="Rok izvedbe"
-                  vrednost={
-                    <span className="flex items-center gap-1.5">
-                      <Calendar size={14} className="text-stone-400" />
-                      <span className={jeZamujen(aktivniNalog) ? "text-red-600 font-semibold" : ""}>
-                        {new Date(aktivniNalog.rok).toLocaleDateString("sl-SI")}
-                        {aktivniNalog.rokUra ? ` ob ${aktivniNalog.rokUra}` : ""}
+      {/* KOSI (mere, opisno / za razrez) */}
+      <div className="bg-white rounded-xl p-3 space-y-2">
+        <div className="font-semibold text-sm">Kosi (mere za razrez)</div>
+        {nal.kosi.map((kos, i) => (
+          <div key={i} className="flex gap-2 items-center">
+            <input
+              className={`${inp} flex-1`}
+              placeholder={`Kos ${i + 1} (npr. Pult ob steni)`}
+              value={kos.naziv}
+              onChange={(e) => nastaviKos(i, "naziv", e.target.value)}
+            />
+            <input
+              className={`${inp} w-20`}
+              placeholder="Dolž."
+              inputMode="decimal"
+              value={kos.dolzina}
+              onChange={(e) => nastaviKos(i, "dolzina", e.target.value)}
+            />
+            <input
+              className={`${inp} w-20`}
+              placeholder="Šir."
+              inputMode="decimal"
+              value={kos.sirina}
+              onChange={(e) => nastaviKos(i, "sirina", e.target.value)}
+            />
+            {nal.kosi.length > 1 && (
+              <button
+                onClick={() => setNal({ ...nal, kosi: nal.kosi.filter((_, j) => j !== i) })}
+                className="text-red-600 text-lg px-1"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+        <button
+          onClick={() => setNal({ ...nal, kosi: [...nal.kosi, prazenKos()] })}
+          className="w-full border-2 border-dashed border-gray-300 rounded-xl py-2 text-sm text-gray-500"
+        >
+          + Dodaj kos
+        </button>
+      </div>
+
+      {/* STORITVE */}
+      <div className="bg-white rounded-xl p-3 space-y-3">
+        <div className="font-semibold text-sm">Dodatne storitve</div>
+        {skupine.map((skupina) => (
+          <div key={skupina.naziv} className="border border-gray-200 rounded-lg">
+            <button
+              onClick={() =>
+                setOdpreteSkupine({ ...odpreteSkupine, [skupina.naziv]: !odpreteSkupine[skupina.naziv] })
+              }
+              className="w-full flex justify-between items-center px-3 py-2 text-sm font-medium text-gray-700"
+            >
+              {skupina.naziv}
+              <span className="text-gray-400">{odpreteSkupine[skupina.naziv] ? "▲" : "▼"}</span>
+            </button>
+            {odpreteSkupine[skupina.naziv] && (
+              <div className="px-3 pb-3 space-y-2">
+                {skupina.ids.map((id) => {
+                  const s = cenik.storitve.find((x) => x.id === id);
+                  if (!s) return null;
+                  return (
+                    <div key={id} className="flex items-center gap-2">
+                      <span className="flex-1 text-xs text-gray-600">
+                        {s.naziv} <span className="text-gray-400">({eur(s.cena)}/{s.enota})</span>
                       </span>
-                      {jeZamujen(aktivniNalog) && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-600 text-white font-medium">
-                          Zamujeno
-                        </span>
-                      )}
-                    </span>
-                  }
-                />
-              )}
-              {aktivniNalog.telefon && (
-                <Vrstica
-                  label="Telefon"
-                  vrednost={
-                    <span className="flex items-center gap-1.5">
-                      <Phone size={14} className="text-stone-400" />
-                      {aktivniNalog.telefon}
-                    </span>
-                  }
-                />
-              )}
-              {aktivniNalog.email && (
-                <Vrstica
-                  label="E-mail"
-                  vrednost={
-                    <a
-                      href={`mailto:${aktivniNalog.email}`}
-                      className="flex items-center gap-1.5 text-red-700 hover:underline"
-                    >
-                      <Mail size={14} className="text-stone-400" />
-                      {aktivniNalog.email}
-                    </a>
-                  }
-                />
-              )}
-              <Vrstica label="Opombe" vrednost={aktivniNalog.opombe} />
-              <Vrstica label="Police" vrednost={aktivniNalog.tip} />
-              <Vrstica label="Utori od roba" vrednost={aktivniNalog.utori ? `${aktivniNalog.utori} cm` : ""} />
-              <Vrstica label="Izvaja" vrednost={aktivniNalog.izvajalec} />
-              <Vrstica label="Prevzel" vrednost={aktivniNalog.prevzel} />
+                      <input
+                        className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right"
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={nal.storitve?.[id] || ""}
+                        onChange={(e) => nastaviStoritev(id, e.target.value)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* OSTALO */}
+      <div className="bg-white rounded-xl p-3 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className={lbl}>Popust (%)</label>
+            <input
+              className={inp}
+              inputMode="decimal"
+              value={nal.popust}
+              onChange={(e) => setNal({ ...nal, popust: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className={lbl}>Datum montaže</label>
+            <input
+              type="date"
+              className={inp}
+              value={nal.datumMontaze}
+              onChange={(e) => setNal({ ...nal, datumMontaze: e.target.value })}
+            />
+          </div>
+        </div>
+        <div>
+          <label className={lbl}>DXF oznaka / link</label>
+          <input
+            className={inp}
+            value={nal.dxf}
+            onChange={(e) => setNal({ ...nal, dxf: e.target.value })}
+            placeholder="npr. pult_novak_v2.dxf"
+          />
+        </div>
+        <div>
+          <label className={lbl}>Nalozi DXF datoteko (za prenos na mašine)</label>
+          {nal.dxfDatoteka ? (
+            <div className="flex items-center justify-between bg-stone-100 rounded-lg px-3 py-2 text-sm">
+              <span className="truncate text-stone-700">📎 {nal.dxfDatoteka.ime}</span>
+              <button
+                type="button"
+                onClick={() => setNal({ ...nal, dxfDatoteka: null })}
+                className="text-red-600 text-xs ml-2 shrink-0"
+              >
+                Odstrani
+              </button>
             </div>
-
-            {aktivniNalog.postavke && aktivniNalog.postavke.some(p => p.naziv || p.material || p.dolzina) && (
-              <div className="mt-5 pt-4 border-t border-stone-100">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="carved text-sm uppercase text-stone-600">Postavke</h3>
-                  <span className="text-xs text-stone-400">
-                    {(() => {
-                      const skupaj = aktivniNalog.postavke.reduce((v, p) => v + m2Postavke(p), 0);
-                      return skupaj > 0 ? `Skupaj ${skupaj.toFixed(2)} m²` : "";
-                    })()}
-                  </span>
-                </div>
-                <div className="overflow-x-auto -mx-2">
-                  <table className="w-full text-sm" style={{ minWidth: "480px" }}>
-                    <thead>
-                      <tr className="text-left text-xs uppercase tracking-wide text-stone-400 border-b border-stone-200">
-                        <th className="font-medium py-1.5 px-2">#</th>
-                        <th className="font-medium py-1.5 px-2">Naziv</th>
-                        <th className="font-medium py-1.5 px-2">Material</th>
-                        <th className="font-medium py-1.5 px-2">D × Š × Deb. (cm)</th>
-                        <th className="font-medium py-1.5 px-2">Kos.</th>
-                        <th className="font-medium py-1.5 px-2">Cena (€)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {aktivniNalog.postavke
-                        .filter(p => p.naziv || p.material || p.dolzina)
-                        .map((p, idx) => (
-                          <tr key={p.id} className="border-b border-stone-50">
-                            <td className="py-1.5 px-2 text-stone-400">{idx + 1}</td>
-                            <td className="py-1.5 px-2 text-stone-700">{p.naziv || "—"}</td>
-                            <td className="py-1.5 px-2 text-stone-600">{p.material || "—"}</td>
-                            <td className="py-1.5 px-2 text-stone-600">
-                              {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
-                            </td>
-                            <td className="py-1.5 px-2 text-stone-600">{p.kolicina || "1"}</td>
-                            <td className="py-1.5 px-2 text-stone-600">{p.cena ? `${p.cena} €` : "—"}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {aktivniNalog.status === "Pripravljeno" && (aktivniNalog.email || aktivniNalog.telefon) && (
-              <div className="mt-5 bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-red-800 text-sm">
-                  <Mail size={16} />
-                  <span>Naročilo je pripravljeno — obvesti stranko.</span>
-                </div>
-                <div className="flex flex-wrap gap-2 shrink-0">
-                  {aktivniNalog.email && (
-                    <a
-                      href={obvestiloMailto(aktivniNalog)}
-                      className="bg-red-500 hover:bg-red-400 text-stone-900 text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
-                    >
-                      Pošlji e-mail
-                    </a>
-                  )}
-                  {aktivniNalog.telefon && (
-                    <a
-                      href={obvestiloSMS(aktivniNalog)}
-                      className="bg-stone-800 hover:bg-stone-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
-                    >
-                      Pošlji SMS
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-            {aktivniNalog.status === "Pripravljeno" && !aktivniNalog.email && !aktivniNalog.telefon && (
-              <div className="mt-5 bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 text-sm text-stone-500">
-                Naročilo je pripravljeno. Za pošiljanje obvestila dodaj e-mail ali telefon stranke (uredi nalog).
-              </div>
-            )}
-
-            <div className="mt-5 pt-4 border-t border-stone-100">
-              <label className="block text-xs font-medium text-stone-500 mb-1.5">Spremeni status</label>
-              <div className="flex flex-wrap gap-2">
-                {STATUSI.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => spremeniStatus(aktivniNalog.id, s)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      aktivniNalog.status === s
-                        ? STATUS_BARVE[s]
-                        : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-stone-100">
-              <label className="block text-xs font-medium text-stone-500 mb-1.5">Plačilo</label>
-              <div className="flex flex-wrap gap-2">
-                {["Da", "Ne"].map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => spremeniPlacano(aktivniNalog.id, p)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      (aktivniNalog.placano || "Ne") === p
-                        ? p === "Da"
-                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                          : "bg-red-100 text-red-800 border-red-300"
-                        : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
-                    }`}
-                  >
-                    {p === "Da" ? "Plačano" : "Ne plačano"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {aktivniNalog.status === "V izdelavi" && (
-              <div className="mt-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-                <label className="block text-xs font-medium text-red-800 mb-1.5">Kdo je prevzel naročilo</label>
-                <div className="flex flex-wrap gap-2">
-                  {DELAVCI.map((ime) => (
-                    <button
-                      key={ime}
-                      onClick={() => shraniIzvajalca(aktivniNalog.id, ime)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                        aktivniNalog.izvajalec === ime
-                          ? "bg-red-500 text-stone-900 border-red-500 font-medium"
-                          : "bg-white text-stone-600 border-stone-300 hover:border-red-400"
-                      }`}
-                    >
-                      {ime}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {aktivniNalog.status === "Prevzeto" && (
-              <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-                <label className="block text-xs font-medium text-emerald-800 mb-1.5">Kdo je prevzel</label>
-                <input
-                  defaultValue={aktivniNalog.prevzel || ""}
-                  onBlur={(e) => shraniPrevzel(aktivniNalog.id, e.target.value)}
-                  placeholder="Ime in priimek prevzemnika"
-                  className="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                />
-              </div>
-            )}
-
-            {aktivniNalog.vrsta === "ponudba" && (
-              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <span className="text-sm text-blue-800">To je ponudba — še ni pravi delovni nalog.</span>
-                <button
-                  onClick={() => pretvoriVDelovniNalog(aktivniNalog.id)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shrink-0"
-                >
-                  Pretvori v delovni nalog
-                </button>
-              </div>
-            )}
-
-            {aktivniNalog.vrsta === "ponudba" && (aktivniNalog.email || aktivniNalog.telefon) && (
-              <div className="mt-4 bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <span className="text-sm text-stone-600">Pošlji ponudbo stranki v predogled:</span>
-                <div className="flex flex-wrap gap-2 shrink-0">
-                  {aktivniNalog.email && (
-                    <a
-                      href={ponudbaMailto(aktivniNalog)}
-                      className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
-                    >
-                      Pošlji e-mail
-                    </a>
-                  )}
-                  {aktivniNalog.telefon && (
-                    <a
-                      href={ponudbaSMS(aktivniNalog)}
-                      className="bg-stone-800 hover:bg-stone-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
-                    >
-                      Pošlji SMS
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2 mt-5">
-              {aktivniNalog.vrsta === "ponudba" ? (
-                <button
-                  onClick={() => setPogled("tiskPonudbe")}
-                  className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
-                >
-                  <Printer size={15} /> Natisni ponudbo
-                </button>
+          ) : (
+            <input
+              type="file"
+              accept=".dxf,.dwg"
+              onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setNal({ ...nal, dxfDatoteka: rez }))}
+              className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
+            />
+          )}
+        </div>
+        <div className="sm:col-span-2">
+          <label className={lbl}>Skica / delovni list z izmere (slika ali PDF)</label>
+          {nal.skica ? (
+            <div className="bg-stone-100 rounded-lg p-2">
+              {nal.skica.tip && nal.skica.tip.startsWith("image/") ? (
+                <img src={nal.skica.podatki} alt="Skica" className="max-h-64 rounded-lg mx-auto" />
               ) : (
-                <>
-                  <button
-                    onClick={() => izvoziDonatoniCSV(aktivniNalog)}
-                    className="bg-red-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-red-500 transition-colors flex items-center gap-2"
-                  >
-                    <Download size={15} /> CSV Donatoni
-                  </button>
-                  <button
-                    onClick={() => setPogled("izracunPolic")}
-                    className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
-                  >
-                    <Ruler size={15} /> Izračun polic
-                  </button>
-                  <button
-                    onClick={() => setPogled("tisk")}
-                    className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
-                  >
-                    <Printer size={15} /> Natisni delovni nalog
-                  </button>
-                  <button
-                    onClick={() => setPogled("dobavnica")}
-                    className="bg-emerald-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-500 transition-colors flex items-center gap-2"
-                  >
-                    <FileText size={15} /> Izdaj dobavnico
-                  </button>
-                </>
+                <div className="flex items-center justify-between text-sm px-2 py-1">
+                  <span className="truncate text-stone-700">📄 {nal.skica.ime}</span>
+                </div>
               )}
               <button
-                onClick={() => odpriUredi(aktivniNalog)}
-                className="bg-stone-800 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors flex items-center gap-2"
+                type="button"
+                onClick={() => setNal({ ...nal, skica: null })}
+                className="text-red-600 text-xs mt-2 block mx-auto"
               >
-                <Pencil size={15} /> Uredi
-              </button>
-              <button
-                onClick={() => {
-                  if (window.confirm(`Ali res želiš izbrisati ${aktivniNalog.vrsta === "ponudba" ? "ponudbo" : "delovni nalog"} ${aktivniNalog.stevilka || ""} (${aktivniNalog.stranka})? Tega dejanja ni mogoče razveljaviti.`)) {
-                    izbrisiNalog(aktivniNalog.id);
-                  }
-                }}
-                className="px-4 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
-              >
-                <Trash2 size={15} /> Izbriši
+                Odstrani skico
               </button>
             </div>
-          </div>
-        )}
-
-        {pogled === "dobavnica" && aktivniNalog && (
-          <Dobavnica nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
-        )}
-
-        {pogled === "tisk" && aktivniNalog && (
-          <TiskNaloga nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
-        )}
-
-        {pogled === "tiskPonudbe" && aktivniNalog && (
-          <TiskPonudbe nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
-        )}
-
-        {pogled === "izracunPolic" && aktivniNalog && (
-          <IzracunPolic nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
-        )}
-      </main>
-
-      {pogled === "seznam" && !naloziLoading && (
-        <>
-          <button
-            onClick={odpriNovoPonudbo}
-            className="fixed bottom-24 right-6 bg-blue-600 hover:bg-blue-500 text-white rounded-full pl-4 pr-5 h-14 shadow-lg flex items-center gap-2 transition-colors"
-            aria-label="Izdelaj ponudbo"
-          >
-            <Plus size={22} />
-            <span className="text-sm font-medium whitespace-nowrap">Izdelaj ponudbo</span>
-          </button>
-          <button
-            onClick={odpriNov}
-            className="fixed bottom-6 right-6 bg-red-500 hover:bg-red-400 text-stone-900 rounded-full pl-4 pr-5 h-14 shadow-lg flex items-center gap-2 transition-colors"
-            aria-label="Izdelaj delovni list"
-          >
-            <Plus size={22} />
-            <span className="text-sm font-medium whitespace-nowrap">Izdelaj delovni list</span>
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-function TiskNaloga({ nalog, onZapri }) {
-  const postavkeZaPrikaz = (nalog.postavke || []).filter(
-    (p) => p.naziv || p.material || p.dolzina
-  );
-  const skupajM2 = postavkeZaPrikaz.reduce((v, p) => v + m2Postavke(p), 0);
-  const danes = new Date().toLocaleDateString("sl-SI");
-
-  return (
-    <div>
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .tisk-list, .tisk-list * { visibility: visible; }
-          .tisk-list { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
-          .tisk-brez { display: none !important; }
-        }
-      `}</style>
-
-      <div className="tisk-brez flex flex-wrap gap-2 mb-2">
-        <button
-          onClick={() => prenesiHTMLDokument(".tisk-list", `Delovni nalog ${nalog.stevilka || ""}`, `delovni-nalog-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`)}
-          className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
-        >
-          <FileText size={15} /> Prenesi datoteko
-        </button>
-        <button
-          onClick={onZapri}
-          className="px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
-        >
-          Nazaj
-        </button>
-      </div>
-
-      <div className="tisk-list bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
-        <div className="flex items-center justify-between gap-3 border-b-2 border-stone-800 pb-2 mb-3">
-          <img
-            src={CAKS_LOGO}
-            alt="Čakš logo"
-            className="h-8 w-auto object-contain shrink-0"
+          ) : (
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              capture="environment"
+              onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setNal({ ...nal, skica: rez }))}
+              className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
+            />
+          )}
+        </div>
+        <div>
+          <label className={lbl}>Opombe</label>
+          <textarea
+            className={inp}
+            rows={2}
+            value={nal.opombe}
+            onChange={(e) => setNal({ ...nal, opombe: e.target.value })}
           />
-          <p className="carved text-sm uppercase text-stone-700 shrink-0">Delovni nalog</p>
         </div>
+      </div>
 
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-2 text-sm border-b border-stone-200 pb-2">
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Št.</span><span className="font-semibold text-stone-800">{nalog.stevilka}</span></span>
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Naročnik</span><span className="font-semibold text-stone-800">{nalog.stranka}</span></span>
-          {nalog.oddal && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">Oddal</span><span className="text-stone-700">{nalog.oddal}</span></span>
-          )}
-          {nalog.rok && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">Do kdaj pripravljeno</span><span className="font-semibold text-red-700">{new Date(nalog.rok).toLocaleDateString("sl-SI")}{nalog.rokUra ? ` ob ${nalog.rokUra}` : ""}</span></span>
-          )}
-          {nalog.tip && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">Police</span><span className="font-semibold text-stone-800">{nalog.tip}</span></span>
-          )}
-          {nalog.utori && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">Utori od roba</span><span className="font-semibold text-stone-800">{nalog.utori} cm</span></span>
-          )}
+      {/* SKUPAJ */}
+      <div className="bg-black text-white rounded-xl p-3 text-sm space-y-1">
+        <div className="flex justify-between">
+          <span>Material {izr.material.naziv && `(${izr.material.naziv})`}</span>
+          <span>{eur(izr.material.cena)}</span>
         </div>
-
-        {nalog.opis && (
-          <div className="mb-3 pb-2 border-b border-stone-200">
-            <span className="text-xs text-stone-400 uppercase mr-1">Opis dela</span>
-            <span className="text-sm text-stone-700">{nalog.opis}</span>
+        <div className="flex justify-between">
+          <span>Storitve</span>
+          <span>{eur(izr.storitveSkupaj)}</span>
+        </div>
+        <div className="flex justify-between border-t border-gray-700 pt-1">
+          <span>Osnova</span>
+          <span>{eur(izr.osnova)}</span>
+        </div>
+        {izr.popust > 0 && (
+          <div className="flex justify-between text-red-400">
+            <span>Popust ({nal.popust}%)</span>
+            <span>−{eur(izr.popust)}</span>
           </div>
         )}
+        <div className="flex justify-between">
+          <span>DDV 22%</span>
+          <span>{eur(izr.ddv)}</span>
+        </div>
+        <div className="flex justify-between font-bold text-base border-t border-gray-700 pt-1">
+          <span>SKUPAJ</span>
+          <span>{eur(izr.zDdv)}</span>
+        </div>
+      </div>
 
-        {postavkeZaPrikaz.length > 0 && (
-          <div className="mb-3">
-            <table className="w-full border-collapse table-fixed">
-              <colgroup>
-                <col style={{ width: "4%" }} />
-                <col style={{ width: "25%" }} />
-                <col style={{ width: "23%" }} />
-                <col style={{ width: "36%" }} />
-                <col style={{ width: "12%" }} />
-              </colgroup>
-              <thead>
-                <tr className="border-b-2 border-stone-300 text-left text-xs uppercase text-stone-500">
-                  <th className="py-2 pr-1 overflow-hidden">#</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Naziv</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Material</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200 normal-case overflow-hidden truncate">Mere (cm)</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200 whitespace-nowrap">Kos.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {postavkeZaPrikaz.map((p, idx) => (
-                  <tr key={p.id} className="border-b border-stone-100">
-                    <td className="py-2 pr-1 text-xs text-stone-400 align-top overflow-hidden">{idx + 1}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top overflow-hidden">
-                      {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
-                    </td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top whitespace-nowrap">{p.kolicina || "1"}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {skupajM2 > 0 && (
-                <tfoot>
-                  <tr>
-                    <td colSpan="3" className="pt-2 text-right text-xs font-medium text-stone-500">
-                      Skupaj
-                    </td>
-                    <td className="pt-2 text-sm font-semibold text-stone-800" colSpan="2">{skupajM2.toFixed(2)} m²</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        )}
-
-        {nalog.opombe && (
-          <p className="text-sm text-stone-700">
-            <span className="text-xs font-medium text-stone-400 uppercase mr-1">Opombe:</span>
-            {nalog.opombe}
-          </p>
-        )}
+      <div className="flex gap-2">
+        <button
+          onClick={preklici}
+          className="flex-1 bg-gray-200 rounded-xl py-3 font-semibold"
+        >
+          Prekliči
+        </button>
+        <button
+          onClick={() => {
+            if (!nal.stranka.ime.trim()) {
+              alert("Vnesi ime stranke.");
+              return;
+            }
+            shrani(nal);
+          }}
+          className="flex-1 bg-red-600 text-white rounded-xl py-3 font-semibold"
+        >
+          Shrani
+        </button>
       </div>
     </div>
   );
 }
 
-function TiskPonudbe({ nalog, onZapri }) {
-  const postavkeZaPrikaz = (nalog.postavke || []).filter(
-    (p) => p.naziv || p.material || p.dolzina
-  );
-  const skupajM2 = postavkeZaPrikaz.reduce((v, p) => v + m2Postavke(p), 0);
-  const danes = new Date().toLocaleDateString("sl-SI");
-  const neto = parseFloat(String(nalog.cena).replace(",", ".")) || 0;
-  const popust = parseFloat(String(nalog.popustSkupaj).replace(",", ".")) || 0;
-  const netoPoPopustu = neto * (1 - popust / 100);
-  const bruto = netoPoPopustu * 1.22;
+// ===================== PODROBNOSTI =====================
 
-  return (
-    <div>
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .ponudba-list, .ponudba-list * { visibility: visible; }
-          .ponudba-list { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
-          .ponudba-brez { display: none !important; }
-        }
-      `}</style>
-
-      <div className="ponudba-brez flex flex-wrap gap-2 mb-2">
-        <button
-          onClick={() => prenesiHTMLDokument(".ponudba-list", `Ponudba ${nalog.stevilka || ""}`, `ponudba-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`)}
-          className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
-        >
-          <FileText size={15} /> Prenesi datoteko
-        </button>
-        <button
-          onClick={onZapri}
-          className="px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
-        >
+function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni }) {
+  const [kdoOpravil, setKdoOpravil] = useState("");
+  if (!nalog)
+    return (
+      <div className="p-4">
+        Nalog ne obstaja.{" "}
+        <button onClick={nazaj} className="text-red-600 underline">
           Nazaj
         </button>
       </div>
+    );
 
-      <div className="ponudba-list bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
-        <div className="flex items-center justify-between gap-3 border-b-2 border-stone-800 pb-2 mb-3">
-          <img src={CAKS_LOGO} alt="Čakš logo" className="h-8 w-auto object-contain shrink-0" />
-          <p className="carved text-sm uppercase text-stone-700 shrink-0">Ponudba</p>
+  const s = STATUSI.find((x) => x.id === nalog.status) || STATUSI[0];
+  const idx = STATUSI.findIndex((x) => x.id === nalog.status);
+  const naslednji = idx < STATUSI.length - 1 ? STATUSI[idx + 1] : null;
+  const izr = izracunNaloga(nalog, cenik);
+  const material = najdiMaterial(cenik, nalog.materialId);
+  const storitveZUporabo = izr.storitve.filter((s) => s.kolicina > 0);
+
+  return (
+    <div className="p-3 space-y-3">
+      <button onClick={nazaj} className="text-sm text-gray-500">
+        ← Nazaj na seznam
+      </button>
+
+      <div className="bg-white rounded-xl p-4 space-y-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="font-bold text-lg">{nalog.stevilka}</div>
+            <div className="text-sm text-gray-600">{nalog.datum}</div>
+          </div>
+          <span className={`text-white text-xs px-3 py-1 rounded-full ${s.barva}`}>
+            {s.naziv}
+          </span>
         </div>
-
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-3 text-sm border-b border-stone-200 pb-2">
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Št.</span><span className="font-semibold text-stone-800">{nalog.stevilka}</span></span>
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Stranka</span><span className="font-semibold text-stone-800">{nalog.stranka}</span></span>
-          {nalog.telefon && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">Tel</span><span className="text-stone-700">{nalog.telefon}</span></span>
-          )}
-          {nalog.email && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">E-mail</span><span className="text-stone-700">{nalog.email}</span></span>
-          )}
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Datum</span><span className="text-stone-700">{danes}</span></span>
-          {nalog.veljavnostPonudbe && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">Velja do</span><span className="font-semibold text-blue-700">{new Date(nalog.veljavnostPonudbe).toLocaleDateString("sl-SI")}</span></span>
-          )}
+        <div className="text-sm">
+          <div className="font-semibold">{nalog.stranka?.ime}</div>
+          {nalog.stranka?.telefon && <div>{nalog.stranka.telefon}</div>}
+          {nalog.stranka?.naslov && <div className="text-gray-600">{nalog.stranka.naslov}</div>}
         </div>
-
-        {nalog.opis && (
-          <div className="mb-3 pb-2 border-b border-stone-200">
-            <span className="text-xs text-stone-400 uppercase mr-1">Opis dela</span>
-            <span className="text-sm text-stone-700">{nalog.opis}</span>
+        {nalog.sprejel && (
+          <div className="text-xs text-gray-500">Sprejel: {nalog.sprejel}</div>
+        )}
+        {nalog.dxf && <div className="text-xs text-gray-500">DXF: {nalog.dxf}</div>}
+        {nalog.dxfDatoteka && (
+          <a
+            href={nalog.dxfDatoteka.podatki}
+            download={nalog.dxfDatoteka.ime}
+            className="text-xs text-blue-600 underline block"
+          >
+            📎 Prenesi DXF datoteko ({nalog.dxfDatoteka.ime})
+          </a>
+        )}
+        {nalog.datumMontaze && (
+          <div className="text-sm text-red-600 font-semibold">
+            Montaža: {nalog.datumMontaze}
           </div>
         )}
-
-        {postavkeZaPrikaz.length > 0 && (
-          <div className="overflow-x-auto mb-3">
-            <table className="w-full border-collapse table-fixed" style={{ minWidth: "560px" }}>
-              <colgroup>
-                <col style={{ width: "4%" }} />
-                <col style={{ width: "20%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "26%" }} />
-                <col style={{ width: "8%" }} />
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "12%" }} />
-              </colgroup>
-              <thead>
-                <tr className="border-b-2 border-stone-300 text-left text-xs uppercase text-stone-500">
-                  <th className="py-2 pr-1">#</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Naziv</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Material</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200 normal-case">Mere (cm)</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Kos.</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Popust</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Cena (€)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {postavkeZaPrikaz.map((p, idx) => (
-                  <tr key={p.id} className="border-b border-stone-100">
-                    <td className="py-2 pr-1 text-xs text-stone-400 align-top">{idx + 1}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top whitespace-nowrap">
-                      {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
-                    </td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.kolicina || "1"}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.popust ? `${p.popust}%` : "—"}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs font-semibold text-stone-800 align-top">{p.cena ? `${p.cena} €` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {skupajM2 > 0 && (
-                <tfoot>
-                  <tr>
-                    <td colSpan="5" className="pt-2 text-right text-xs font-medium text-stone-500">
-                      Skupaj m²
-                    </td>
-                    <td colSpan="2" className="pt-2 text-sm font-semibold text-stone-800">{skupajM2.toFixed(2)} m²</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+        {nalog.opombe && (
+          <div className="text-sm bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+            {nalog.opombe}
           </div>
         )}
+      </div>
 
-        {nalog.cena && (
-          <div className="mb-3 pt-2 border-t-2 border-stone-200 flex flex-col items-end gap-0.5 text-sm">
-            <span className="text-stone-600">Skupna cena neto: <span className="font-semibold text-stone-800">{neto.toFixed(2)} €</span></span>
-            {popust > 0 && (
-              <span className="text-stone-600">Popust: <span className="font-semibold text-stone-800">{popust}%</span> → <span className="font-semibold text-stone-800">{netoPoPopustu.toFixed(2)} €</span></span>
+      {nalog.skica && (
+        <div className="bg-white rounded-xl p-3">
+          <div className="font-semibold text-sm mb-2">Skica / delovni list z izmere</div>
+          {nalog.skica.tip && nalog.skica.tip.startsWith("image/") ? (
+            <img src={nalog.skica.podatki} alt="Skica" className="max-h-80 rounded-lg mx-auto" />
+          ) : (
+            <a
+              href={nalog.skica.podatki}
+              download={nalog.skica.ime}
+              className="text-sm text-blue-600 underline"
+            >
+              📄 Prenesi {nalog.skica.ime}
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* MATERIAL */}
+      <div className="bg-white rounded-xl p-3 text-sm space-y-1">
+        <div className="font-semibold">
+          {material ? material.naziv : "Material ni izbran"}
+          {material?.tip === "m2" && ` · ${nalog.debelina}cm`}
+        </div>
+        {material?.tip === "m2" ? (
+          <div className="flex justify-between text-gray-600">
+            <span>Kvadratura ({skupnaKvadratura(nalog.kosi).toFixed(2)} m²)</span>
+            <span>{eur(izr.material.cena)}</span>
+          </div>
+        ) : material?.tip === "plosca" ? (
+          <div className="flex justify-between text-gray-600">
+            <span>Število plošč ({nalog.steviloPlosc || 0})</span>
+            <span>{eur(izr.material.cena)}</span>
+          </div>
+        ) : null}
+      </div>
+
+      {/* KOSI */}
+      {(nalog.kosi || []).some((k) => k.naziv || k.dolzina || k.sirina) && (
+        <div className="bg-white rounded-xl p-3 text-sm space-y-1">
+          <div className="font-semibold mb-1">Kosi</div>
+          {nalog.kosi.map((kos, i) => (
+            <div key={i} className="flex justify-between text-gray-600">
+              <span>{kos.naziv || `Kos ${i + 1}`}</span>
+              <span>{kos.dolzina || "–"} × {kos.sirina || "–"} cm</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* STORITVE */}
+      {storitveZUporabo.length > 0 && (
+        <div className="bg-white rounded-xl p-3 text-sm space-y-1">
+          <div className="font-semibold mb-1">Storitve</div>
+          {storitveZUporabo.map((s) => (
+            <div key={s.id} className="flex justify-between text-gray-600">
+              <span>{s.naziv} × {s.kolicina}</span>
+              <span>{eur(s.skupaj)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* CENA */}
+      <div className="bg-black text-white rounded-xl p-3 text-sm space-y-1">
+        {nalog.ponudbenaCena != null && (
+          <div className="flex justify-between text-gray-400">
+            <span>Ponudbena cena</span>
+            <span>{eur(nalog.ponudbenaCena)}</span>
+          </div>
+        )}
+        <div className="flex justify-between font-bold text-base">
+          <span>Končna cena (z DDV)</span>
+          <span>{eur(izr.zDdv)}</span>
+        </div>
+        <button
+          onClick={() => preklopiPlacano(nalog)}
+          className={`w-full mt-2 rounded-lg py-2 text-sm font-semibold ${
+            nalog.placano ? "bg-green-600" : "bg-gray-700"
+          }`}
+        >
+          {nalog.placano ? "✓ Plačano" : "Označi kot plačano"}
+        </button>
+      </div>
+
+      {naslednji && (
+        <div className="bg-white rounded-xl p-3 space-y-2">
+          <div className="text-sm font-semibold">Naslednja faza: {naslednji.naziv}</div>
+          <select
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            value={kdoOpravil}
+            onChange={(e) => setKdoOpravil(e.target.value)}
+          >
+            <option value="">Kdo opravi? (neobvezno)</option>
+            {ZAPOSLENI_PROIZVODNJA.map((z) => (
+              <option key={z}>{z}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => {
+              spremeniStatus(nalog, naslednji.id, kdoOpravil);
+              setKdoOpravil("");
+            }}
+            className={`w-full text-white rounded-xl py-3 font-semibold ${naslednji.barva}`}
+          >
+            Premakni v: {naslednji.naziv} →
+          </button>
+        </div>
+      )}
+
+      {(nalog.zgodovina || []).length > 0 && (
+        <div className="bg-white rounded-xl p-3 text-xs text-gray-500 space-y-1">
+          <div className="font-semibold text-gray-700 text-sm mb-1">Zgodovina</div>
+          {nalog.zgodovina.map((z, i) => {
+            const zs = STATUSI.find((x) => x.id === z.status);
+            return (
+              <div key={i}>
+                {new Date(z.datum).toLocaleDateString("sl-SI")}{" "}
+                {new Date(z.datum).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}{" "}
+                — {zs ? zs.naziv : z.status}
+                {z.kdo && ` (${z.kdo})`}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {(nalog.stranka?.email || nalog.stranka?.telefon) && (
+        <div className="bg-white rounded-xl p-3 space-y-2">
+          <div className="text-sm font-semibold">Pošlji ponudbo stranki</div>
+          <div className="flex flex-wrap gap-2">
+            {nalog.stranka?.email && (
+              <a
+                href={ponudbaPultiMailto(nalog, izr)}
+                className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+              >
+                Pošlji e-mail
+              </a>
             )}
-            <span className="text-stone-800 font-bold text-base">Skupna cena z DDV (22%): {bruto.toFixed(2)} €</span>
-          </div>
-        )}
-
-        {nalog.opombe && (
-          <p className="text-sm text-stone-700 mb-2">
-            <span className="text-xs font-medium text-stone-400 uppercase mr-1">Opombe:</span>
-            {nalog.opombe}
-          </p>
-        )}
-
-        {nalog.veljavnostPonudbe && (
-          <p className="text-xs text-stone-500 mt-3 pt-2 border-t border-stone-200">
-            Ta ponudba velja do {new Date(nalog.veljavnostPonudbe).toLocaleDateString("sl-SI")}. Cene so informativne narave in se lahko spremenijo po tem datumu.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function IzracunPolic({ nalog, onZapri }) {
-  const razredi = izracunajRazredePolic(nalog);
-  const skupajTM = razredi.reduce((v, r) => v + r.tekociMetri, 0);
-
-  return (
-    <div>
-      <div className="flex flex-wrap gap-2 mb-4">
-        <button
-          onClick={() => prenesiHTMLDokument(".izracun-polic-list", `Izračun polic ${nalog.stevilka || ""}`, `izracun-polic-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`)}
-          className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
-        >
-          <FileText size={15} /> Prenesi datoteko
-        </button>
-        <button
-          onClick={onZapri}
-          className="px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
-        >
-          Nazaj
-        </button>
-      </div>
-
-      <div className="izracun-polic-list bg-white border border-stone-200 rounded-xl p-5">
-        <div className="flex items-center justify-between gap-3 border-b-2 border-stone-800 pb-2 mb-4">
-          <img src={CAKS_LOGO} alt="Čakš logo" className="h-8 w-auto object-contain shrink-0" />
-          <div className="text-right">
-            <p className="carved text-sm uppercase text-stone-700">Izračun polic — tekoči metri</p>
-            <p className="text-xs text-stone-500">Št. {nalog.stevilka} · {nalog.stranka}</p>
+            {nalog.stranka?.telefon && (
+              <a
+                href={ponudbaPultiSMS(nalog, izr)}
+                className="bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+              >
+                Pošlji SMS
+              </a>
+            )}
           </div>
         </div>
-
-      {razredi.length === 0 ? (
-        <p className="text-sm text-stone-500">Ni postavk za izračun.</p>
-      ) : (
-        <>
-          <div className="overflow-x-auto -mx-1">
-            <table className="w-full text-sm" style={{ minWidth: "480px" }}>
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-stone-400 border-b-2 border-stone-200">
-                  <th className="font-medium py-2 px-2">Material</th>
-                  <th className="font-medium py-2 px-2">Širinski razred</th>
-                  <th className="font-medium py-2 px-2">Debelina</th>
-                  <th className="font-medium py-2 px-2">Kos.</th>
-                  <th className="font-medium py-2 px-2">Skupaj tekočih metrov</th>
-                </tr>
-              </thead>
-              <tbody>
-                {razredi.map((r, idx) => (
-                  <tr key={idx} className="border-b border-stone-100">
-                    <td className="py-2 px-2 text-stone-700">{r.material}</td>
-                    <td className="py-2 px-2 text-stone-600">{r.razred}</td>
-                    <td className="py-2 px-2 text-stone-600">{r.debelina}</td>
-                    <td className="py-2 px-2 text-stone-600">{r.stevilo}</td>
-                    <td className="py-2 px-2 font-semibold text-stone-800">{r.tekociMetri.toFixed(2)} tm</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex items-center justify-between mt-4 pt-3 border-t-2 border-stone-200">
-            <span className="text-sm text-stone-500">Skupaj vseh tekočih metrov</span>
-            <span className="text-lg font-bold text-red-600">{skupajTM.toFixed(2)} tm</span>
-          </div>
-        </>
       )}
+
+      <div className="flex gap-2">
+        <button onClick={() => natisni(nalog)} className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-semibold">
+          Natisni ponudbo
+        </button>
+      </div>
+
+      <div className="flex gap-2">
+        <button onClick={() => uredi(nalog)} className="flex-1 bg-gray-800 text-white rounded-xl py-3 font-semibold">
+          Uredi
+        </button>
+        <button onClick={() => izbrisi(nalog)} className="flex-1 bg-red-100 text-red-600 rounded-xl py-3 font-semibold">
+          Izbriši
+        </button>
       </div>
     </div>
   );
 }
 
-function Vrstica({ label, vrednost }) {
-  if (!vrednost) return null;
-  return (
-    <div className="flex flex-col sm:flex-row sm:gap-3">
-      <span className="text-stone-400 text-xs font-medium sm:w-28 shrink-0 sm:pt-0.5 mb-0.5 sm:mb-0">{label}</span>
-      <span className="text-stone-700">{vrednost}</span>
-    </div>
-  );
-}
+// ===================== CENIK (ADMIN) =====================
 
-function Dobavnica({ nalog, onZapri }) {
-  const postavkeZaPrikaz = (nalog.postavke || []).filter(
-    (p) => p.naziv || p.material || p.dolzina
-  );
-  const skupajM2 = postavkeZaPrikaz.reduce((v, p) => v + m2Postavke(p), 0);
+function TiskPonudbePulti({ nalog, cenik, nazaj }) {
+  if (!nalog) return <div className="p-4">Nalog ne obstaja. <button onClick={nazaj} className="text-red-600 underline">Nazaj</button></div>;
+
+  const izr = izracunNaloga(nalog, cenik);
+  const material = najdiMaterial(cenik, nalog.materialId);
+  const storitveZUporabo = izr.storitve.filter((s) => s.kolicina > 0);
   const danes = new Date().toLocaleDateString("sl-SI");
+  const strankaVarno = (nalog.stranka?.ime || "").replace(/[\\/:*?"<>|]/g, "").trim();
 
   return (
-    <div>
+    <div className="p-3 space-y-3">
       <style>{`
         @media print {
           body * { visibility: hidden; }
-          .dobavnica-list, .dobavnica-list * { visibility: visible; }
-          .dobavnica-list { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
-          .dobavnica-brez-tiska { display: none !important; }
+          .ponudba-pulti-list, .ponudba-pulti-list * { visibility: visible; }
+          .ponudba-pulti-list { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
+          .ponudba-pulti-brez { display: none !important; }
         }
       `}</style>
 
-      <div className="dobavnica-brez-tiska flex flex-wrap gap-2 mb-2">
+      <div className="ponudba-pulti-brez flex flex-wrap gap-2">
         <button
-          onClick={() => prenesiHTMLDokument(".dobavnica-list", `Dobavnica ${nalog.stevilka || ""}`, `dobavnica-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`)}
-          className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
+          onClick={() => prenesiHTMLDokumentPulti(".ponudba-pulti-list", `Ponudba ${nalog.stevilka || ""}`, `ponudba-pult-${nalog.stevilka || "nalog"}${strankaVarno ? " " + strankaVarno : ""}.html`)}
+          className="bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
         >
-          <FileText size={15} /> Prenesi datoteko
+          Prenesi datoteko
         </button>
-        <button
-          onClick={onZapri}
-          className="px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
-        >
+        <button onClick={nazaj} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100">
           Nazaj
         </button>
       </div>
 
-      <div className="dobavnica-list bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
-        <div className="flex items-center justify-between gap-3 border-b-2 border-stone-800 pb-2 mb-3">
-          <img
-            src={CAKS_LOGO}
-            alt="Čakš logo"
-            className="h-8 w-auto object-contain shrink-0"
-          />
-          <p className="carved text-sm uppercase text-stone-700 shrink-0">Dobavnica</p>
+      <div className="ponudba-pulti-list bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
+        <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
+          <div className="font-bold text-lg">ČAKŠ <span className="text-red-600">· Pulti</span></div>
+          <div className="text-sm uppercase font-semibold text-gray-600">Ponudba</div>
         </div>
 
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-2 text-sm border-b border-stone-200 pb-2">
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Št.</span><span className="font-semibold text-stone-800">{nalog.stevilka}</span></span>
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Kupec</span><span className="font-semibold text-stone-800">{nalog.stranka}</span></span>
-          {nalog.telefon && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">Tel</span><span className="text-stone-700">{nalog.telefon}</span></span>
-          )}
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Datum</span><span className="text-stone-700">{danes}</span></span>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm border-b border-gray-200 pb-2 mb-3">
+          <span><span className="text-xs text-gray-400 uppercase mr-1">Št.</span><span className="font-semibold">{nalog.stevilka}</span></span>
+          <span><span className="text-xs text-gray-400 uppercase mr-1">Stranka</span><span className="font-semibold">{nalog.stranka?.ime}</span></span>
+          {nalog.stranka?.telefon && <span><span className="text-xs text-gray-400 uppercase mr-1">Tel</span>{nalog.stranka.telefon}</span>}
+          {nalog.stranka?.email && <span><span className="text-xs text-gray-400 uppercase mr-1">E-mail</span>{nalog.stranka.email}</span>}
+          {nalog.stranka?.naslov && <span><span className="text-xs text-gray-400 uppercase mr-1">Naslov</span>{nalog.stranka.naslov}</span>}
+          <span><span className="text-xs text-gray-400 uppercase mr-1">Datum</span>{danes}</span>
+          {nalog.datumMontaze && <span><span className="text-xs text-gray-400 uppercase mr-1">Predviden datum montaže</span><span className="font-semibold text-red-600">{nalog.datumMontaze}</span></span>}
         </div>
 
-        {postavkeZaPrikaz.length > 0 && (
+        <div className="mb-3 pb-2 border-b border-gray-200 text-sm">
+          <span className="text-xs text-gray-400 uppercase mr-1">Material</span>
+          <span className="font-semibold">{material ? material.naziv : "—"}</span>
+          {material?.tip === "m2" && ` · ${nalog.debelina}cm · ${skupnaKvadratura(nalog.kosi).toFixed(2)} m²`}
+          {material?.tip === "plosca" && ` · ${nalog.steviloPlosc || 0} plošč`}
+        </div>
+
+        {(nalog.kosi || []).some((k) => k.naziv || k.dolzina || k.sirina) && (
           <div className="mb-3">
-            <table className="w-full border-collapse table-fixed">
-              <colgroup>
-                <col style={{ width: "4%" }} />
-                <col style={{ width: "25%" }} />
-                <col style={{ width: "23%" }} />
-                <col style={{ width: "36%" }} />
-                <col style={{ width: "12%" }} />
-              </colgroup>
+            <div className="text-xs text-gray-400 uppercase mb-1">Kosi</div>
+            <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="border-b-2 border-stone-300 text-left text-xs uppercase text-stone-500">
-                  <th className="py-2 pr-1 overflow-hidden">#</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Naziv</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200">Material</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200 normal-case overflow-hidden truncate">Mere (cm)</th>
-                  <th className="py-2 pr-1 pl-2 border-l border-stone-200 whitespace-nowrap">Kos.</th>
+                <tr className="text-left text-xs uppercase text-gray-400 border-b border-gray-200">
+                  <th className="py-1">Naziv</th>
+                  <th className="py-1">Mere (cm)</th>
                 </tr>
               </thead>
               <tbody>
-                {postavkeZaPrikaz.map((p, idx) => (
-                  <tr key={p.id} className="border-b border-stone-100">
-                    <td className="py-2 pr-1 text-xs text-stone-400 align-top overflow-hidden">{idx + 1}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top overflow-hidden">
-                      {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
-                    </td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top whitespace-nowrap">{p.kolicina || "1"}</td>
+                {nalog.kosi.map((k, i) => (
+                  <tr key={i} className="border-b border-gray-100">
+                    <td className="py-1">{k.naziv || `Kos ${i + 1}`}</td>
+                    <td className="py-1">{k.dolzina || "–"} × {k.sirina || "–"}</td>
                   </tr>
                 ))}
               </tbody>
-              {skupajM2 > 0 && (
-                <tfoot>
-                  <tr>
-                    <td colSpan="3" className="pt-2 text-right text-xs font-medium text-stone-500">
-                      Skupaj
-                    </td>
-                    <td className="pt-2 text-sm font-semibold text-stone-800" colSpan="2">{skupajM2.toFixed(2)} m²</td>
-                  </tr>
-                </tfoot>
-              )}
             </table>
           </div>
         )}
 
-        {nalog.prevzel && (
-          <p className="text-sm text-stone-600 mb-6">Blago prevzel: {nalog.prevzel}</p>
+        {storitveZUporabo.length > 0 && (
+          <div className="mb-3">
+            <div className="text-xs text-gray-400 uppercase mb-1">Storitve</div>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="text-left text-xs uppercase text-gray-400 border-b border-gray-200">
+                  <th className="py-1">Postavka</th>
+                  <th className="py-1">Kol.</th>
+                  <th className="py-1 text-right">Cena</th>
+                </tr>
+              </thead>
+              <tbody>
+                {storitveZUporabo.map((s) => (
+                  <tr key={s.id} className="border-b border-gray-100">
+                    <td className="py-1">{s.naziv}</td>
+                    <td className="py-1">{s.kolicina} {s.enota}</td>
+                    <td className="py-1 text-right">{eur(s.skupaj)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-8 pt-2">
-          <div className="border-t border-stone-400 pt-2 text-center text-xs text-stone-500">
-            Podpis dobavitelja
+        <div className="flex flex-col items-end gap-0.5 text-sm border-t-2 border-gray-200 pt-2 mb-2">
+          <span>Material: <span className="font-semibold">{eur(izr.material.cena)}</span></span>
+          <span>Storitve: <span className="font-semibold">{eur(izr.storitveSkupaj)}</span></span>
+          {izr.popust > 0 && <span>Popust ({nalog.popust}%): <span className="font-semibold">−{eur(izr.popust)}</span></span>}
+          <span>DDV 22%: <span className="font-semibold">{eur(izr.ddv)}</span></span>
+          <span className="text-base font-bold">Skupaj z DDV: {eur(izr.zDdv)}</span>
+        </div>
+
+        {nalog.opombe && (
+          <p className="text-sm mt-2"><span className="text-xs text-gray-400 uppercase mr-1">Opombe:</span>{nalog.opombe}</p>
+        )}
+
+        <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-200">
+          Za vsa vprašanja smo dosegljivi na 031 235 146. Cene so informativne narave.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CenikAdmin({ cenik, shrani, nazaj }) {
+  const [c, setC] = useState(JSON.parse(JSON.stringify(cenik)));
+
+  const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-right";
+
+  function posodobiMaterial(i, polje, vrednost) {
+    const materiali = c.materiali.map((m, j) => (j === i ? { ...m, [polje]: vrednost } : m));
+    setC({ ...c, materiali });
+  }
+
+  function posodobiStoritev(i, polje, vrednost) {
+    const storitve = c.storitve.map((s, j) => (j === i ? { ...s, [polje]: vrednost } : s));
+    setC({ ...c, storitve });
+  }
+
+  return (
+    <div className="p-3 space-y-3">
+      <button onClick={nazaj} className="text-sm text-gray-500">
+        ← Nazaj
+      </button>
+      <div className="flex items-center justify-between">
+        <h2 className="font-bold text-lg">Cenik pultov</h2>
+        <button
+          onClick={() => {
+            if (confirm("Ali res želiš prepisati trenutni cenik z novim, privzetim cenikom (iz Excela)? Trenutne ročne spremembe bodo izgubljene.")) {
+              setC(JSON.parse(JSON.stringify(PRIVZETI_CENIK)));
+            }
+          }}
+          className="text-xs bg-red-600 text-white px-3 py-2 rounded-lg"
+        >
+          Ponastavi na privzeti cenik
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl p-3 space-y-2">
+        <div className="font-semibold text-sm">Materiali</div>
+        {c.materiali.map((m, i) => (
+          <div key={m.id} className="flex gap-2 items-center flex-wrap">
+            <input
+              className="flex-1 min-w-[120px] border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              value={m.naziv}
+              onChange={(e) => posodobiMaterial(i, "naziv", e.target.value)}
+            />
+            {m.tip === "plosca" ? (
+              <input
+                className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm text-right"
+                inputMode="decimal"
+                value={m.cenaPlosca}
+                placeholder="€/plošča"
+                onChange={(e) => posodobiMaterial(i, "cenaPlosca", e.target.value)}
+              />
+            ) : (
+              <>
+                <input
+                  className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm text-right"
+                  inputMode="decimal"
+                  value={m.cena2cm}
+                  placeholder="€/m² 2cm"
+                  onChange={(e) => posodobiMaterial(i, "cena2cm", e.target.value)}
+                />
+                <input
+                  className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm text-right"
+                  inputMode="decimal"
+                  value={m.cena3cm}
+                  placeholder="€/m² 3cm"
+                  onChange={(e) => posodobiMaterial(i, "cena3cm", e.target.value)}
+                />
+              </>
+            )}
+            <button
+              onClick={() => setC({ ...c, materiali: c.materiali.filter((_, j) => j !== i) })}
+              className="text-red-600 text-lg px-1"
+            >
+              ×
+            </button>
           </div>
-          <div className="border-t border-stone-400 pt-2 text-center text-xs text-stone-500">
-            Podpis prevzemnika
-          </div>
+        ))}
+        <div className="flex gap-2">
+          <button
+            onClick={() =>
+              setC({
+                ...c,
+                materiali: [...c.materiali, { id: "mat" + Date.now(), naziv: "", tip: "m2", cena2cm: "", cena3cm: "" }],
+              })
+            }
+            className="text-sm text-red-600"
+          >
+            + Dodaj material (m²)
+          </button>
+          <button
+            onClick={() =>
+              setC({
+                ...c,
+                materiali: [...c.materiali, { id: "mat" + Date.now(), naziv: "", tip: "plosca", cenaPlosca: "" }],
+              })
+            }
+            className="text-sm text-red-600"
+          >
+            + Dodaj material (plošča)
+          </button>
         </div>
       </div>
+
+      <div className="bg-white rounded-xl p-3 space-y-2">
+        <div className="font-semibold text-sm">Storitve</div>
+        {c.storitve.map((s, i) => (
+          <div key={s.id} className="flex gap-2 items-center">
+            <input
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              value={s.naziv}
+              onChange={(e) => posodobiStoritev(i, "naziv", e.target.value)}
+            />
+            <select
+              className="w-20 border border-gray-300 rounded-lg px-2 py-2 text-sm"
+              value={s.enota}
+              onChange={(e) => posodobiStoritev(i, "enota", e.target.value)}
+            >
+              <option>KOM</option>
+              <option>TM</option>
+              <option>M2</option>
+              <option>KOS</option>
+            </select>
+            <input
+              className={inp + " w-20"}
+              inputMode="decimal"
+              value={s.cena}
+              onChange={(e) => posodobiStoritev(i, "cena", e.target.value)}
+            />
+            <button
+              onClick={() => setC({ ...c, storitve: c.storitve.filter((_, j) => j !== i) })}
+              className="text-red-600 text-lg px-1"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() =>
+            setC({ ...c, storitve: [...c.storitve, { id: "storitev" + Date.now(), naziv: "", enota: "KOM", cena: "" }] })
+          }
+          className="text-sm text-red-600"
+        >
+          + Dodaj storitev
+        </button>
+      </div>
+
+      <button
+        onClick={() => {
+          shrani(c);
+          nazaj();
+        }}
+        className="w-full bg-red-600 text-white rounded-xl py-3 font-semibold"
+      >
+        Shrani cenik
+      </button>
     </div>
   );
 }
