@@ -14,6 +14,12 @@ const STATUS_BARVE = {
   "Pripravljeno": "bg-sky-100 text-sky-800 border-sky-300",
   "Prevzeto": "bg-emerald-100 text-emerald-800 border-emerald-300",
 };
+const KARTICA_BARVE = {
+  "Sprejeto": "bg-stone-100 border-2 border-stone-300 hover:border-stone-400",
+  "V izdelavi": "bg-amber-50 border-2 border-amber-300 hover:border-amber-400",
+  "Pripravljeno": "bg-sky-50 border-2 border-sky-300 hover:border-sky-400",
+  "Prevzeto": "bg-emerald-50 border-2 border-emerald-300 hover:border-emerald-400",
+};
 const STATUS_HEX = {
   "Sprejeto": "#a8a29e",
   "V izdelavi": "#f59e0b",
@@ -1072,10 +1078,12 @@ export default function DelovniNalogi() {
                       onClick={() => odpriPodrobnosti(n.id)}
                       className={`w-full text-left rounded-xl px-4 py-3.5 hover:shadow-sm transition-all flex items-center justify-between gap-3 ${
                         n.racun === "poslati"
-                          ? "bg-yellow-50 border-2 border-yellow-400 hover:border-yellow-500"
+                          ? "bg-yellow-200 border-2 border-yellow-500 hover:border-yellow-600"
+                          : n.racun === "poslan"
+                          ? "bg-emerald-200 border-2 border-emerald-500 hover:border-emerald-600"
                           : zamujen
                           ? "bg-red-50 border-2 border-red-400 hover:border-red-500"
-                          : "bg-white border border-stone-200 hover:border-red-400"
+                          : KARTICA_BARVE[n.status] || "bg-white border border-stone-200 hover:border-red-400"
                       }`}
                     >
                       <div className="min-w-0">
@@ -1098,8 +1106,13 @@ export default function DelovniNalogi() {
                             </span>
                           )}
                           {n.racun === "poslati" && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-medium">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500 text-yellow-950 font-medium">
                               Račun za poslati
+                            </span>
+                          )}
+                          {n.racun === "poslan" && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-600 text-white font-medium">
+                              Račun poslan
                             </span>
                           )}
                           {(n.placano || "Ne") === "Da" ? (
