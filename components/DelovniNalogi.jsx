@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, Fragment } from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download } from "lucide-react";
@@ -478,7 +476,7 @@ export default function DelovniNalogi() {
   const [aktivniId, setAktivniId] = useState(null);
   const [obrazec, setObrazec] = useState(prazenObrazec());
   const [iskanje, setIskanje] = useState("");
-  const [filterStatus, setFilterStatus] = useState("Vsi");
+  const [filterStatusi, setFilterStatusi] = useState([]);
   const [shranjujem, setShranjujem] = useState(false);
   const [adminOdklenjen, setAdminOdklenjen] = useState(false);
   const [pokaziPinVnos, setPokaziPinVnos] = useState(false);
@@ -688,6 +686,11 @@ export default function DelovniNalogi() {
     await shraniNalogi(posodobljeni);
   }
 
+  async function spremeniRacun(id, racun) {
+    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, racun } : n));
+    await shraniNalogi(posodobljeni);
+  }
+
   async function shraniPrevzel(id, prevzel) {
     const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, prevzel } : n));
     await shraniNalogi(posodobljeni);
@@ -732,7 +735,7 @@ export default function DelovniNalogi() {
       n.stranka.toLowerCase().includes(iskanje.toLowerCase()) ||
       n.opis.toLowerCase().includes(iskanje.toLowerCase()) ||
       (n.stevilka || "").toLowerCase().includes(iskanje.toLowerCase());
-    const ujemaStatus = filterStatus === "Vsi" || n.status === filterStatus;
+    const ujemaStatus = filterStatusi.length === 0 || filterStatusi.includes(n.status);
     return ujemaIskanje && ujemaStatus;
   });
 
@@ -1005,7 +1008,7 @@ export default function DelovniNalogi() {
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-3 mb-5">
+            <div className="flex flex-col sm:flex-row gap-3 mb-3">
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                 <input
@@ -1015,16 +1018,36 @@ export default function DelovniNalogi() {
                   className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-stone-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500"
                 />
               </div>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-2.5 rounded-lg border border-stone-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 mb-5">
+              <button
+                onClick={() => setFilterStatusi([])}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  filterStatusi.length === 0
+                    ? "bg-stone-700 text-white border-stone-700 font-medium"
+                    : "bg-white text-stone-500 border-stone-300 hover:border-stone-500"
+                }`}
               >
-                <option>Vsi</option>
-                {STATUSI.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
+                Vsi
+              </button>
+              {STATUSI.map((s) => (
+                <button
+                  key={s}
+                  onClick={() =>
+                    setFilterStatusi((prej) =>
+                      prej.includes(s) ? prej.filter((x) => x !== s) : [...prej, s]
+                    )
+                  }
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    filterStatusi.includes(s)
+                      ? STATUS_BARVE[s] + " font-medium ring-1 ring-inset ring-current"
+                      : "bg-white text-stone-500 border-stone-300 hover:border-stone-500"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
             </div>
 
             {filtrirani.length === 0 ? (
@@ -1046,7 +1069,9 @@ export default function DelovniNalogi() {
                       key={n.id}
                       onClick={() => odpriPodrobnosti(n.id)}
                       className={`w-full text-left rounded-xl px-4 py-3.5 hover:shadow-sm transition-all flex items-center justify-between gap-3 ${
-                        zamujen
+                        n.racun === "poslati"
+                          ? "bg-yellow-50 border-2 border-yellow-400 hover:border-yellow-500"
+                          : zamujen
                           ? "bg-red-50 border-2 border-red-400 hover:border-red-500"
                           : "bg-white border border-stone-200 hover:border-red-400"
                       }`}
@@ -1068,6 +1093,11 @@ export default function DelovniNalogi() {
                           {zamujen && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-red-600 text-white font-medium">
                               Zamujeno
+                            </span>
+                          )}
+                          {n.racun === "poslati" && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-medium">
+                              Račun za poslati
                             </span>
                           )}
                           {(n.placano || "Ne") === "Da" ? (
@@ -1803,6 +1833,32 @@ export default function DelovniNalogi() {
                     {p === "Da" ? "Plačano" : "Ne plačano"}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-stone-100">
+              <label className="block text-xs font-medium text-stone-500 mb-1.5">Račun</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => spremeniRacun(aktivniNalog.id, "poslati")}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    aktivniNalog.racun === "poslati"
+                      ? "bg-yellow-100 text-yellow-800 border-yellow-400 font-medium"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
+                  }`}
+                >
+                  Pošlji račun
+                </button>
+                <button
+                  onClick={() => spremeniRacun(aktivniNalog.id, "poslan")}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    aktivniNalog.racun === "poslan"
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-300 font-medium"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
+                  }`}
+                >
+                  Račun poslan
+                </button>
               </div>
             </div>
 
