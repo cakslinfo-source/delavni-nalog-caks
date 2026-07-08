@@ -275,8 +275,12 @@ function SestanekKartica({ s, onClick }) {
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-xl p-3 shadow-sm cursor-pointer border-l-4 ${
-        s.opravljeno ? "border-emerald-500" : jePretekel ? "border-red-400" : "border-blue-500"
+      className={`rounded-xl p-3 shadow-sm cursor-pointer border-l-4 ${
+        s.opravljeno
+          ? "bg-emerald-100 border-emerald-500"
+          : jePretekel
+          ? "bg-white border-red-400"
+          : "bg-white border-blue-500"
       }`}
     >
       <div className="flex justify-between items-start">
@@ -290,7 +294,7 @@ function SestanekKartica({ s, onClick }) {
           <div className="text-xs text-gray-500">{s.ura}</div>
         </div>
       </div>
-      {s.opravljeno && <div className="text-xs text-emerald-600 font-medium mt-1">✓ Opravljeno</div>}
+      {s.opravljeno && <div className="text-xs text-emerald-700 font-semibold mt-1">✓ Opravljeno</div>}
     </div>
   );
 }
@@ -320,28 +324,28 @@ function KoledarPogled({ sestanki, prikazMeseca, setPrikazMeseca, izbranDan, set
 
   return (
     <div className="p-3 space-y-3">
-      <div className="bg-white rounded-xl p-3">
-        <div className="flex items-center justify-between mb-3">
+      <div className="bg-white rounded-xl p-2.5 max-w-xs mx-auto">
+        <div className="flex items-center justify-between mb-2">
           <button
             onClick={() => setPrikazMeseca((p) => (p.mesec === 0 ? { leto: p.leto - 1, mesec: 11 } : { ...p, mesec: p.mesec - 1 }))}
-            className="px-3 py-1 rounded-lg bg-gray-100 text-gray-600"
+            className="px-2 py-0.5 rounded-lg bg-gray-100 text-gray-600 text-sm"
           >
             ←
           </button>
-          <div className="font-semibold">{imenaMesecev[mesec]} {leto}</div>
+          <div className="font-semibold text-sm">{imenaMesecev[mesec]} {leto}</div>
           <button
             onClick={() => setPrikazMeseca((p) => (p.mesec === 11 ? { leto: p.leto + 1, mesec: 0 } : { ...p, mesec: p.mesec + 1 }))}
-            className="px-3 py-1 rounded-lg bg-gray-100 text-gray-600"
+            className="px-2 py-0.5 rounded-lg bg-gray-100 text-gray-600 text-sm"
           >
             →
           </button>
         </div>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-400 mb-1">
-          {["Pon", "Tor", "Sre", "Čet", "Pet", "Sob", "Ned"].map((d) => (
-            <div key={d}>{d}</div>
+        <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] text-gray-400 mb-1">
+          {["P", "T", "S", "Č", "P", "S", "N"].map((d, i) => (
+            <div key={i}>{d}</div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-0.5">
           {celice.map((dan, i) => {
             if (dan === null) return <div key={i} />;
             const dStr = datumNiza(dan);
@@ -352,13 +356,13 @@ function KoledarPogled({ sestanki, prikazMeseca, setPrikazMeseca, izbranDan, set
               <button
                 key={i}
                 onClick={() => setIzbranDan(jeIzbran ? null : dStr)}
-                className={`aspect-square rounded-lg text-sm flex flex-col items-center justify-center relative ${
+                className={`aspect-square rounded-md text-xs flex flex-col items-center justify-center relative ${
                   jeIzbran ? "bg-red-600 text-white" : jeDanes ? "bg-gray-200 font-bold" : "hover:bg-gray-100"
                 }`}
               >
                 {dan}
                 {steviloSestankov > 0 && (
-                  <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${jeIzbran ? "bg-white" : "bg-red-500"}`} />
+                  <span className={`w-1 h-1 rounded-full ${jeIzbran ? "bg-white" : "bg-red-500"}`} />
                 )}
               </button>
             );
@@ -378,7 +382,7 @@ function KoledarPogled({ sestanki, prikazMeseca, setPrikazMeseca, izbranDan, set
           ) : (
             <div className="space-y-2">
               {sestankiIzbranegaDne
-                .sort((a, b) => a.ura.localeCompare(b.ura))
+                .sort((a, b) => (a.opravljeno === b.opravljeno ? a.ura.localeCompare(b.ura) : a.opravljeno ? 1 : -1))
                 .map((s) => (
                   <SestanekKartica key={s.id} s={s} onClick={() => odpri(s)} />
                 ))}
