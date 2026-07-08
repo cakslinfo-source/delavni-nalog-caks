@@ -799,6 +799,12 @@ export default function DelovniNalogi() {
             >
               Pulti
             </a>
+            <a
+              href="/sestanki"
+              className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
+            >
+              Sestanki/Izmere
+            </a>
             {adminOdklenjen ? (
               <button
                 onClick={zapriAdmin}
