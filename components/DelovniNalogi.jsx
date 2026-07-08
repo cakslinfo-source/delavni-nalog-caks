@@ -59,6 +59,8 @@ function prazenObrazec() {
     popustSkupaj: "",
     vrsta: "narocilo",
     veljavnostPonudbe: "",
+    slikaNarocila: null,
+    dxfDatoteka: null,
     postavke: [novaPostavka()],
   };
 }
@@ -439,6 +441,34 @@ function strankaZaIme(nalog) {
   return (nalog.stranka || "").replace(/[\\/:*?"<>|]/g, "").trim();
 }
 
+function datotekaVBase64(file) {
+  return new Promise((resolve, reject) => {
+    const bralnik = new FileReader();
+    bralnik.onload = () => resolve({ ime: file.name, tip: file.type, podatki: bralnik.result });
+    bralnik.onerror = reject;
+    bralnik.readAsDataURL(file);
+  });
+}
+
+const MAX_DATOTEKA_MB = 4;
+
+async function obravnavajNalozenoDatoteko(event, nastavi) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  if (file.size > MAX_DATOTEKA_MB * 1024 * 1024) {
+    alert(`Datoteka je prevelika (max ${MAX_DATOTEKA_MB} MB). Poskusi manjšo/stisnjeno datoteko.`);
+    event.target.value = "";
+    return;
+  }
+  try {
+    const rezultat = await datotekaVBase64(file);
+    nastavi(rezultat);
+  } catch (e) {
+    alert("Napaka pri nalaganju datoteke.");
+  }
+  event.target.value = "";
+}
+
 function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
   const el = document.querySelector(selector);
   if (!el) {
@@ -579,6 +609,8 @@ export default function DelovniNalogi() {
       popustSkupaj: nalog.popustSkupaj || "",
       rokUra: nalog.rokUra || "",
       veljavnostPonudbe: nalog.veljavnostPonudbe || "",
+      slikaNarocila: nalog.slikaNarocila || null,
+      dxfDatoteka: nalog.dxfDatoteka || null,
       postavke: nalog.postavke.length ? nalog.postavke : [novaPostavka()],
     });
     setAktivniId(nalog.id);
@@ -798,12 +830,6 @@ export default function DelovniNalogi() {
               className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
             >
               Pulti
-            </a>
-            <a
-              href="/sestanki"
-              className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
-            >
-              Sestanki/Izmere
             </a>
             {adminOdklenjen ? (
               <button
@@ -1617,6 +1643,57 @@ export default function DelovniNalogi() {
               />
             </div>
 
+            <div className="border-t border-stone-200 pt-4 mt-4 grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Slika naročila (npr. iz e-pošte stranke)</label>
+                {obrazec.slikaNarocila ? (
+                  <div className="bg-stone-50 border border-stone-200 rounded-lg p-2">
+                    {obrazec.slikaNarocila.tip && obrazec.slikaNarocila.tip.startsWith("image/") ? (
+                      <img src={obrazec.slikaNarocila.podatki} alt="Slika naročila" className="max-h-40 rounded-lg mx-auto" />
+                    ) : (
+                      <span className="text-xs text-stone-700 block truncate">📄 {obrazec.slikaNarocila.ime}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setObrazec({ ...obrazec, slikaNarocila: null })}
+                      className="text-red-600 text-xs mt-2 block mx-auto"
+                    >
+                      Odstrani sliko
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setObrazec({ ...obrazec, slikaNarocila: rez }))}
+                    className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
+                  />
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">DXF datoteka (za prenos na mašine)</label>
+                {obrazec.dxfDatoteka ? (
+                  <div className="flex items-center justify-between bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm">
+                    <span className="truncate text-stone-700">📎 {obrazec.dxfDatoteka.ime}</span>
+                    <button
+                      type="button"
+                      onClick={() => setObrazec({ ...obrazec, dxfDatoteka: null })}
+                      className="text-red-600 text-xs ml-2 shrink-0"
+                    >
+                      Odstrani
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    type="file"
+                    accept=".dxf,.dwg"
+                    onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setObrazec({ ...obrazec, dxfDatoteka: rez }))}
+                    className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
+                  />
+                )}
+              </div>
+            </div>
+
             <div className="flex gap-2 mt-5">
               <button
                 onClick={shraniObrazec}
@@ -1740,6 +1817,38 @@ export default function DelovniNalogi() {
               <Vrstica label="Izvaja" vrednost={aktivniNalog.izvajalec} />
               <Vrstica label="Prevzel" vrednost={aktivniNalog.prevzel} />
             </div>
+
+            {(aktivniNalog.slikaNarocila || aktivniNalog.dxfDatoteka) && (
+              <div className="mt-5 pt-4 border-t border-stone-100 grid sm:grid-cols-2 gap-4">
+                {aktivniNalog.slikaNarocila && (
+                  <div>
+                    <h3 className="carved text-sm uppercase text-stone-600 mb-2">Slika naročila</h3>
+                    {aktivniNalog.slikaNarocila.tip && aktivniNalog.slikaNarocila.tip.startsWith("image/") ? (
+                      <img src={aktivniNalog.slikaNarocila.podatki} alt="Slika naročila" className="max-h-64 rounded-lg border border-stone-200 mx-auto" />
+                    ) : null}
+                    <a
+                      href={aktivniNalog.slikaNarocila.podatki}
+                      download={aktivniNalog.slikaNarocila.ime}
+                      className="text-sm text-red-700 underline block mt-2"
+                    >
+                      ⬇ Prenesi {aktivniNalog.slikaNarocila.ime}
+                    </a>
+                  </div>
+                )}
+                {aktivniNalog.dxfDatoteka && (
+                  <div>
+                    <h3 className="carved text-sm uppercase text-stone-600 mb-2">DXF datoteka</h3>
+                    <a
+                      href={aktivniNalog.dxfDatoteka.podatki}
+                      download={aktivniNalog.dxfDatoteka.ime}
+                      className="text-sm text-red-700 underline block"
+                    >
+                      📎 Prenesi {aktivniNalog.dxfDatoteka.ime}
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
 
             {aktivniNalog.postavke && aktivniNalog.postavke.some(p => p.naziv || p.material || p.dolzina) && (
               <div className="mt-5 pt-4 border-t border-stone-100">
