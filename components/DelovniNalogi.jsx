@@ -509,6 +509,7 @@ const ADMIN_PIN = "1991";
 export default function DelovniNalogi() {
   const [nalogi, setNalogi] = useState([]);
   const [naloziLoading, setNaloziLoading] = useState(true);
+  const [zadnjaVerzija, setZadnjaVerzija] = useState(0);
   const [napaka, setNapaka] = useState("");
   const [pogled, setPogled] = useState("seznam");
   const [aktivniId, setAktivniId] = useState(null);
@@ -555,6 +556,7 @@ export default function DelovniNalogi() {
       try {
         const res = await fetch("/api/nalogi");
         const podatki = await res.json();
+        setZadnjaVerzija(Number(res.headers.get("X-Verzija")) || 0);
         if (Array.isArray(podatki)) {
           const popravljeni = podatki.map((n) => ({
             ...n,
@@ -570,17 +572,41 @@ export default function DelovniNalogi() {
     })();
   }, []);
 
-  async function shraniNalogi(noviSeznam) {
+  async function shraniNalogi(noviSeznam, pricakovanaVerzija) {
     setNalogi(noviSeznam);
     setShranjujem(true);
     try {
       const res = await fetch("/api/nalogi", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(noviSeznam),
+        body: JSON.stringify({ seznam: noviSeznam, pricakovanaVerzija }),
       });
-      if (!res.ok) setNapaka("Shranjevanje ni uspelo. Poskusi znova.");
-      else setNapaka("");
+      const odgovor = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        setNapaka(
+          odgovor.zastarelaAplikacija
+            ? "Aplikacija na tej napravi je zastarela. Stran se je osvežila – preveri stanje in poskusi znova."
+            : "Nekdo drug je medtem spremenil podatke. Stran se je osvežila na najnovejše stanje – preveri in poskusi znova."
+        );
+        try {
+          const svezRes = await fetch("/api/nalogi");
+          const sveziPodatki = await svezRes.json();
+          if (Array.isArray(sveziPodatki)) {
+            setNalogi(
+              sveziPodatki.map((n) => ({
+                ...n,
+                postavke: Array.isArray(n.postavke) && n.postavke.length ? n.postavke : [novaPostavka()],
+              }))
+            );
+          }
+          setZadnjaVerzija(Number(svezRes.headers.get("X-Verzija")) || 0);
+        } catch (e2) {}
+      } else if (!res.ok) {
+        setNapaka("Shranjevanje ni uspelo. Poskusi znova.");
+      } else {
+        setNapaka("");
+        if (odgovor.verzija !== undefined) setZadnjaVerzija(odgovor.verzija);
+      }
     } catch (e) {
       setNapaka("Napaka pri shranjevanju. Preveri povezavo in poskusi znova.");
     } finally {
@@ -588,14 +614,16 @@ export default function DelovniNalogi() {
     }
   }
 
-  // Varno spreminjanje: najprej osveži najnovejše stanje iz baze (v primeru, da je bilo
-  // med tem spremenjeno na drugi napravi), šele nato vanj vnese lokalno spremembo.
-  // Tako prepreči, da bi ena naprava po nesreči prepisala spremembe druge naprave.
+  // Varno spreminjanje: najprej osveži najnovejše stanje in verzijo iz baze (v primeru, da je
+  // bilo med tem spremenjeno na drugi napravi), šele nato vanj vnese lokalno spremembo in
+  // shrani z navedbo pričakovane verzije — če se medtem kdo drug shrani prvi, strežnik zavrne.
   async function posodobiNaloge(transformFn) {
     let osnova = nalogi;
+    let verzija = zadnjaVerzija;
     try {
       const res = await fetch("/api/nalogi");
       const sveze = await res.json();
+      verzija = Number(res.headers.get("X-Verzija")) || 0;
       if (Array.isArray(sveze)) {
         osnova = sveze.map((n) => ({
           ...n,
@@ -606,7 +634,7 @@ export default function DelovniNalogi() {
       // če osveževanje ne uspe, nadaljujemo z lokalnim stanjem kot rezervo
     }
     const novi = transformFn(osnova);
-    await shraniNalogi(novi);
+    await shraniNalogi(novi, verzija);
   }
 
   function odpriNov() {
