@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Fragment } from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download } from "lucide-react";
+import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw } from "lucide-react";
 
 const STATUSI = ["Sprejeto", "V izdelavi", "Pripravljeno", "Prevzeto"];
 const DELAVCI = ["Luka", "Miha", "Rok", "Mersad", "Patrik"];
@@ -886,6 +886,15 @@ export default function DelovniNalogi() {
             >
               Spomeniki
             </a>
+            <button
+              onClick={() => {
+                window.location.href = window.location.pathname + "?osvezeno=" + Date.now();
+              }}
+              className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors flex items-center gap-1"
+              title="Osveži aplikacijo — prenese najnovejšo različico in podatke"
+            >
+              <RefreshCw size={13} /> Osveži
+            </button>
             {adminOdklenjen ? (
               <button
                 onClick={zapriAdmin}
