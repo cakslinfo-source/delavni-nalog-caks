@@ -154,6 +154,18 @@ export default function Sestanki() {
           <a href="/pulti" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">
             Pulti
           </a>
+          <a href="/spomeniki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">
+            Spomeniki
+          </a>
+          <button
+            onClick={() => {
+              window.location.href = window.location.pathname + "?osvezeno=" + Date.now();
+            }}
+            className="text-xs bg-gray-800 px-3 py-2 rounded-lg"
+            title="Osveži aplikacijo"
+          >
+            ⟳ Osveži
+          </button>
         </div>
       </div>
 
