@@ -588,6 +588,27 @@ export default function DelovniNalogi() {
     }
   }
 
+  // Varno spreminjanje: najprej osveži najnovejše stanje iz baze (v primeru, da je bilo
+  // med tem spremenjeno na drugi napravi), šele nato vanj vnese lokalno spremembo.
+  // Tako prepreči, da bi ena naprava po nesreči prepisala spremembe druge naprave.
+  async function posodobiNaloge(transformFn) {
+    let osnova = nalogi;
+    try {
+      const res = await fetch("/api/nalogi");
+      const sveze = await res.json();
+      if (Array.isArray(sveze)) {
+        osnova = sveze.map((n) => ({
+          ...n,
+          postavke: Array.isArray(n.postavke) && n.postavke.length ? n.postavke : [novaPostavka()],
+        }));
+      }
+    } catch (e) {
+      // če osveževanje ne uspe, nadaljujemo z lokalnim stanjem kot rezervo
+    }
+    const novi = transformFn(osnova);
+    await shraniNalogi(novi);
+  }
+
   function odpriNov() {
     setObrazec(prazenObrazec());
     setAktivniId(null);
@@ -677,22 +698,24 @@ export default function DelovniNalogi() {
     const obrazecZaShranjevanje = { ...obrazec, postavke: ocisceniPostavki.length ? ocisceniPostavki : [novaPostavka()] };
 
     if (aktivniId) {
-      const posodobljeni = nalogi.map((n) => (n.id === aktivniId ? { ...obrazecZaShranjevanje, id: aktivniId } : n));
-      await shraniNalogi(posodobljeni);
+      await posodobiNaloge((os) => os.map((n) => (n.id === aktivniId ? { ...obrazecZaShranjevanje, id: aktivniId } : n)));
       setAktivniId(aktivniId);
       setPogled("podrobnosti");
     } else {
-      const predpona = obrazec.vrsta === "ponudba" ? "PO" : "DN";
-      const stevilkaIndex = nalogi.filter((n) => (n.vrsta || "narocilo") === (obrazec.vrsta || "narocilo")).length + 1;
-      const novNalog = {
-        ...obrazecZaShranjevanje,
-        id: `${Date.now()}`,
-        stevilka: `${praznoStevilo(predpona)}${String(stevilkaIndex).padStart(3, "0")}`,
-        datumVnosa: new Date().toISOString(),
-      };
-      const posodobljeni = [novNalog, ...nalogi];
-      await shraniNalogi(posodobljeni);
-      setAktivniId(novNalog.id);
+      let novId = null;
+      await posodobiNaloge((os) => {
+        const predpona = obrazec.vrsta === "ponudba" ? "PO" : "DN";
+        const stevilkaIndex = os.filter((n) => (n.vrsta || "narocilo") === (obrazec.vrsta || "narocilo")).length + 1;
+        const novNalog = {
+          ...obrazecZaShranjevanje,
+          id: `${Date.now()}`,
+          stevilka: `${praznoStevilo(predpona)}${String(stevilkaIndex).padStart(3, "0")}`,
+          datumVnosa: new Date().toISOString(),
+        };
+        novId = novNalog.id;
+        return [novNalog, ...os];
+      });
+      setAktivniId(novId);
       setPogled("podrobnosti");
     }
   }
@@ -702,48 +725,40 @@ export default function DelovniNalogi() {
     if (!nalog) return;
     const potrdi = window.confirm(`Ali želiš ponudbo ${nalog.stevilka} pretvoriti v pravi delovni nalog? Dobila bo novo številko delovnega naloga.`);
     if (!potrdi) return;
-    const stevilkaIndex = nalogi.filter((n) => (n.vrsta || "narocilo") === "narocilo").length + 1;
-    const novaStevilka = `${praznoStevilo("DN")}${String(stevilkaIndex).padStart(3, "0")}`;
-    const posodobljeni = nalogi.map((n) =>
-      n.id === id ? { ...n, vrsta: "narocilo", stevilka: novaStevilka, status: "Sprejeto" } : n
-    );
-    await shraniNalogi(posodobljeni);
+    await posodobiNaloge((os) => {
+      const stevilkaIndex = os.filter((n) => (n.vrsta || "narocilo") === "narocilo").length + 1;
+      const novaStevilka = `${praznoStevilo("DN")}${String(stevilkaIndex).padStart(3, "0")}`;
+      return os.map((n) => (n.id === id ? { ...n, vrsta: "narocilo", stevilka: novaStevilka, status: "Sprejeto" } : n));
+    });
   }
 
   async function izbrisiNalog(id) {
-    const posodobljeni = nalogi.filter((n) => n.id !== id);
-    await shraniNalogi(posodobljeni);
+    await posodobiNaloge((os) => os.filter((n) => n.id !== id));
     setPogled("seznam");
   }
 
   async function spremeniStatus(id, status) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, status } : n));
-    await shraniNalogi(posodobljeni);
+    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, status } : n)));
   }
 
   async function spremeniPlacano(id, placano) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, placano } : n));
-    await shraniNalogi(posodobljeni);
+    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, placano } : n)));
   }
 
   async function spremeniRacun(id, racun) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, racun } : n));
-    await shraniNalogi(posodobljeni);
+    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, racun } : n)));
   }
 
   async function shraniPrevzel(id, prevzel) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, prevzel } : n));
-    await shraniNalogi(posodobljeni);
+    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, prevzel } : n)));
   }
 
   async function shraniIzvajalca(id, izvajalec) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, izvajalec } : n));
-    await shraniNalogi(posodobljeni);
+    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, izvajalec } : n)));
   }
 
   async function shraniOddal(id, oddal) {
-    const posodobljeni = nalogi.map((n) => (n.id === id ? { ...n, oddal } : n));
-    await shraniNalogi(posodobljeni);
+    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, oddal } : n)));
   }
 
   const aktivniNalog = nalogi.find((n) => n.id === aktivniId);
@@ -836,6 +851,12 @@ export default function DelovniNalogi() {
               className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
             >
               Sestanki/Izmere
+            </a>
+            <a
+              href="/spomeniki"
+              className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
+            >
+              Spomeniki
             </a>
             {adminOdklenjen ? (
               <button
