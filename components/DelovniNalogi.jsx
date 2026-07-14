@@ -554,7 +554,7 @@ export default function DelovniNalogi() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/nalogi");
+        const res = await fetch("/api/nalogi", { cache: "no-store" });
         const podatki = await res.json();
         setZadnjaVerzija(Number(res.headers.get("X-Verzija")) || 0);
         if (Array.isArray(podatki)) {
@@ -589,7 +589,7 @@ export default function DelovniNalogi() {
             : "Nekdo drug je medtem spremenil podatke. Stran se je osvežila na najnovejše stanje – preveri in poskusi znova."
         );
         try {
-          const svezRes = await fetch("/api/nalogi");
+          const svezRes = await fetch("/api/nalogi", { cache: "no-store" });
           const sveziPodatki = await svezRes.json();
           if (Array.isArray(sveziPodatki)) {
             setNalogi(
@@ -621,7 +621,7 @@ export default function DelovniNalogi() {
     let osnova = nalogi;
     let verzija = zadnjaVerzija;
     try {
-      const res = await fetch("/api/nalogi");
+      const res = await fetch("/api/nalogi", { cache: "no-store" });
       const sveze = await res.json();
       verzija = Number(res.headers.get("X-Verzija")) || 0;
       if (Array.isArray(sveze)) {
