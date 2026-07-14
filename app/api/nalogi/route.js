@@ -1,5 +1,9 @@
 import { Redis } from "@upstash/redis";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
@@ -14,7 +18,11 @@ export async function GET() {
     const verzija = Number((await redis.get(VERZIJA_KLJUC)) || 0);
     return new Response(JSON.stringify(podatki || []), {
       status: 200,
-      headers: { "Content-Type": "application/json", "X-Verzija": String(verzija) },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Verzija": String(verzija),
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
     });
   } catch (e) {
     console.error("Napaka pri branju iz Redis:", e);
