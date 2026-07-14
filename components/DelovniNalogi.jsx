@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw } from "lucide-react";
 
@@ -2182,7 +2182,19 @@ export default function DelovniNalogi() {
         )}
 
         {pogled === "dobavnica" && aktivniNalog && (
-          <Dobavnica nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
+          <Dobavnica
+            nalog={aktivniNalog}
+            onZapri={() => setPogled("podrobnosti")}
+            shraniPodpis={(podpisDataURL, imePodpisnika) =>
+              posodobiNaloge((os) =>
+                os.map((n) =>
+                  n.id === aktivniNalog.id
+                    ? { ...n, podpisPrevzemnika: podpisDataURL, podpisIme: imePodpisnika, podpisDatum: new Date().toISOString() }
+                    : n
+                )
+              )
+            }
+          />
         )}
 
         {pogled === "tisk" && aktivniNalog && (
@@ -2569,12 +2581,13 @@ function Vrstica({ label, vrednost }) {
   );
 }
 
-function Dobavnica({ nalog, onZapri }) {
+function Dobavnica({ nalog, onZapri, shraniPodpis }) {
   const postavkeZaPrikaz = (nalog.postavke || []).filter(
     (p) => p.naziv || p.material || p.dolzina
   );
   const skupajM2 = postavkeZaPrikaz.reduce((v, p) => v + m2Postavke(p), 0);
   const danes = new Date().toLocaleDateString("sl-SI");
+  const [podpisovanje, setPodpisovanje] = useState(false);
 
   return (
     <div>
@@ -2668,18 +2681,177 @@ function Dobavnica({ nalog, onZapri }) {
         )}
 
         {nalog.prevzel && (
-          <p className="text-sm text-stone-600 mb-6">Blago prevzel: {nalog.prevzel}</p>
+          <p className="text-sm text-stone-600 mb-2">Blago prevzel: {nalog.prevzel}</p>
         )}
 
-        <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-8 pt-2">
-          <div className="border-t border-stone-400 pt-2 text-center text-xs text-stone-500">
-            Podpis dobavitelja
+        {nalog.podpisPrevzemnika ? (
+          <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-6 pt-2">
+            <div className="border-t border-stone-400 pt-2 text-center text-xs text-stone-500">
+              Podpis dobavitelja
+            </div>
+            <div className="text-center">
+              <img src={nalog.podpisPrevzemnika} alt="Podpis prevzemnika" className="h-16 mx-auto object-contain" />
+              <div className="border-t border-stone-400 pt-1 text-xs text-stone-500">
+                Podpis prevzemnika{nalog.podpisIme ? ` — ${nalog.podpisIme}` : ""}
+              </div>
+              {nalog.podpisDatum && (
+                <div className="dobavnica-brez-tiska text-[10px] text-stone-400 mt-0.5">
+                  Podpisano {new Date(nalog.podpisDatum).toLocaleString("sl-SI")}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="border-t border-stone-400 pt-2 text-center text-xs text-stone-500">
-            Podpis prevzemnika
-          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-8 pt-2">
+              <div className="border-t border-stone-400 pt-2 text-center text-xs text-stone-500">
+                Podpis dobavitelja
+              </div>
+              <div className="border-t border-stone-400 pt-2 text-center text-xs text-stone-500">
+                Podpis prevzemnika
+              </div>
+            </div>
+            <button
+              onClick={() => setPodpisovanje(true)}
+              className="dobavnica-brez-tiska w-full mt-4 bg-red-600 hover:bg-red-500 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
+            >
+              ✍️ Podpiši elektronsko (prevzemnik)
+            </button>
+          </>
+        )}
+      </div>
+
+      {podpisovanje && (
+        <PodpisniPad
+          zacetnoIme={nalog.prevzel || nalog.stranka || ""}
+          onPreklici={() => setPodpisovanje(false)}
+          onShrani={(podpisDataURL, ime) => {
+            shraniPodpis(podpisDataURL, ime);
+            setPodpisovanje(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PodpisniPad({ zacetnoIme, onPreklici, onShrani }) {
+  const platnoRef = useRef(null);
+  const risemRef = useRef(false);
+  const zadnjaTockaRef = useRef(null);
+  const [prazno, setPrazno] = useState(true);
+  const [ime, setIme] = useState(zacetnoIme);
+
+  useEffect(() => {
+    const platno = platnoRef.current;
+    if (!platno) return;
+    const ctx = platno.getContext("2d");
+    const razmerje = window.devicePixelRatio || 1;
+    const sirina = platno.clientWidth;
+    const visina = platno.clientHeight;
+    platno.width = sirina * razmerje;
+    platno.height = visina * razmerje;
+    ctx.scale(razmerje, razmerje);
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1c1917";
+  }, []);
+
+  function tockaIzDogodka(e) {
+    const platno = platnoRef.current;
+    const rect = platno.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function zacniRisanje(e) {
+    e.preventDefault();
+    risemRef.current = true;
+    zadnjaTockaRef.current = tockaIzDogodka(e);
+  }
+
+  function risi(e) {
+    if (!risemRef.current) return;
+    e.preventDefault();
+    const ctx = platnoRef.current.getContext("2d");
+    const tocka = tockaIzDogodka(e);
+    ctx.beginPath();
+    ctx.moveTo(zadnjaTockaRef.current.x, zadnjaTockaRef.current.y);
+    ctx.lineTo(tocka.x, tocka.y);
+    ctx.stroke();
+    zadnjaTockaRef.current = tocka;
+    if (prazno) setPrazno(false);
+  }
+
+  function koncajRisanje() {
+    risemRef.current = false;
+  }
+
+  function pocisti() {
+    const platno = platnoRef.current;
+    const ctx = platno.getContext("2d");
+    ctx.clearRect(0, 0, platno.width, platno.height);
+    setPrazno(true);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl p-4 w-full max-w-md">
+        <h3 className="carved text-base uppercase text-stone-700 mb-3">Elektronski podpis prevzemnika</h3>
+        <input
+          value={ime}
+          onChange={(e) => setIme(e.target.value)}
+          placeholder="Ime in priimek prevzemnika"
+          className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+        />
+        <p className="text-xs text-stone-500 mb-1.5">Podpiši s prstom ali miško v spodnje polje:</p>
+        <canvas
+          ref={platnoRef}
+          className="w-full border-2 border-dashed border-stone-300 rounded-lg touch-none"
+          style={{ height: "160px" }}
+          onMouseDown={zacniRisanje}
+          onMouseMove={risi}
+          onMouseUp={koncajRisanje}
+          onMouseLeave={koncajRisanje}
+          onTouchStart={zacniRisanje}
+          onTouchMove={risi}
+          onTouchEnd={koncajRisanje}
+        />
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={pocisti}
+            className="px-3 py-2 rounded-lg text-sm font-medium text-stone-600 border border-stone-300 hover:bg-stone-50"
+          >
+            Počisti
+          </button>
+          <button
+            onClick={onPreklici}
+            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100"
+          >
+            Prekliči
+          </button>
+          <button
+            onClick={() => {
+              if (prazno) {
+                alert("Prosim, najprej se podpiši.");
+                return;
+              }
+              if (!ime.trim()) {
+                alert("Vnesi ime prevzemnika.");
+                return;
+              }
+              const podatkiPodpisa = platnoRef.current.toDataURL("image/png");
+              onShrani(podatkiPodpisa, ime.trim());
+            }}
+            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-500"
+          >
+            Shrani podpis
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
