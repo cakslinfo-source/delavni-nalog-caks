@@ -309,6 +309,20 @@ function ponudbaMailto(nalog) {
   return `mailto:${nalog.email}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besediloPonudbe(nalog))}`;
 }
 
+const COMPANY_EMAIL = "kamnosestvo.caks@siol.net";
+
+function dobavnicaMailto(nalog) {
+  const zadeva = `Dobavnica ${nalog.stevilka || ""} — podpisana — Kamnoseštvo Čakš`;
+  const besedilo =
+    `Pozdravljeni,\n\n` +
+    `v prilogi pošiljamo podpisano dobavnico ${nalog.stevilka || ""} za naročilo (${nalog.opis || ""}).\n` +
+    `Blago je prevzel: ${nalog.podpisIme || nalog.prevzel || nalog.stranka}${nalog.podpisDatum ? `, dne ${new Date(nalog.podpisDatum).toLocaleString("sl-SI")}` : ""}.\n\n` +
+    `POMEMBNO: datoteka z dobavnico se je pravkar prenesla na ta računalnik/telefon — pred pošiljanjem jo ročno pripni k temu sporočilu.\n\n` +
+    `Lep pozdrav,\nKamnoseštvo Čakš\n031 235 146`;
+  const prejemnik = nalog.email || "";
+  return `mailto:${prejemnik}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besedilo)}`;
+}
+
 function ponudbaSMS(nalog) {
   const stevilkaCista = (nalog.telefon || "").replace(/[^0-9+]/g, "");
   const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -2840,6 +2854,18 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
           </>
         )}
       </div>
+
+      {nalog.podpisPrevzemnika && (
+        <a
+          href={dobavnicaMailto(nalog)}
+          onClick={() => {
+            prenesiHTMLDokument(".dobavnica-list", `Dobavnica ${nalog.stevilka || ""}`, `dobavnica-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`);
+          }}
+          className="dobavnica-brez-tiska w-full mt-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
+        >
+          <Mail size={15} /> Pošlji na mail
+        </a>
+      )}
 
       {podpisovanje && (
         <PodpisniPad
