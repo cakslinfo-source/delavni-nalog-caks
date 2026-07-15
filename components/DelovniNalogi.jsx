@@ -662,7 +662,9 @@ export default function DelovniNalogi() {
           setZadnjaVerzija(Number(svezRes.headers.get("X-Verzija")) || 0);
         } catch (e2) {}
       } else if (!res.ok) {
-        setNapaka("Shranjevanje ni uspelo. Poskusi znova.");
+        setNapaka(
+          `Shranjevanje ni uspelo (${res.status}). ${odgovor.napaka || ""} ${odgovor.podrobnosti || ""}`.trim()
+        );
       } else {
         setNapaka("");
         if (odgovor.verzija !== undefined) setZadnjaVerzija(odgovor.verzija);
