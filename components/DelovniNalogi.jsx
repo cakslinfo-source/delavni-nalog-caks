@@ -452,7 +452,7 @@ function datotekaVBase64(file) {
 
 const MAX_DATOTEKA_MB = 4;
 
-async function obravnavajNalozenoDatoteko(event, nastavi) {
+async function obravnavajNalozenoDatoteko(event, nastavi, kljucPredpona) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   if (file.size > MAX_DATOTEKA_MB * 1024 * 1024) {
@@ -462,11 +462,55 @@ async function obravnavajNalozenoDatoteko(event, nastavi) {
   }
   try {
     const rezultat = await datotekaVBase64(file);
-    nastavi(rezultat);
+    const kljuc = `${kljucPredpona}-${Date.now()}`;
+    const res = await fetch("/api/priloge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kljuc, podatki: rezultat }),
+    });
+    if (!res.ok) {
+      alert("Shranjevanje datoteke ni uspelo (morda je prevelika). Poskusi manjšo datoteko.");
+      event.target.value = "";
+      return;
+    }
+    // V nalog shranimo samo majhno referenco (ime, tip, kljuc), ne cele datoteke —
+    // s tem glavni seznam naročil ne naraste prek dovoljene velikosti pri shranjevanju.
+    nastavi({ ime: rezultat.ime, tip: rezultat.tip, kljuc });
   } catch (e) {
     alert("Napaka pri nalaganju datoteke.");
   }
   event.target.value = "";
+}
+
+function PrilogaPregled({ referenca, slikaRazred }) {
+  const [podatkiURL, setPodatkiURL] = useState(null);
+  const [nalaga, setNalaga] = useState(true);
+
+  useEffect(() => {
+    let odjava = false;
+    setNalaga(true);
+    fetch(`/api/priloge?kljuc=${encodeURIComponent(referenca.kljuc)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((p) => {
+        if (!odjava && p && p.podatki) setPodatkiURL(p.podatki);
+      })
+      .finally(() => {
+        if (!odjava) setNalaga(false);
+      });
+    return () => { odjava = true; };
+  }, [referenca.kljuc]);
+
+  if (nalaga) return <p className="text-xs text-stone-400">Nalagam prilogo …</p>;
+  if (!podatkiURL) return <p className="text-xs text-stone-400">Priloge ni bilo mogoče naložiti.</p>;
+
+  const jeSlika = referenca.tip && referenca.tip.startsWith("image/");
+  return jeSlika ? (
+    <img src={podatkiURL} alt={referenca.ime} className={slikaRazred || "max-h-64 rounded-lg border border-stone-200 mx-auto"} />
+  ) : (
+    <a href={podatkiURL} download={referenca.ime} className="text-sm text-red-700 underline block">
+      ⬇ Prenesi {referenca.ime}
+    </a>
+  );
 }
 
 function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
@@ -1712,11 +1756,7 @@ export default function DelovniNalogi() {
                 <label className="block text-xs font-medium text-stone-500 mb-1">Slika naročila (npr. iz e-pošte stranke)</label>
                 {obrazec.slikaNarocila ? (
                   <div className="bg-stone-50 border border-stone-200 rounded-lg p-2">
-                    {obrazec.slikaNarocila.tip && obrazec.slikaNarocila.tip.startsWith("image/") ? (
-                      <img src={obrazec.slikaNarocila.podatki} alt="Slika naročila" className="max-h-40 rounded-lg mx-auto" />
-                    ) : (
-                      <span className="text-xs text-stone-700 block truncate">📄 {obrazec.slikaNarocila.ime}</span>
-                    )}
+                    <PrilogaPregled referenca={obrazec.slikaNarocila} slikaRazred="max-h-40 rounded-lg mx-auto" />
                     <button
                       type="button"
                       onClick={() => setObrazec({ ...obrazec, slikaNarocila: null })}
@@ -1729,7 +1769,7 @@ export default function DelovniNalogi() {
                   <input
                     type="file"
                     accept="image/*,application/pdf"
-                    onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setObrazec({ ...obrazec, slikaNarocila: rez }))}
+                    onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setObrazec({ ...obrazec, slikaNarocila: rez }), `nalog-${aktivniId || "nov"}-slika`)}
                     className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
                   />
                 )}
@@ -1751,7 +1791,7 @@ export default function DelovniNalogi() {
                   <input
                     type="file"
                     accept=".dxf,.dwg"
-                    onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setObrazec({ ...obrazec, dxfDatoteka: rez }))}
+                    onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setObrazec({ ...obrazec, dxfDatoteka: rez }), `nalog-${aktivniId || "nov"}-dxf`)}
                     className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
                   />
                 )}
@@ -1887,28 +1927,13 @@ export default function DelovniNalogi() {
                 {aktivniNalog.slikaNarocila && (
                   <div>
                     <h3 className="carved text-sm uppercase text-stone-600 mb-2">Slika naročila</h3>
-                    {aktivniNalog.slikaNarocila.tip && aktivniNalog.slikaNarocila.tip.startsWith("image/") ? (
-                      <img src={aktivniNalog.slikaNarocila.podatki} alt="Slika naročila" className="max-h-64 rounded-lg border border-stone-200 mx-auto" />
-                    ) : null}
-                    <a
-                      href={aktivniNalog.slikaNarocila.podatki}
-                      download={aktivniNalog.slikaNarocila.ime}
-                      className="text-sm text-red-700 underline block mt-2"
-                    >
-                      ⬇ Prenesi {aktivniNalog.slikaNarocila.ime}
-                    </a>
+                    <PrilogaPregled referenca={aktivniNalog.slikaNarocila} slikaRazred="max-h-64 rounded-lg border border-stone-200 mx-auto" />
                   </div>
                 )}
                 {aktivniNalog.dxfDatoteka && (
                   <div>
                     <h3 className="carved text-sm uppercase text-stone-600 mb-2">DXF datoteka</h3>
-                    <a
-                      href={aktivniNalog.dxfDatoteka.podatki}
-                      download={aktivniNalog.dxfDatoteka.ime}
-                      className="text-sm text-red-700 underline block"
-                    >
-                      📎 Prenesi {aktivniNalog.dxfDatoteka.ime}
-                    </a>
+                    <PrilogaPregled referenca={aktivniNalog.dxfDatoteka} />
                   </div>
                 )}
               </div>
