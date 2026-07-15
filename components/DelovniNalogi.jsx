@@ -527,13 +527,10 @@ function PrilogaPregled({ referenca, slikaRazred }) {
   );
 }
 
-function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
+function zgradiHTMLDokument(selector, naslov) {
   const el = document.querySelector(selector);
-  if (!el) {
-    alert("Ni bilo mogoče najti vsebine za izpis.");
-    return;
-  }
-  const html =
+  if (!el) return null;
+  return (
     "<!DOCTYPE html><html lang=\"sl\"><head><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
     "<title>" + naslov + "</title>" +
@@ -549,8 +546,16 @@ function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
     "</style></head><body>" +
     "<div class=\"navodilo\">To je prenesena datoteka za tiskanje. Uporabi Ctrl+P (Cmd+P na Mac) ali meni brskalnika &rarr; Natisni / Shrani kot PDF.</div>" +
     "<div class=\"ovoj\">" + el.outerHTML + "</div>" +
-    "</body></html>";
+    "</body></html>"
+  );
+}
 
+function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
+  const html = zgradiHTMLDokument(selector, naslov);
+  if (!html) {
+    alert("Ni bilo mogoče najti vsebine za izpis.");
+    return;
+  }
   const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -560,6 +565,34 @@ function prenesiHTMLDokument(selector, naslov, imeDatoteke) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+async function posljiDokumentPoMailu(selector, naslov, imeDatoteke, na, zadeva, besedilo) {
+  const html = zgradiHTMLDokument(selector, naslov);
+  if (!html) {
+    alert("Ni bilo mogoče najti vsebine za pošiljanje.");
+    return false;
+  }
+  if (!na) {
+    alert("Stranka nima vnesenega e-mail naslova.");
+    return false;
+  }
+  try {
+    const res = await fetch("/api/posljidobavnico", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ na, zadeva, besedilo, imeDatoteke, vsebinaDatoteke: html }),
+    });
+    const odgovor = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(`Pošiljanje ni uspelo: ${odgovor.napaka || res.status}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    alert("Napaka pri pošiljanju e-pošte. Preveri povezavo.");
+    return false;
+  }
 }
 
 const ADMIN_PIN = "1991";
@@ -2722,6 +2755,7 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
   const skupajM2 = postavkeZaPrikaz.reduce((v, p) => v + m2Postavke(p), 0);
   const danes = new Date().toLocaleDateString("sl-SI");
   const [podpisovanje, setPodpisovanje] = useState(false);
+  const [posiljam, setPosiljam] = useState(false);
 
   return (
     <div>
@@ -2856,15 +2890,31 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
       </div>
 
       {nalog.podpisPrevzemnika && (
-        <a
-          href={dobavnicaMailto(nalog)}
-          onClick={() => {
-            prenesiHTMLDokument(".dobavnica-list", `Dobavnica ${nalog.stevilka || ""}`, `dobavnica-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`);
+        <button
+          disabled={posiljam}
+          onClick={async () => {
+            setPosiljam(true);
+            const zadeva = `Dobavnica ${nalog.stevilka || ""} — podpisana — Kamnoseštvo Čakš`;
+            const besedilo =
+              `Pozdravljeni,\n\n` +
+              `v prilogi pošiljamo podpisano dobavnico ${nalog.stevilka || ""} za naročilo (${nalog.opis || ""}).\n` +
+              `Blago je prevzel: ${nalog.podpisIme || nalog.prevzel || nalog.stranka}${nalog.podpisDatum ? `, dne ${new Date(nalog.podpisDatum).toLocaleString("sl-SI")}` : ""}.\n\n` +
+              `Lep pozdrav,\nKamnoseštvo Čakš\n031 235 146`;
+            const uspeh = await posljiDokumentPoMailu(
+              ".dobavnica-list",
+              `Dobavnica ${nalog.stevilka || ""}`,
+              `dobavnica-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`,
+              nalog.email,
+              zadeva,
+              besedilo
+            );
+            setPosiljam(false);
+            if (uspeh) alert(`Dobavnica je bila poslana na ${nalog.email}.`);
           }}
-          className="dobavnica-brez-tiska w-full mt-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
+          className="dobavnica-brez-tiska w-full mt-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
         >
-          <Mail size={15} /> Pošlji na mail
-        </a>
+          <Mail size={15} /> {posiljam ? "Pošiljam …" : "Pošlji na mail"}
+        </button>
       )}
 
       {podpisovanje && (
