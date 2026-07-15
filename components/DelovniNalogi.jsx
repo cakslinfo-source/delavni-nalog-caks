@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Fragment } from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw } from "lucide-react";
+import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw, Save } from "lucide-react";
 
 const STATUSI = ["Sprejeto", "V izdelavi", "Pripravljeno", "Prevzeto"];
 const DELAVCI = ["Luka", "Miha", "Rok", "Mersad", "Patrik"];
@@ -554,6 +554,7 @@ export default function DelovniNalogi() {
   const [nalogi, setNalogi] = useState([]);
   const [naloziLoading, setNaloziLoading] = useState(true);
   const [zadnjaVerzija, setZadnjaVerzija] = useState(0);
+  const [potrditevShranjeno, setPotrditevShranjeno] = useState(false);
   const [napaka, setNapaka] = useState("");
   const [pogled, setPogled] = useState("seznam");
   const [aktivniId, setAktivniId] = useState(null);
@@ -577,6 +578,20 @@ export default function DelovniNalogi() {
       // localStorage ni na voljo
     }
   }, []);
+
+  // Opozori uporabnika, če poskuša zapreti/osvežiti stran, medtem ko ureja nalog,
+  // ki ga še ni shranil na strežnik — prepreči nehoteno izgubo vnesenih podatkov.
+  useEffect(() => {
+    function opozoriPredOdhodom(e) {
+      if (pogled === "nov") {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+    }
+    window.addEventListener("beforeunload", opozoriPredOdhodom);
+    return () => window.removeEventListener("beforeunload", opozoriPredOdhodom);
+  }, [pogled]);
 
   function potrdiPin() {
     if (pinVnos === ADMIN_PIN) {
@@ -619,6 +634,7 @@ export default function DelovniNalogi() {
   async function shraniNalogi(noviSeznam, pricakovanaVerzija) {
     setNalogi(noviSeznam);
     setShranjujem(true);
+    let uspeh = false;
     try {
       const res = await fetch("/api/nalogi", {
         method: "POST",
@@ -650,12 +666,14 @@ export default function DelovniNalogi() {
       } else {
         setNapaka("");
         if (odgovor.verzija !== undefined) setZadnjaVerzija(odgovor.verzija);
+        uspeh = true;
       }
     } catch (e) {
       setNapaka("Napaka pri shranjevanju. Preveri povezavo in poskusi znova.");
     } finally {
       setShranjujem(false);
     }
+    return uspeh;
   }
 
   // Varno spreminjanje: najprej osveži najnovejše stanje in verzijo iz baze (v primeru, da je
@@ -678,7 +696,7 @@ export default function DelovniNalogi() {
       // če osveževanje ne uspe, nadaljujemo z lokalnim stanjem kot rezervo
     }
     const novi = transformFn(osnova);
-    await shraniNalogi(novi, verzija);
+    return await shraniNalogi(novi, verzija);
   }
 
   function odpriNov() {
@@ -770,12 +788,16 @@ export default function DelovniNalogi() {
     const obrazecZaShranjevanje = { ...obrazec, postavke: ocisceniPostavki.length ? ocisceniPostavki : [novaPostavka()] };
 
     if (aktivniId) {
-      await posodobiNaloge((os) => os.map((n) => (n.id === aktivniId ? { ...obrazecZaShranjevanje, id: aktivniId } : n)));
+      const uspeh = await posodobiNaloge((os) => os.map((n) => (n.id === aktivniId ? { ...obrazecZaShranjevanje, id: aktivniId } : n)));
       setAktivniId(aktivniId);
       setPogled("podrobnosti");
+      if (uspeh) {
+        setPotrditevShranjeno(true);
+        setTimeout(() => setPotrditevShranjeno(false), 3000);
+      }
     } else {
       let novId = null;
-      await posodobiNaloge((os) => {
+      const uspeh = await posodobiNaloge((os) => {
         const predpona = obrazec.vrsta === "ponudba" ? "PO" : "DN";
         const stevilkaIndex = os.filter((n) => (n.vrsta || "narocilo") === (obrazec.vrsta || "narocilo")).length + 1;
         const novNalog = {
@@ -789,6 +811,10 @@ export default function DelovniNalogi() {
       });
       setAktivniId(novId);
       setPogled("podrobnosti");
+      if (uspeh) {
+        setPotrditevShranjeno(true);
+        setTimeout(() => setPotrditevShranjeno(false), 3000);
+      }
     }
   }
 
@@ -1802,9 +1828,9 @@ export default function DelovniNalogi() {
               <button
                 onClick={shraniObrazec}
                 disabled={shranjujem}
-                className="bg-stone-800 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors flex items-center gap-2 disabled:opacity-60"
+                className="bg-red-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-red-500 transition-colors flex items-center gap-2 disabled:opacity-60"
               >
-                <Check size={16} /> {shranjujem ? "Shranjujem…" : "Shrani nalog"}
+                <Save size={16} /> {shranjujem ? "Shranjujem na strežnik…" : "Shrani nalog"}
               </button>
               <button
                 onClick={() => setPogled(aktivniId ? "podrobnosti" : "seznam")}
@@ -1818,6 +1844,11 @@ export default function DelovniNalogi() {
 
         {pogled === "podrobnosti" && aktivniNalog && (
           <div className="bg-white border border-stone-200 rounded-xl p-5">
+            {potrditevShranjeno && (
+              <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-sm rounded-lg px-4 py-2.5 mb-4 flex items-center gap-2">
+                <Check size={16} /> Shranjeno na strežnik — nalog je varno na spletu.
+              </div>
+            )}
             <div className="bg-stone-100 border border-stone-300 rounded-lg px-4 py-3 mb-4">
               <label className="block text-xs font-medium text-stone-600 mb-1.5">Kdo je oddal naročilo</label>
               <div className="flex flex-wrap gap-2">
