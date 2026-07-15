@@ -701,6 +701,55 @@ export default function DelovniNalogi() {
     return await shraniNalogi(novi, verzija);
   }
 
+  async function pociistiVelikePriloge() {
+    setNapaka("");
+    try {
+      const res = await fetch("/api/nalogi", { cache: "no-store" });
+      const trenutni = await res.json();
+      const verzija = Number(res.headers.get("X-Verzija")) || 0;
+      if (!Array.isArray(trenutni)) {
+        alert("Ni bilo mogoče prebrati podatkov.");
+        return;
+      }
+      let steviloPocisceno = 0;
+      const novi = [];
+      for (const n of trenutni) {
+        const posodobljen = { ...n };
+        for (const polje of ["slikaNarocila", "dxfDatoteka"]) {
+          const vrednost = posodobljen[polje];
+          // Star format ima podatke (base64) neposredno v naročilu — to je vzrok napake 413.
+          if (vrednost && vrednost.podatki && !vrednost.kljuc) {
+            const kljuc = `nalog-${n.id}-${polje}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            try {
+              const rp = await fetch("/api/priloge", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ kljuc, podatki: vrednost }),
+              });
+              if (rp.ok) {
+                posodobljen[polje] = { ime: vrednost.ime, tip: vrednost.tip, kljuc };
+                steviloPocisceno++;
+              }
+            } catch (e) {}
+          }
+        }
+        novi.push(posodobljen);
+      }
+      if (steviloPocisceno > 0) {
+        const uspeh = await shraniNalogi(novi, verzija);
+        if (uspeh) {
+          alert(`Počiščenih ${steviloPocisceno} starih prilog. Shranjevanje bi zdaj moralo znova delovati.`);
+        } else {
+          alert("Priloge so bile prenesene, a shranjevanje seznama je še vedno spodletelo. Sporoči Claudu.");
+        }
+      } else {
+        alert("Ni bilo najdenih starih (prevelikih) prilog. Vzrok napake 413 je verjetno drugje.");
+      }
+    } catch (e) {
+      alert("Napaka pri čiščenju prilog.");
+    }
+  }
+
   function odpriNov() {
     setObrazec(prazenObrazec());
     setAktivniId(null);
@@ -1143,6 +1192,19 @@ export default function DelovniNalogi() {
                   </div>
                   <p className="text-xs text-stone-500 mt-2">
                     Samodejna varnostna kopija se shrani vsak dan ob 3h zjutraj. Priporočamo tudi ročni prenos vsake toliko časa.
+                  </p>
+                </div>
+
+                <div className="border-t border-stone-700 pt-3 mt-3">
+                  <p className="text-xs font-medium text-stone-400 uppercase mb-2">Popravilo napake pri shranjevanju</p>
+                  <button
+                    onClick={pociistiVelikePriloge}
+                    className="text-sm px-3 py-2 rounded-lg border border-amber-600 text-amber-400 hover:bg-amber-950 transition-colors w-full"
+                  >
+                    🧹 Počisti velike/stare priloge (popravi napako 413)
+                  </button>
+                  <p className="text-xs text-stone-500 mt-2">
+                    Uporabi, če shranjevanje javlja napako "413" — poišče stara naročila s slikami/DXF, shranjenimi na starejši način, in jih popravi.
                   </p>
                 </div>
               </div>
