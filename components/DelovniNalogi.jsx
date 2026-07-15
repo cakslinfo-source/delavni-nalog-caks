@@ -310,6 +310,10 @@ function ponudbaMailto(nalog) {
 }
 
 const COMPANY_EMAIL = "kamnosestvo.caks@siol.net";
+// ZAČASNO: Resend brez preverjene domene (caks.si) lahko pošilja samo na ta prijavni e-mail.
+// Ko bo domena caks.si preverjena pri Resendu, spremeni to nazaj na `nalog.email`, da dobavnice
+// hodijo neposredno na e-mail stranke.
+const ZACASNI_PREJEMNIK_DOBAVNIC = "caksl.info@gmail.com";
 
 function dobavnicaMailto(nalog) {
   const zadeva = `Dobavnica ${nalog.stevilka || ""} — podpisana — Kamnoseštvo Čakš`;
@@ -585,7 +589,7 @@ async function posljiDokumentPoMailu(selector, naslov, imeDatoteke, na, zadeva, 
     });
     const odgovor = await res.json().catch(() => ({}));
     if (!res.ok) {
-      alert(`Pošiljanje ni uspelo: ${odgovor.napaka || res.status}`);
+      alert(`Pošiljanje ni uspelo (${res.status}): ${odgovor.napaka || ""}\n${odgovor.podrobnosti || ""}`);
       return false;
     }
     return true;
@@ -2894,22 +2898,23 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
           disabled={posiljam}
           onClick={async () => {
             setPosiljam(true);
-            const zadeva = `Dobavnica ${nalog.stevilka || ""} — podpisana — Kamnoseštvo Čakš`;
+            const zadeva = `Dobavnica ${nalog.stevilka || ""} — podpisana — Kamnoseštvo Čakš (${nalog.stranka})`;
             const besedilo =
               `Pozdravljeni,\n\n` +
               `v prilogi pošiljamo podpisano dobavnico ${nalog.stevilka || ""} za naročilo (${nalog.opis || ""}).\n` +
+              `Stranka: ${nalog.stranka}${nalog.email ? ` (${nalog.email})` : ""}\n` +
               `Blago je prevzel: ${nalog.podpisIme || nalog.prevzel || nalog.stranka}${nalog.podpisDatum ? `, dne ${new Date(nalog.podpisDatum).toLocaleString("sl-SI")}` : ""}.\n\n` +
               `Lep pozdrav,\nKamnoseštvo Čakš\n031 235 146`;
             const uspeh = await posljiDokumentPoMailu(
               ".dobavnica-list",
               `Dobavnica ${nalog.stevilka || ""}`,
               `dobavnica-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`,
-              nalog.email,
+              ZACASNI_PREJEMNIK_DOBAVNIC,
               zadeva,
               besedilo
             );
             setPosiljam(false);
-            if (uspeh) alert(`Dobavnica je bila poslana na ${nalog.email}.`);
+            if (uspeh) alert(`Dobavnica je bila poslana na ${ZACASNI_PREJEMNIK_DOBAVNIC} (začasno, dokler domena ni preverjena).`);
           }}
           className="dobavnica-brez-tiska w-full mt-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
         >
