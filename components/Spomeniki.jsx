@@ -8,11 +8,10 @@ const ZAPOSLENI_PROIZVODNJA = ["Luka", "Miha", "Rok", "Mersad", "Patrik"];
 const ZAPOSLENI_SPREJEM = ["Luka", "Miha", "Jože", "Timea", "Žan", "Žiga"];
 
 const STATUSI = [
-  { id: "narocilo", naziv: "Naročilo", barva: "bg-gray-500" },
-  { id: "izmera", naziv: "Izmera", barva: "bg-blue-500" },
-  { id: "izdelava", naziv: "Izdelava", barva: "bg-orange-500" },
-  { id: "montaza", naziv: "Montaža", barva: "bg-red-600" },
-  { id: "zakljuceno", naziv: "Zaključeno", barva: "bg-green-600" },
+  { id: "sprejeto", naziv: "Sprejeto", barva: "bg-gray-500" },
+  { id: "izdelavi", naziv: "V izdelavi", barva: "bg-orange-500" },
+  { id: "pripravljeno", naziv: "Pripravljeno", barva: "bg-sky-500" },
+  { id: "prevzeto", naziv: "Prevzeto", barva: "bg-blue-800" },
 ];
 
 const TIPI_KOMPONENT = ["Temelji", "Robniki", "Pokrivalne", "Podstavek", "Deska PP", "Napisne", "Slepe", "Deske", "Ostalo"];
@@ -26,6 +25,7 @@ function prazenSpomenik() {
   return {
     id: Date.now(),
     stevilka: "",
+    vrsta: "narocilo",
     datum: new Date().toISOString().slice(0, 10),
     stranka: { ime: "", telefon: "", email: "" },
     lokacija: "",
@@ -41,7 +41,7 @@ function prazenSpomenik() {
     cena: "",
     komponente: [praznaKomponenta()],
     sprejel: "",
-    status: "narocilo",
+    status: "sprejeto",
     opombe: "",
     slika: null,
     zgodovina: [],
@@ -55,10 +55,11 @@ function eur(x) {
   return v.toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
 
-function novaStevilka(spomeniki) {
+function novaStevilka(spomeniki, vrsta) {
+  const predpona = vrsta === "ponudba" ? "PO" : "SP";
   const leto = new Date().getFullYear();
-  const letos = spomeniki.filter((x) => (x.stevilka || "").includes(`SP-${leto}`)).length;
-  return `SP-${leto}-${String(letos + 1).padStart(3, "0")}`;
+  const letos = spomeniki.filter((x) => (x.stevilka || "").includes(`${predpona}-${leto}`)).length;
+  return `${predpona}-${leto}-${String(letos + 1).padStart(3, "0")}`;
 }
 
 function datotekaVBase64(file) {
@@ -264,7 +265,7 @@ export default function Spomeniki() {
 
       {pogled === "seznam" && (
         <div className="p-3">
-          <div className="grid grid-cols-5 gap-1.5 mb-3">
+          <div className="grid grid-cols-4 gap-1.5 mb-3">
             {STATUSI.map((s) => {
               const st = spomeniki.filter((x) => x.status === s.id).length;
               return (
@@ -308,7 +309,9 @@ export default function Spomeniki() {
                         <div className="text-sm text-gray-600">{n.stranka?.ime}</div>
                         {n.lokacija && <div className="text-xs text-gray-400">{n.lokacija}</div>}
                       </div>
-                      <span className={`text-white text-xs px-2 py-1 rounded-full ${s.barva}`}>{s.naziv}</span>
+                      <span className={`text-white text-xs px-2 py-1 rounded-full ${n.vrsta === "ponudba" ? "bg-blue-600" : s.barva}`}>
+                        {n.vrsta === "ponudba" ? "Ponudba" : s.naziv}
+                      </span>
                     </div>
                     <div className="flex justify-between items-end mt-2 text-sm">
                       <span className="text-gray-400">{n.montaza ? `Montaža: ${new Date(n.montaza).toLocaleDateString("sl-SI")}` : n.datum}</span>
@@ -341,8 +344,8 @@ export default function Spomeniki() {
               uspeh = await posodobiSpomenike((os) => {
                 const nov = {
                   ...nal,
-                  stevilka: novaStevilka(os),
-                  zgodovina: [{ status: "narocilo", datum: new Date().toISOString(), kdo: nal.sprejel || "" }],
+                  stevilka: novaStevilka(os, nal.vrsta),
+                  zgodovina: [{ status: nal.status, datum: new Date().toISOString(), kdo: nal.sprejel || "" }],
                 };
                 novId = nov.id;
                 return [nov, ...os];
@@ -383,6 +386,23 @@ export default function Spomeniki() {
             setPogled("seznam");
           }}
           natisni={(nal) => { setIzbran(nal.id); setPogled("tiskanje"); }}
+          pretvoriVNarocilo={(nal) => {
+            if (!confirm(`Ponudbo ${nal.stevilka} pretvorim v pravo naročilo? Dobi novo številko.`)) return;
+            posodobiSpomenike((os) => {
+              const novaStev = novaStevilka(os, "narocilo");
+              return os.map((x) =>
+                x.id === nal.id
+                  ? {
+                      ...x,
+                      vrsta: "narocilo",
+                      stevilka: novaStev,
+                      status: "sprejeto",
+                      zgodovina: [...(x.zgodovina || []), { status: "sprejeto", datum: new Date().toISOString(), kdo: "" }],
+                    }
+                  : x
+              );
+            });
+          }}
         />
       )}
 
@@ -447,7 +467,29 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
 
   return (
     <div className="p-3 space-y-4">
-      <h2 className="font-bold text-lg">{nal._urejanje ? `Urejanje ${nal.stevilka}` : "Nov nalog — spomenik"}</h2>
+      <h2 className="font-bold text-lg">{nal._urejanje ? `Urejanje ${nal.stevilka}` : "Nov vnos — spomenik"}</h2>
+
+      {!nal._urejanje && (
+        <div className="bg-white rounded-xl p-3">
+          <label className="text-xs text-gray-500 mb-1 block">Vrsta vnosa</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setNal({ ...nal, vrsta: "ponudba" })}
+              className={`flex-1 text-sm py-2 rounded-lg border ${nal.vrsta === "ponudba" ? "bg-blue-600 text-white border-blue-600 font-medium" : "bg-white text-gray-600 border-gray-300"}`}
+            >
+              Ponudba
+            </button>
+            <button
+              type="button"
+              onClick={() => setNal({ ...nal, vrsta: "narocilo" })}
+              className={`flex-1 text-sm py-2 rounded-lg border ${nal.vrsta === "narocilo" ? "bg-red-600 text-white border-red-600 font-medium" : "bg-white text-gray-600 border-gray-300"}`}
+            >
+              Naročilo
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl p-3 space-y-2">
         <div className="font-semibold text-sm">Stranka</div>
@@ -824,7 +866,7 @@ function TiskDelovniList({ nalog, nazaj }) {
   );
 }
 
-function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni }) {
+function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, pretvoriVNarocilo }) {
   const [kdoOpravil, setKdoOpravil] = useState("");
   if (!nalog)
     return (
@@ -845,6 +887,18 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
       {potrditevShranjeno && (
         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-sm rounded-lg px-4 py-2.5">
           ✓ Shranjeno na strežnik.
+        </div>
+      )}
+
+      {nalog.vrsta === "ponudba" && (
+        <div className="bg-blue-50 border border-blue-300 rounded-xl p-3 space-y-2">
+          <div className="text-sm text-blue-800 font-medium">To je ponudba, še ni pravo naročilo.</div>
+          <button
+            onClick={() => pretvoriVNarocilo(nalog)}
+            className="w-full bg-blue-600 text-white rounded-lg py-2.5 text-sm font-semibold"
+          >
+            Pretvori v naročilo
+          </button>
         </div>
       )}
 
@@ -922,7 +976,7 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
         </button>
       </div>
 
-      {naslednji && (
+      {naslednji && nalog.vrsta !== "ponudba" && (
         <div className="bg-white rounded-xl p-3 space-y-2">
           <div className="text-sm font-semibold">Naslednja faza: {naslednji.naziv}</div>
           <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white" value={kdoOpravil} onChange={(e) => setKdoOpravil(e.target.value)}>
