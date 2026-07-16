@@ -16,10 +16,10 @@ const STATUSI = [
 ];
 
 const TIPI_KOMPONENT = ["Temelji", "Robniki", "Pokrivalne", "Podstavek", "Deska PP", "Napisne", "Slepe", "Deske", "Ostalo"];
-const POZICIJE = ["Levo", "Spredaj", "Zadaj", "Desno"];
+const POLIRANJE_MOZNOSTI = ["Levo", "Spredaj", "Zadaj", "Desno"];
 
 function praznaKomponenta() {
-  return { id: Date.now() + Math.random(), tip: "Temelji", dolzina: "", sirina: "", debelina: "", obdelava: "", pozicija: [] };
+  return { id: Date.now() + Math.random(), tip: "Temelji", kolicina: "1", dolzina: "", sirina: "", debelina: "", obdelava: "", poliranje: [] };
 }
 
 function prazenSpomenik() {
@@ -439,10 +439,10 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
     setNal({ ...nal, komponente });
   }
 
-  function preklopiPozicijo(i, pozicija) {
+  function preklopiPoliranje(i, stran) {
     const k = nal.komponente[i];
-    const nova = k.pozicija.includes(pozicija) ? k.pozicija.filter((p) => p !== pozicija) : [...k.pozicija, pozicija];
-    nastaviKomponento(i, "pozicija", nova);
+    const nova = k.poliranje.includes(stran) ? k.poliranje.filter((p) => p !== stran) : [...k.poliranje, stran];
+    nastaviKomponento(i, "poliranje", nova);
   }
 
   return (
@@ -558,7 +558,11 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <label className={lbl}>Količina (kos)</label>
+                <input className={inp} inputMode="numeric" value={k.kolicina} onChange={(e) => nastaviKomponento(i, "kolicina", e.target.value)} />
+              </div>
               <div>
                 <label className={lbl}>Dolžina (cm)</label>
                 <input className={inp} inputMode="decimal" value={k.dolzina} onChange={(e) => nastaviKomponento(i, "dolzina", e.target.value)} />
@@ -577,15 +581,15 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
               <input className={inp} value={k.obdelava} onChange={(e) => nastaviKomponento(i, "obdelava", e.target.value)} placeholder="npr. poliran rob" />
             </div>
             <div>
-              <label className={lbl}>Pozicija</label>
+              <label className={lbl}>Poliranje</label>
               <div className="flex flex-wrap gap-1.5">
-                {POZICIJE.map((p) => (
+                {POLIRANJE_MOZNOSTI.map((p) => (
                   <button
                     key={p}
                     type="button"
-                    onClick={() => preklopiPozicijo(i, p)}
+                    onClick={() => preklopiPoliranje(i, p)}
                     className={`text-xs px-3 py-1.5 rounded-full border ${
-                      k.pozicija.includes(p) ? "bg-red-600 text-white border-red-600 font-medium" : "bg-white text-gray-600 border-gray-300"
+                      k.poliranje.includes(p) ? "bg-red-600 text-white border-red-600 font-medium" : "bg-white text-gray-600 border-gray-300"
                     }`}
                   >
                     {p}
@@ -648,6 +652,50 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
       </div>
     </div>
   );
+}
+
+function izvoziDonatoniCSVSpomenik(nalog) {
+  const komponente = (nalog.komponente || []).filter((k) => k.dolzina || k.sirina || k.debelina);
+  const glave = ["Numero", "Larghezza", "Altezza", "Nome", "Spessore"];
+  const ubezi = (val) => {
+    const s = String(val ?? "");
+    if (s.includes(";") || s.includes('"') || s.includes("\n")) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  };
+  const prveTriCrkeStranke = (nalog.stranka?.ime || "").trim().slice(0, 3).toUpperCase();
+  const stTipa = {};
+  const vrstice = komponente.map((k) => {
+    stTipa[k.tip] = (stTipa[k.tip] || 0) + 1;
+    const zaporedje = stTipa[k.tip];
+    const mm = (v) => {
+      const n = parseFloat(String(v).replace(",", "."));
+      return isNaN(n) ? "" : n * 10;
+    };
+    const skupnoPoTipu = komponente.filter((x) => x.tip === k.tip).length;
+    const imeKosa = `${k.tip}${skupnoPoTipu > 1 ? ` ${zaporedje}` : ""}`;
+    const dolzinaMM = mm(k.dolzina);
+    const sirinaMM = mm(k.sirina);
+    return [
+      k.kolicina || "1",
+      dolzinaMM,
+      sirinaMM,
+      `${prveTriCrkeStranke} ${imeKosa} ${dolzinaMM}x${sirinaMM}`,
+      mm(k.debelina),
+    ];
+  });
+  const csv = [glave, ...vrstice].map((r) => r.map(ubezi).join(";")).join("\r\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const strankaVarno = (nalog.stranka?.ime || "").replace(/[\\/:*?"<>|]/g, "").trim();
+  a.download = `csv donatoni ${nalog.stevilka || "spomenik"}${strankaVarno ? " " + strankaVarno : ""}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function prenesiHTMLDokumentSpomenik(selector, naslov, imeDatoteke) {
@@ -733,7 +781,6 @@ function TiskDelovniList({ nalog, nazaj }) {
           <div><span className="text-xs text-gray-400 uppercase mr-1">Dodatki:</span>{nalog.dodatki || "—"}</div>
           <div><span className="text-xs text-gray-400 uppercase mr-1">Svečnik:</span>{nalog.svecnik ? "DA" : "NE"}</div>
           <div><span className="text-xs text-gray-400 uppercase mr-1">Treger:</span>{nalog.treger ? "DA" : "NE"}</div>
-          <div><span className="text-xs text-gray-400 uppercase mr-1">Cena:</span><span className="font-semibold">{eur(nalog.cena)}</span></div>
         </div>
 
         {oznacene.length > 0 && (
@@ -741,22 +788,24 @@ function TiskDelovniList({ nalog, nazaj }) {
             <thead>
               <tr className="text-left text-xs uppercase text-gray-400 border-b-2 border-gray-300">
                 <th className="py-1 pr-2">Kos</th>
+                <th className="py-1 pr-2">Kol.</th>
                 <th className="py-1 pr-2">Dolžina</th>
                 <th className="py-1 pr-2">Širina</th>
                 <th className="py-1 pr-2">Deb.</th>
                 <th className="py-1 pr-2">Obdelava</th>
-                <th className="py-1 pr-2">Pozicija</th>
+                <th className="py-1 pr-2">Poliranje</th>
               </tr>
             </thead>
             <tbody>
               {oznacene.map((k) => (
                 <tr key={k.id} className="border-b border-gray-100">
                   <td className="py-1.5 pr-2 font-medium">{k.tip}{skupnoPoTipu[k.tip] > 1 ? ` #${k.zaporedje}` : ""}</td>
+                  <td className="py-1.5 pr-2">{k.kolicina || "1"}</td>
                   <td className="py-1.5 pr-2">{k.dolzina || "–"}</td>
                   <td className="py-1.5 pr-2">{k.sirina || "–"}</td>
                   <td className="py-1.5 pr-2">{k.debelina || "–"}</td>
                   <td className="py-1.5 pr-2">{k.obdelava || "–"}</td>
-                  <td className="py-1.5 pr-2 text-xs text-gray-500">{k.pozicija?.join(", ") || "–"}</td>
+                  <td className="py-1.5 pr-2 text-xs text-gray-500">{k.poliranje?.join(", ") || "–"}</td>
                 </tr>
               ))}
             </tbody>
@@ -838,12 +887,12 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
           <div className="font-semibold mb-1">Kosi</div>
           {komponenteZaPrikaz.map((k) => (
             <div key={k.id} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0">
-              <div className="font-medium">{k.tip}</div>
+              <div className="font-medium">{k.tip} {k.kolicina && k.kolicina !== "1" ? `× ${k.kolicina}` : ""}</div>
               <div className="text-gray-600">
                 {k.dolzina || "–"} × {k.sirina || "–"} × {k.debelina || "–"} cm
                 {k.obdelava && ` · ${k.obdelava}`}
               </div>
-              {k.pozicija?.length > 0 && <div className="text-xs text-gray-400">{k.pozicija.join(", ")}</div>}
+              {k.poliranje?.length > 0 && <div className="text-xs text-gray-400">Poliranje: {k.poliranje.join(", ")}</div>}
             </div>
           ))}
         </div>
@@ -908,6 +957,10 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
 
       <button onClick={() => natisni(nalog)} className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold">
         🖨 Natisni delovni list
+      </button>
+
+      <button onClick={() => izvoziDonatoniCSVSpomenik(nalog)} className="w-full bg-stone-700 text-white rounded-xl py-3 font-semibold">
+        ⬇ CSV Donatoni
       </button>
 
       <div className="flex gap-2">
