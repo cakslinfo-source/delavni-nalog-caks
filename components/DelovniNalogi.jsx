@@ -604,6 +604,7 @@ const ADMIN_PIN = "1991";
 export default function DelovniNalogi() {
   const [nalogi, setNalogi] = useState([]);
   const [naloziLoading, setNaloziLoading] = useState(true);
+  const [vrednostPultiSpomeniki, setVrednostPultiSpomeniki] = useState(0);
   const [zadnjaVerzija, setZadnjaVerzija] = useState(0);
   const [potrditevShranjeno, setPotrditevShranjeno] = useState(false);
   const [napaka, setNapaka] = useState("");
@@ -620,6 +621,28 @@ export default function DelovniNalogi() {
   const [izbranaStranka, setIzbranaStranka] = useState(null);
 
   const [rocniMaterial, setRocniMaterial] = useState({});
+
+  useEffect(() => {
+    // Vsota vrednosti naročil iz Pultov in Spomenikov, prikazana skupaj s Policami v admin pregledu.
+    Promise.all([
+      fetch("/api/pulti", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
+      fetch("/api/spomeniki", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
+    ])
+      .then(([pulti, spomeniki]) => {
+        const stevilo = (v) => {
+          const n = parseFloat(String(v).replace(",", "."));
+          return isNaN(n) ? 0 : n;
+        };
+        const vsotaPultov = Array.isArray(pulti)
+          ? pulti.reduce((v, p) => v + stevilo(p.ponudbenaCena), 0)
+          : 0;
+        const vsotaSpomenikov = Array.isArray(spomeniki)
+          ? spomeniki.reduce((v, s) => v + stevilo(s.cena), 0)
+          : 0;
+        setVrednostPultiSpomeniki(vsotaPultov + vsotaSpomenikov);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     try {
@@ -1138,7 +1161,10 @@ export default function DelovniNalogi() {
                     <p className="text-xs font-medium text-stone-400 uppercase mb-1 flex items-center gap-1.5">
                       <Unlock size={12} /> Skupna vrednost vseh naročil
                     </p>
-                    <p className="text-2xl font-bold text-white">{skupnaVrednostVseh.toFixed(2)} €</p>
+                    <p className="text-2xl font-bold text-white">{(skupnaVrednostVseh + vrednostPultiSpomeniki).toFixed(2)} €</p>
+                    <p className="text-[11px] text-stone-500 mt-0.5">
+                      Police: {skupnaVrednostVseh.toFixed(2)} € · Pulti + Spomeniki: {vrednostPultiSpomeniki.toFixed(2)} €
+                    </p>
                   </div>
                 </div>
 
