@@ -604,7 +604,6 @@ const ADMIN_PIN = "1991";
 export default function DelovniNalogi() {
   const [nalogi, setNalogi] = useState([]);
   const [naloziLoading, setNaloziLoading] = useState(true);
-  const [vrednostPultiSpomeniki, setVrednostPultiSpomeniki] = useState(0);
   const [zadnjaVerzija, setZadnjaVerzija] = useState(0);
   const [potrditevShranjeno, setPotrditevShranjeno] = useState(false);
   const [napaka, setNapaka] = useState("");
@@ -622,26 +621,48 @@ export default function DelovniNalogi() {
 
   const [rocniMaterial, setRocniMaterial] = useState({});
 
+  const [pultiPodatki, setPultiPodatki] = useState([]);
+  const [spomenikiPodatki, setSpomenikiPodatki] = useState([]);
+
+  async function nalozizPultiInSpomenike() {
+    try {
+      const [pRes, sRes] = await Promise.all([
+        fetch("/api/pulti", { cache: "no-store" }),
+        fetch("/api/spomeniki", { cache: "no-store" }),
+      ]);
+      const [pulti, spomeniki] = await Promise.all([pRes.json(), sRes.json()]);
+      setPultiPodatki(Array.isArray(pulti) ? pulti : []);
+      setSpomenikiPodatki(Array.isArray(spomeniki) ? spomeniki : []);
+    } catch (e) {}
+  }
+
+  async function preklopiPlacanoPulti(id) {
+    const noviSeznam = pultiPodatki.map((p) => (p.id === id ? { ...p, placano: !p.placano } : p));
+    setPultiPodatki(noviSeznam);
+    try {
+      await fetch("/api/pulti", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(noviSeznam),
+      });
+    } catch (e) {}
+  }
+
+  async function preklopiPlacanoSpomenik(id) {
+    const noviSeznam = spomenikiPodatki.map((s) => (s.id === id ? { ...s, placano: s.placano === "Da" ? "Ne" : "Da" } : s));
+    setSpomenikiPodatki(noviSeznam);
+    try {
+      await fetch("/api/spomeniki", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seznam: noviSeznam }),
+      });
+    } catch (e) {}
+  }
+
   useEffect(() => {
-    // Vsota vrednosti naročil iz Pultov in Spomenikov, prikazana skupaj s Policami v admin pregledu.
-    Promise.all([
-      fetch("/api/pulti", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
-      fetch("/api/spomeniki", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
-    ])
-      .then(([pulti, spomeniki]) => {
-        const stevilo = (v) => {
-          const n = parseFloat(String(v).replace(",", "."));
-          return isNaN(n) ? 0 : n;
-        };
-        const vsotaPultov = Array.isArray(pulti)
-          ? pulti.reduce((v, p) => v + stevilo(p.ponudbenaCena), 0)
-          : 0;
-        const vsotaSpomenikov = Array.isArray(spomeniki)
-          ? spomeniki.reduce((v, s) => v + stevilo(s.cena), 0)
-          : 0;
-        setVrednostPultiSpomeniki(vsotaPultov + vsotaSpomenikov);
-      })
-      .catch(() => {});
+    // Naloži polne podatke iz Pultov in Spomenikov (za skupno vrednost IN skupen seznam neplačanih).
+    nalozizPultiInSpomenike();
   }, []);
 
   useEffect(() => {
@@ -996,6 +1017,16 @@ export default function DelovniNalogi() {
     return v + (isNaN(c) ? 0 : c);
   }, 0);
 
+  const steviloVarno = (v) => {
+    const n = parseFloat(String(v).replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  };
+  const vrednostPultiSpomeniki =
+    pultiPodatki.reduce((v, p) => v + steviloVarno(p.ponudbenaCena), 0) +
+    spomenikiPodatki.reduce((v, s) => v + steviloVarno(s.cena), 0);
+  const neplacaniPulti = pultiPodatki.filter((p) => !p.placano);
+  const neplacaniSpomeniki = spomenikiPodatki.filter((s) => s.placano !== "Da");
+
   const edinstveneStranke = [...new Set(nalogi.map((n) => n.stranka).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "sl")
   );
@@ -1240,6 +1271,56 @@ export default function DelovniNalogi() {
                     </div>
                   );
                 })()}
+
+                {(neplacaniPulti.length > 0 || neplacaniSpomeniki.length > 0) && (
+                  <div className="border-t border-stone-700 pt-3 mt-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-stone-400 uppercase">Neplačano — Pulti in Spomeniki</p>
+                      <span className="text-sm font-semibold text-red-400">
+                        {(
+                          neplacaniPulti.reduce((v, p) => v + steviloVarno(p.ponudbenaCena), 0) +
+                          neplacaniSpomeniki.reduce((v, s) => v + steviloVarno(s.cena), 0)
+                        ).toFixed(2)} €
+                      </span>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto space-y-1">
+                      {neplacaniPulti.map((p) => (
+                        <div key={`pulti-${p.id}`} className="flex items-center justify-between text-sm py-1.5 border-b border-stone-800 px-1">
+                          <span className="text-stone-300 truncate">
+                            <span className="text-blue-400 text-xs mr-1">[Pulti]</span>
+                            {p.stevilka} · {p.stranka?.ime}
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <span className="font-semibold text-red-400">{p.ponudbenaCena ? `${steviloVarno(p.ponudbenaCena).toFixed(2)} €` : "brez cene"}</span>
+                            <button
+                              onClick={() => preklopiPlacanoPulti(p.id)}
+                              className="text-xs px-2 py-1 rounded bg-emerald-900 text-emerald-300 hover:bg-emerald-800"
+                            >
+                              Označi plačano
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {neplacaniSpomeniki.map((s) => (
+                        <div key={`spomenik-${s.id}`} className="flex items-center justify-between text-sm py-1.5 border-b border-stone-800 px-1">
+                          <span className="text-stone-300 truncate">
+                            <span className="text-purple-400 text-xs mr-1">[Spomenik]</span>
+                            {s.stevilka} · {s.stranka?.ime}
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <span className="font-semibold text-red-400">{s.cena ? `${steviloVarno(s.cena).toFixed(2)} €` : "brez cene"}</span>
+                            <button
+                              onClick={() => preklopiPlacanoSpomenik(s.id)}
+                              className="text-xs px-2 py-1 rounded bg-emerald-900 text-emerald-300 hover:bg-emerald-800"
+                            >
+                              Označi plačano
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <button
                   onClick={() => setPogled("stranke")}
