@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -383,6 +382,14 @@ export default function Spomeniki() {
             posodobiSpomenike((os) => os.filter((x) => x.id !== nal.id));
             setPogled("seznam");
           }}
+          natisni={(nal) => { setIzbran(nal.id); setPogled("tiskanje"); }}
+        />
+      )}
+
+      {pogled === "tiskanje" && (
+        <TiskDelovniList
+          nalog={spomeniki.find((x) => x.id === izbran)}
+          nazaj={() => setPogled("podrobnosti")}
         />
       )}
 
@@ -526,9 +533,14 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
       </div>
 
       <div className="bg-white rounded-xl p-3 space-y-3">
-        <div className="font-semibold text-sm">Kosi (mere in obdelava)</div>
-        {nal.komponente.map((k, i) => (
+        <div className="font-semibold text-sm">Kosi (mere in obdelava za vsak kos posebej)</div>
+        {nal.komponente.map((k, i) => {
+          const zaporedjeVTipu = nal.komponente.slice(0, i + 1).filter((x) => x.tip === k.tip).length;
+          return (
           <div key={k.id} className="border border-gray-200 rounded-lg p-2.5 space-y-2">
+            <div className="text-xs font-semibold text-red-600 uppercase">
+              {k.tip} {zaporedjeVTipu > 1 || nal.komponente.filter((x) => x.tip === k.tip).length > 1 ? `#${zaporedjeVTipu}` : ""}
+            </div>
             <div className="flex items-center gap-2">
               <select
                 className={`${inp} flex-1`}
@@ -582,7 +594,8 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
         <button
           onClick={() => setNal({ ...nal, komponente: [...nal.komponente, praznaKomponenta()] })}
           className="w-full border-2 border-dashed border-gray-300 rounded-xl py-2 text-sm text-gray-500"
@@ -637,7 +650,132 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
   );
 }
 
-function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi }) {
+function prenesiHTMLDokumentSpomenik(selector, naslov, imeDatoteke) {
+  const el = document.querySelector(selector);
+  if (!el) {
+    alert("Ni bilo mogoče najti vsebine za izpis.");
+    return;
+  }
+  const html =
+    "<!DOCTYPE html><html lang=\"sl\"><head><meta charset=\"utf-8\">" +
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+    "<title>" + naslov + "</title>" +
+    "<script src=\"https://cdn.tailwindcss.com\"></script>" +
+    "<style>body{font-family:system-ui,sans-serif;background:#f5f5f4;margin:0;padding:24px;}" +
+    ".navodilo{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:14px;max-width:800px;margin-left:auto;margin-right:auto;}" +
+    ".ovoj{max-width:800px;margin:0 auto;}" +
+    "@media print { .navodilo{ display:none !important; } body{ background:#fff !important; padding:0 !important; } .ovoj{ max-width:100% !important; } }" +
+    "</style></head><body>" +
+    "<div class=\"navodilo\">To je prenesena datoteka za tiskanje. Uporabi Ctrl+P (Cmd+P na Mac) ali meni brskalnika &rarr; Natisni / Shrani kot PDF.</div>" +
+    "<div class=\"ovoj\">" + el.outerHTML + "</div>" +
+    "</body></html>";
+  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = imeDatoteke;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function TiskDelovniList({ nalog, nazaj }) {
+  if (!nalog) return <div className="p-4">Nalog ne obstaja. <button onClick={nazaj} className="text-red-600 underline">Nazaj</button></div>;
+
+  const komponenteZaPrikaz = (nalog.komponente || []).filter((k) => k.dolzina || k.sirina || k.debelina || k.obdelava);
+  const stTipa = {};
+  const oznacene = komponenteZaPrikaz.map((k) => {
+    stTipa[k.tip] = (stTipa[k.tip] || 0) + 1;
+    return { ...k, zaporedje: stTipa[k.tip] };
+  });
+  const skupnoPoTipu = {};
+  komponenteZaPrikaz.forEach((k) => { skupnoPoTipu[k.tip] = (skupnoPoTipu[k.tip] || 0) + 1; });
+
+  return (
+    <div className="p-3 space-y-3">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .spomenik-list, .spomenik-list * { visibility: visible; }
+          .spomenik-list { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
+          .spomenik-brez-tiska { display: none !important; }
+        }
+      `}</style>
+
+      <div className="spomenik-brez-tiska flex flex-wrap gap-2">
+        <button
+          onClick={() => prenesiHTMLDokumentSpomenik(".spomenik-list", `Delovni list ${nalog.stevilka || ""}`, `delovni-list-${nalog.stevilka || "spomenik"}${nalog.stranka?.ime ? " " + nalog.stranka.ime : ""}.html`)}
+          className="bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
+        >
+          Prenesi / natisni datoteko
+        </button>
+        <button onClick={nazaj} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100">
+          Nazaj
+        </button>
+      </div>
+
+      <div className="spomenik-list bg-white rounded-xl p-4 sm:p-6 border border-gray-200 text-sm">
+        <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
+          <div className="font-bold text-lg">ČAKŠ <span className="text-red-600">· Spomenik</span></div>
+          <div className="text-sm uppercase font-semibold text-gray-600">Delovni list</div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-gray-200 pb-2 mb-2">
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Stranka:</span><span className="font-semibold">{nalog.stranka?.ime}</span></div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Lokacija:</span>{nalog.lokacija || "—"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Montaža:</span>{nalog.montaza ? new Date(nalog.montaza).toLocaleDateString("sl-SI") : "—"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Podiranje:</span>{nalog.podiranje ? "DA" : "NE"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Material:</span>{nalog.material || "—"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Lučka/vaza:</span>{nalog.luckaVaza || "—"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Črke:</span>{nalog.crke || "—"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Žarna niša:</span>{nalog.zarnaNisa || "—"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Dodatki:</span>{nalog.dodatki || "—"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Svečnik:</span>{nalog.svecnik ? "DA" : "NE"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Treger:</span>{nalog.treger ? "DA" : "NE"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Cena:</span><span className="font-semibold">{eur(nalog.cena)}</span></div>
+        </div>
+
+        {oznacene.length > 0 && (
+          <table className="w-full border-collapse mt-2">
+            <thead>
+              <tr className="text-left text-xs uppercase text-gray-400 border-b-2 border-gray-300">
+                <th className="py-1 pr-2">Kos</th>
+                <th className="py-1 pr-2">Dolžina</th>
+                <th className="py-1 pr-2">Širina</th>
+                <th className="py-1 pr-2">Deb.</th>
+                <th className="py-1 pr-2">Obdelava</th>
+                <th className="py-1 pr-2">Pozicija</th>
+              </tr>
+            </thead>
+            <tbody>
+              {oznacene.map((k) => (
+                <tr key={k.id} className="border-b border-gray-100">
+                  <td className="py-1.5 pr-2 font-medium">{k.tip}{skupnoPoTipu[k.tip] > 1 ? ` #${k.zaporedje}` : ""}</td>
+                  <td className="py-1.5 pr-2">{k.dolzina || "–"}</td>
+                  <td className="py-1.5 pr-2">{k.sirina || "–"}</td>
+                  <td className="py-1.5 pr-2">{k.debelina || "–"}</td>
+                  <td className="py-1.5 pr-2">{k.obdelava || "–"}</td>
+                  <td className="py-1.5 pr-2 text-xs text-gray-500">{k.pozicija?.join(", ") || "–"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {nalog.opombe && (
+          <p className="mt-3 pt-2 border-t border-gray-200"><span className="text-xs text-gray-400 uppercase mr-1">Opombe:</span>{nalog.opombe}</p>
+        )}
+
+        <p className="text-xs text-gray-500 mt-4 pt-2 border-t border-gray-200">
+          Kamnoseštvo Čakš · 031 235 146
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni }) {
   const [kdoOpravil, setKdoOpravil] = useState("");
   if (!nalog)
     return (
@@ -767,6 +905,10 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
           })}
         </div>
       )}
+
+      <button onClick={() => natisni(nalog)} className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold">
+        🖨 Natisni delovni list
+      </button>
 
       <div className="flex gap-2">
         <button onClick={() => uredi(nalog)} className="flex-1 bg-gray-800 text-white rounded-xl py-3 font-semibold">Uredi</button>
