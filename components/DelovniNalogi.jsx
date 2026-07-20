@@ -2963,6 +2963,13 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
           <p className="text-sm text-stone-600 mb-2">Blago prevzel: {nalog.prevzel}</p>
         )}
 
+        {nalog.opombe && (
+          <div className="text-sm bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-4">
+            <span className="text-xs text-stone-400 uppercase block mb-0.5">Opombe</span>
+            {nalog.opombe}
+          </div>
+        )}
+
         {nalog.podpisPrevzemnika ? (
           <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-6 pt-2">
             <div className="border-t border-stone-400 pt-2 text-center text-xs text-stone-500">
