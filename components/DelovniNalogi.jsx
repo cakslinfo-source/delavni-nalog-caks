@@ -612,6 +612,7 @@ export default function DelovniNalogi() {
   const [obrazec, setObrazec] = useState(prazenObrazec());
   const [iskanje, setIskanje] = useState("");
   const [filterStatusi, setFilterStatusi] = useState([]);
+  const [pokaziSamoRacune, setPokaziSamoRacune] = useState(false);
   const [shranjujem, setShranjujem] = useState(false);
   const [adminOdklenjen, setAdminOdklenjen] = useState(false);
   const [pokaziPinVnos, setPokaziPinVnos] = useState(false);
@@ -1045,8 +1046,11 @@ export default function DelovniNalogi() {
       n.opis.toLowerCase().includes(iskanje.toLowerCase()) ||
       (n.stevilka || "").toLowerCase().includes(iskanje.toLowerCase());
     const ujemaStatus = filterStatusi.length === 0 || filterStatusi.includes(n.status);
-    return ujemaIskanje && ujemaStatus;
+    const ujemaRacun = !pokaziSamoRacune || n.racun === "poslati";
+    return ujemaIskanje && ujemaStatus && ujemaRacun;
   });
+
+  const steviloZaPoslatiRacun = nalogi.filter((n) => n.racun === "poslati").length;
 
   const skupajM2Obrazec = obrazec.postavke.reduce((vsota, p) => vsota + m2Postavke(p), 0);
 
@@ -1444,6 +1448,18 @@ export default function DelovniNalogi() {
                   {s}
                 </button>
               ))}
+              {steviloZaPoslatiRacun > 0 && (
+                <button
+                  onClick={() => setPokaziSamoRacune((v) => !v)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1 ${
+                    pokaziSamoRacune
+                      ? "bg-yellow-400 text-yellow-950 border-yellow-500 font-medium ring-1 ring-inset ring-current"
+                      : "bg-yellow-50 text-yellow-800 border-yellow-300 hover:border-yellow-500"
+                  }`}
+                >
+                  <Mail size={12} /> Pošlji račun ({steviloZaPoslatiRacun})
+                </button>
+              )}
             </div>
 
             {filtrirani.length === 0 ? (
