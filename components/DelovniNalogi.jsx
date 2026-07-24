@@ -1251,6 +1251,46 @@ export default function DelovniNalogi() {
                   })()}
                 </div>
 
+                <div className="border-t border-stone-700 pt-3 mt-3">
+                  <p className="text-xs font-medium text-stone-400 uppercase mb-2">Vrednost naročil po mesecih</p>
+                  {(() => {
+                    const vsotePoMesecu = {};
+                    nalogi.forEach((n) => {
+                      const c = parseFloat(String(n.cena).replace(",", "."));
+                      if (!n.datumVnosa || isNaN(c)) return;
+                      const kljuc = n.datumVnosa.slice(0, 7);
+                      vsotePoMesecu[kljuc] = (vsotePoMesecu[kljuc] || 0) + c;
+                    });
+                    const podatkiMesecev = Object.entries(vsotePoMesecu)
+                      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+                      .slice(-12)
+                      .map(([kljuc, vsota]) => ({
+                        naziv: new Date(kljuc + "-01").toLocaleDateString("sl-SI", { month: "short", year: "2-digit" }),
+                        vsota,
+                      }));
+                    if (podatkiMesecev.length === 0) {
+                      return <p className="text-xs text-stone-500">Ni dovolj podatkov za prikaz.</p>;
+                    }
+                    return (
+                      <div style={{ width: "100%", height: 160 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={podatkiMesecev} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#44403c" vertical={false} />
+                            <XAxis dataKey="naziv" tick={{ fill: "#a8a29e", fontSize: 10 }} />
+                            <YAxis tick={{ fill: "#a8a29e", fontSize: 10 }} />
+                            <Tooltip
+                              contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
+                              labelStyle={{ color: "#fff" }}
+                              formatter={(value) => [`${value.toFixed(2)} €`, "Vsota"]}
+                            />
+                            <Bar dataKey="vsota" radius={[4, 4, 0, 0]} fill="#dc2626" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    );
+                  })()}
+                </div>
+
                 {(() => {
                   const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
                   const skupajNeplacano = neplacana.reduce((v, n) => {
