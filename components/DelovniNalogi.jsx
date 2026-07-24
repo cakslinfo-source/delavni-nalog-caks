@@ -619,6 +619,7 @@ export default function DelovniNalogi() {
   const [pinVnos, setPinVnos] = useState("");
   const [pinNapaka, setPinNapaka] = useState("");
   const [izbranaStranka, setIzbranaStranka] = useState(null);
+  const [izbranMesec, setIzbranMesec] = useState(null);
 
   const [rocniMaterial, setRocniMaterial] = useState({});
 
@@ -1380,6 +1381,13 @@ export default function DelovniNalogi() {
                   Pregled po strankah →
                 </button>
 
+                <button
+                  onClick={() => setPogled("meseci")}
+                  className="mt-2 w-full text-sm text-center px-3 py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors"
+                >
+                  Pregled po mesecih →
+                </button>
+
                 <div className="border-t border-stone-700 pt-3 mt-3">
                   <p className="text-xs font-medium text-stone-400 uppercase mb-2">Varnostna kopija</p>
                   <div className="flex flex-wrap gap-2">
@@ -1691,6 +1699,111 @@ export default function DelovniNalogi() {
                       </div>
                       {adminOdklenjen && (
                         <span className="font-semibold text-red-600 shrink-0">{n.cena ? `${n.cena} €` : "brez cene"}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {pogled === "meseci" && (() => {
+          const skupinePoMesecu = {};
+          nalogi.forEach((n) => {
+            if (!n.datumVnosa) return;
+            const kljuc = n.datumVnosa.slice(0, 7);
+            if (!skupinePoMesecu[kljuc]) skupinePoMesecu[kljuc] = [];
+            skupinePoMesecu[kljuc].push(n);
+          });
+          const meseci = Object.keys(skupinePoMesecu).sort((a, b) => (a < b ? 1 : -1));
+          return (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="carved text-lg uppercase text-stone-700">Naročila po mesecih</h2>
+                <button onClick={() => setPogled("seznam")} className="text-sm text-stone-500 hover:text-stone-700">
+                  ← Nazaj na seznam
+                </button>
+              </div>
+              {meseci.length === 0 ? (
+                <p className="text-sm text-stone-500">Ni še nobenega naročila.</p>
+              ) : (
+                <div className="space-y-2">
+                  {meseci.map((kljuc) => {
+                    const nal = skupinePoMesecu[kljuc];
+                    const vsota = nal.reduce((v, n) => {
+                      const c = parseFloat(String(n.cena).replace(",", "."));
+                      return v + (isNaN(c) ? 0 : c);
+                    }, 0);
+                    const naziv = new Date(kljuc + "-01").toLocaleDateString("sl-SI", { month: "long", year: "numeric" });
+                    return (
+                      <button
+                        key={kljuc}
+                        onClick={() => { setIzbranMesec(kljuc); setPogled("mesecDetalji"); }}
+                        className="w-full text-left bg-white border border-stone-200 rounded-xl px-4 py-3.5 hover:border-red-400 hover:shadow-sm transition-all flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-semibold text-stone-800 capitalize truncate">{naziv}</div>
+                          <div className="text-sm text-stone-500">{nal.length} naročil</div>
+                        </div>
+                        {adminOdklenjen && (
+                          <span className="font-semibold text-stone-700 shrink-0">{vsota.toFixed(2)} €</span>
+                        )}
+                        <ChevronRight size={18} className="text-stone-300 shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {pogled === "mesecDetalji" && izbranMesec && (() => {
+          const naroceilaMeseca = nalogi.filter((n) => n.datumVnosa && n.datumVnosa.slice(0, 7) === izbranMesec);
+          const vsota = naroceilaMeseca.reduce((v, n) => {
+            const c = parseFloat(String(n.cena).replace(",", "."));
+            return v + (isNaN(c) ? 0 : c);
+          }, 0);
+          const naziv = new Date(izbranMesec + "-01").toLocaleDateString("sl-SI", { month: "long", year: "numeric" });
+          return (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="carved text-lg uppercase text-stone-700 capitalize">{naziv}</h2>
+                <button onClick={() => setPogled("meseci")} className="text-sm text-stone-500 hover:text-stone-700">
+                  ← Nazaj na mesece
+                </button>
+              </div>
+
+              {adminOdklenjen && (
+                <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mb-4 flex items-center justify-between">
+                  <span className="text-sm text-stone-300">Skupna vrednost ({naroceilaMeseca.length} naročil)</span>
+                  <span className="text-xl font-bold text-white">{vsota.toFixed(2)} €</span>
+                </div>
+              )}
+
+              {naroceilaMeseca.length === 0 ? (
+                <p className="text-sm text-stone-500">Ni naročil v tem mesecu.</p>
+              ) : (
+                <div className="space-y-2">
+                  {naroceilaMeseca.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => odpriPodrobnosti(n.id)}
+                      className="w-full text-left bg-white border border-stone-200 rounded-xl px-4 py-3.5 hover:border-red-400 hover:shadow-sm transition-all flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BARVE[n.status]}`}>
+                            {n.status}
+                          </span>
+                        </div>
+                        <div className="font-semibold text-stone-800 truncate">{n.stranka}</div>
+                        <div className="text-sm text-stone-500 truncate">{n.opis}</div>
+                      </div>
+                      {adminOdklenjen && (
+                        <span className="font-semibold text-stone-700 shrink-0">{n.cena ? `${n.cena} €` : "brez cene"}</span>
                       )}
                     </button>
                   ))}
