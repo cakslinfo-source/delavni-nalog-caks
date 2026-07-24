@@ -1210,7 +1210,7 @@ export default function DelovniNalogi() {
                       return v + (isNaN(c) ? 0 : c);
                     }, 0);
                     const skupajPlacano = nalogi.reduce((v, n) => {
-                      if ((n.placano || "Ne") !== "Da") return v;
+                      if ((n.placano || "Ne") !== "Da" && n.racun !== "poslan") return v;
                       const c = parseFloat(String(n.cena).replace(",", "."));
                       return v + (isNaN(c) ? 0 : c);
                     }, 0);
@@ -1532,7 +1532,14 @@ export default function DelovniNalogi() {
                         <div className="font-semibold text-stone-800 truncate">{n.stranka}</div>
                         <div className="text-sm text-stone-500 truncate">{n.opis}</div>
                       </div>
-                      <ChevronRight size={18} className="text-stone-300 shrink-0" />
+                      <div className="shrink-0 flex items-center gap-2">
+                        {(n.obvestiloEmailPoslano || n.obvestiloSmsPoslano) && (
+                          <span className="text-[11px] text-emerald-700 font-medium text-right leading-tight">
+                            ✓ Stranka<br />obveščena
+                          </span>
+                        )}
+                        <ChevronRight size={18} className="text-stone-300 shrink-0" />
+                      </div>
                     </button>
                   );
                 })}
