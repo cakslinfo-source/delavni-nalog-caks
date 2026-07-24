@@ -2351,24 +2351,24 @@ export default function DelovniNalogi() {
               <label className="block text-xs font-medium text-stone-500 mb-1.5">Račun</label>
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => spremeniRacun(aktivniNalog.id, "poslati")}
+                  onClick={() => spremeniRacun(aktivniNalog.id, aktivniNalog.racun === "poslati" ? "" : "poslati")}
                   className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                     aktivniNalog.racun === "poslati"
                       ? "bg-yellow-100 text-yellow-800 border-yellow-400 font-medium"
                       : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
                   }`}
                 >
-                  Pošlji račun
+                  {aktivniNalog.racun === "poslati" ? "✓ Pošlji račun (klikni za preklic)" : "Pošlji račun"}
                 </button>
                 <button
-                  onClick={() => spremeniRacun(aktivniNalog.id, "poslan")}
+                  onClick={() => spremeniRacun(aktivniNalog.id, aktivniNalog.racun === "poslan" ? "" : "poslan")}
                   className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                     aktivniNalog.racun === "poslan"
                       ? "bg-emerald-100 text-emerald-800 border-emerald-300 font-medium"
                       : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
                   }`}
                 >
-                  Račun poslan
+                  {aktivniNalog.racun === "poslan" ? "✓ Račun poslan (klikni za preklic)" : "Račun poslan"}
                 </button>
               </div>
             </div>
