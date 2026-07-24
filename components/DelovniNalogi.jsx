@@ -1245,7 +1245,7 @@ export default function DelovniNalogi() {
                 </div>
 
                 {(() => {
-                  const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da");
+                  const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
                   const skupajNeplacano = neplacana.reduce((v, n) => {
                     const c = parseFloat(String(n.cena).replace(",", "."));
                     return v + (isNaN(c) ? 0 : c);
@@ -1592,7 +1592,7 @@ export default function DelovniNalogi() {
 
         {pogled === "strankaDetalji" && izbranaStranka && (() => {
           const naroceilaStranke = nalogi.filter((n) => n.stranka === izbranaStranka);
-          const neplacana = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da");
+          const neplacana = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
           const skupajNeplacano = neplacana.reduce((v, n) => {
             const c = parseFloat(String(n.cena).replace(",", "."));
             return v + (isNaN(c) ? 0 : c);
@@ -2258,22 +2258,38 @@ export default function DelovniNalogi() {
                   <Mail size={16} />
                   <span>Naročilo je pripravljeno — obvesti stranko.</span>
                 </div>
-                <div className="flex flex-wrap gap-2 shrink-0">
+                <div className="flex flex-wrap gap-2 shrink-0 items-center">
                   {aktivniNalog.email && (
                     <a
                       href={obvestiloMailto(aktivniNalog)}
+                      onClick={() =>
+                        posodobiNaloge((os) =>
+                          os.map((n) => (n.id === aktivniNalog.id ? { ...n, obvestiloEmailPoslano: new Date().toISOString() } : n))
+                        )
+                      }
                       className="bg-red-500 hover:bg-red-400 text-stone-900 text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
                     >
                       Pošlji e-mail
                     </a>
                   )}
+                  {aktivniNalog.email && aktivniNalog.obvestiloEmailPoslano && (
+                    <span className="text-xs text-emerald-700 font-medium">✓ Poslano {new Date(aktivniNalog.obvestiloEmailPoslano).toLocaleDateString("sl-SI")}</span>
+                  )}
                   {aktivniNalog.telefon && (
                     <a
                       href={obvestiloSMS(aktivniNalog)}
+                      onClick={() =>
+                        posodobiNaloge((os) =>
+                          os.map((n) => (n.id === aktivniNalog.id ? { ...n, obvestiloSmsPoslano: new Date().toISOString() } : n))
+                        )
+                      }
                       className="bg-stone-800 hover:bg-stone-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
                     >
                       Pošlji SMS
                     </a>
+                  )}
+                  {aktivniNalog.telefon && aktivniNalog.obvestiloSmsPoslano && (
+                    <span className="text-xs text-emerald-700 font-medium">✓ Poslano {new Date(aktivniNalog.obvestiloSmsPoslano).toLocaleDateString("sl-SI")}</span>
                   )}
                 </div>
               </div>
