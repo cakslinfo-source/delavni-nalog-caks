@@ -1210,14 +1210,21 @@ export default function DelovniNalogi() {
                       return v + (isNaN(c) ? 0 : c);
                     }, 0);
                     const skupajPlacano = nalogi.reduce((v, n) => {
-                      if ((n.placano || "Ne") !== "Da" && n.racun !== "poslan") return v;
+                      if ((n.placano || "Ne") !== "Da") return v;
                       const c = parseFloat(String(n.cena).replace(",", "."));
                       return v + (isNaN(c) ? 0 : c);
                     }, 0);
-                    const skupajNeplacano = skupajVse - skupajPlacano;
+                    const skupajRacunPoslan = nalogi.reduce((v, n) => {
+                      if ((n.placano || "Ne") === "Da") return v;
+                      if (n.racun !== "poslan") return v;
+                      const c = parseFloat(String(n.cena).replace(",", "."));
+                      return v + (isNaN(c) ? 0 : c);
+                    }, 0);
+                    const skupajNeplacano = skupajVse - skupajPlacano - skupajRacunPoslan;
                     const podatkiPlacil = [
                       { naziv: "Skupaj", vsota: skupajVse, barva: "#7f1d1d" },
                       { naziv: "Plačano", vsota: skupajPlacano, barva: "#10b981" },
+                      { naziv: "Račun poslan", vsota: skupajRacunPoslan, barva: "#38bdf8" },
                       { naziv: "Neplačano", vsota: skupajNeplacano, barva: "#facc15" },
                     ];
                     return (
