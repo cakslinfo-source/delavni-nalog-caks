@@ -130,6 +130,46 @@ function izracunNaloga(nalog, cenik) {
   };
 }
 
+function prenesiVarnostnoKopijoPulti(nalogi) {
+  const danes = new Date().toISOString().slice(0, 10);
+  const vsebina = JSON.stringify(nalogi, null, 2);
+  const blob = new Blob([vsebina], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `varnostna-kopija-pulti-${danes}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function obnoviIzDatotekePulti(event, shraniNaloge) {
+  const datoteka = event.target.files && event.target.files[0];
+  if (!datoteka) return;
+  const bralnik = new FileReader();
+  bralnik.onload = async (e) => {
+    try {
+      const podatki = JSON.parse(e.target.result);
+      if (!Array.isArray(podatki)) {
+        alert("Datoteka ni veljavna varnostna kopija (pričakovan je seznam naročil).");
+        return;
+      }
+      const potrdi = window.confirm(
+        `Ali res želiš obnoviti podatke iz te datoteke? Vsebuje ${podatki.length} naročil in bo PREPISALA trenutni seznam. Tega dejanja ni mogoče razveljaviti.`
+      );
+      if (potrdi) {
+        await shraniNaloge(podatki);
+        alert("Podatki so bili uspešno obnovljeni.");
+      }
+    } catch (err) {
+      alert("Napaka pri branju datoteke — preveri, da je to prava .json varnostna kopija.");
+    }
+  };
+  bralnik.readAsText(datoteka);
+  event.target.value = "";
+}
+
 function eur(x) {
   return (
     (x || 0).toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
@@ -465,7 +505,7 @@ export default function Pulti() {
       )}
 
       {pogled === "cenik" && (
-        <CenikAdmin cenik={cenik} shrani={shraniCenik} nazaj={() => setPogled("seznam")} />
+        <CenikAdmin cenik={cenik} shrani={shraniCenik} nazaj={() => setPogled("seznam")} nalogi={nalogi} shraniNaloge={shraniNaloge} />
       )}
 
       {pogled === "seznam" && (
@@ -1295,7 +1335,7 @@ function TiskPonudbePulti({ nalog, cenik, nazaj }) {
   );
 }
 
-function CenikAdmin({ cenik, shrani, nazaj }) {
+function CenikAdmin({ cenik, shrani, nazaj, nalogi, shraniNaloge }) {
   const [c, setC] = useState(JSON.parse(JSON.stringify(cenik)));
 
   const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-right";
@@ -1327,6 +1367,23 @@ function CenikAdmin({ cenik, shrani, nazaj }) {
         >
           Ponastavi na privzeti cenik
         </button>
+      </div>
+
+      <div className="bg-white rounded-xl p-3 space-y-2">
+        <div className="font-semibold text-sm">Varnostna kopija naročil</div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => prenesiVarnostnoKopijoPulti(nalogi)}
+            className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            ⬇ Prenesi kopijo zdaj
+          </button>
+          <label className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">
+            📄 Obnovi iz datoteke
+            <input type="file" accept="application/json" className="hidden" onChange={(e) => obnoviIzDatotekePulti(e, shraniNaloge)} />
+          </label>
+        </div>
+        <p className="text-xs text-gray-500">Priporočamo ročni prenos vsake toliko časa, za vsak slučaj.</p>
       </div>
 
       <div className="bg-white rounded-xl p-3 space-y-2">
