@@ -2857,6 +2857,13 @@ function TiskNaloga({ nalog, onZapri }) {
             className="h-8 w-auto object-contain shrink-0"
           />
           <p className="carved text-sm uppercase text-stone-700 shrink-0">Delovni nalog</p>
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(`https://delavni-nalog-caks.vercel.app/status/${nalog.id}`)}`}
+            alt="QR koda za status naročila"
+            width={70}
+            height={70}
+            className="shrink-0"
+          />
         </div>
 
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-2 text-sm border-b border-stone-200 pb-2">
