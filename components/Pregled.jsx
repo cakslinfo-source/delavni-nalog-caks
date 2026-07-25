@@ -32,8 +32,6 @@ function mapSpomenikStatus(status) {
   return "sprejeto";
 }
 
-const IKONA = { Police: "📋", Pulti: "🪨", Spomenik: "🪦" };
-
 export default function Pregled() {
   const [postavke, setPostavke] = useState([]);
   const [nalaganje, setNalaganje] = useState(true);
@@ -97,129 +95,130 @@ export default function Pregled() {
     };
   }, []);
 
+  const aktivne = postavke.filter((p) => p.stolpec !== "prevzeto");
+  const poModulu = { Police: 0, Pulti: 0, Spomenik: 0 };
+  aktivne.forEach((p) => { poModulu[p.modul] = (poModulu[p.modul] || 0) + 1; });
+  const podatkiGrafa = Object.entries(poModulu)
+    .filter(([, stevilo]) => stevilo > 0)
+    .map(([modul, stevilo]) => ({
+      naziv: modul,
+      stevilo,
+      delez: aktivne.length ? Math.round((stevilo / aktivne.length) * 100) : 0,
+    }));
+
   return (
-    <div className="min-h-screen bg-stone-950 text-white p-6 sm:p-8" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <div className="flex items-center justify-between mb-8">
+    <div className="h-screen bg-stone-950 text-white p-4 sm:p-5 flex flex-col overflow-hidden" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <div>
-          <div className="font-bold text-3xl tracking-tight">
+          <div className="font-bold text-2xl tracking-tight">
             ČAKŠ <span className="text-red-500">· Pregled proizvodnje</span>
           </div>
-          <div className="text-stone-500 text-sm mt-1">Kamnoseštvo Čakš — vsi moduli v živo</div>
+          <div className="text-stone-500 text-xs mt-0.5">Kamnoseštvo Čakš — vsi moduli v živo</div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-mono tabular-nums text-stone-200">
+          <div className="text-xl font-mono tabular-nums text-stone-200">
             {zdaj.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </div>
-          <div className="text-stone-500 text-sm capitalize">
+          <div className="text-stone-500 text-xs capitalize">
             {zdaj.toLocaleDateString("sl-SI", { weekday: "long", day: "numeric", month: "long" })}
           </div>
         </div>
       </div>
 
       {nalaganje ? (
-        <div className="text-center text-stone-500 py-24 text-lg">Nalagam …</div>
+        <div className="text-center text-stone-500 py-24 text-lg flex-1">Nalagam …</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          {STOLPCI.map((stolpec) => {
-            const postavkeStolpca = postavke.filter((p) => p.stolpec === stolpec.id);
-            return (
-              <div key={stolpec.id} className="bg-stone-900 rounded-2xl border border-stone-800 overflow-hidden flex flex-col">
-                <div
-                  className="px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: stolpec.barva + "22", borderBottom: `2px solid ${stolpec.barva}` }}
-                >
-                  <span className="font-semibold text-lg" style={{ color: stolpec.barva }}>{stolpec.naziv}</span>
-                  <span
-                    className="text-sm font-bold rounded-full w-8 h-8 flex items-center justify-center"
-                    style={{ backgroundColor: stolpec.barva, color: "#0c0a09" }}
+        <div className="flex-1 flex gap-4 min-h-0">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 min-h-0">
+            {STOLPCI.map((stolpec) => {
+              const postavkeStolpca = postavke.filter((p) => p.stolpec === stolpec.id);
+              return (
+                <div key={stolpec.id} className="bg-stone-900 rounded-2xl border border-stone-800 overflow-hidden flex flex-col min-h-0">
+                  <div
+                    className="px-4 py-2.5 flex items-center justify-between shrink-0"
+                    style={{ backgroundColor: stolpec.barva + "22", borderBottom: `2px solid ${stolpec.barva}` }}
                   >
-                    {postavkeStolpca.length}
-                  </span>
-                </div>
-                <div className="p-3 space-y-2 overflow-y-auto flex-1" style={{ maxHeight: "70vh" }}>
-                  {postavkeStolpca.length === 0 ? (
-                    <div className="text-stone-600 text-sm text-center py-8">— prazno —</div>
-                  ) : (
-                    postavkeStolpca.map((p) => {
-                      const zamujen = p.rok && new Date(p.rok) < new Date(new Date().toDateString());
-                      return (
-                        <div
-                          key={`${p.modul}-${p.id}`}
-                          className={`rounded-xl p-3 bg-stone-800 border-l-4 border ${zamujen ? "border-red-500" : "border-stone-700"}`}
-                          style={{ borderLeftColor: BARVA_MODULA[p.modul] }}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-stone-400 flex items-center gap-1.5">
-                              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: BARVA_MODULA[p.modul] }} />
-                              {p.modul} · {p.stevilka}
-                            </span>
-                            {zamujen && <span className="text-[10px] text-red-400 font-semibold">ZAMUJA</span>}
-                          </div>
-                          <div className="font-semibold text-stone-100 truncate">{p.stranka || "—"}</div>
-                          <div className="text-sm text-stone-400 truncate">{p.opis}</div>
-                          {p.rok && (
-                            <div className="text-xs text-stone-500 mt-1">
-                              Rok: {new Date(p.rok).toLocaleDateString("sl-SI")}
+                    <span className="font-semibold text-base" style={{ color: stolpec.barva }}>{stolpec.naziv}</span>
+                    <span
+                      className="text-sm font-bold rounded-full w-7 h-7 flex items-center justify-center"
+                      style={{ backgroundColor: stolpec.barva, color: "#0c0a09" }}
+                    >
+                      {postavkeStolpca.length}
+                    </span>
+                  </div>
+                  <div className="p-2.5 space-y-2 overflow-y-auto flex-1 min-h-0">
+                    {postavkeStolpca.length === 0 ? (
+                      <div className="text-stone-600 text-sm text-center py-8">— prazno —</div>
+                    ) : (
+                      postavkeStolpca.map((p) => {
+                        const zamujen = p.rok && new Date(p.rok) < new Date(new Date().toDateString());
+                        return (
+                          <div
+                            key={`${p.modul}-${p.id}`}
+                            className={`rounded-lg p-2.5 bg-stone-800 border-l-4 border ${zamujen ? "border-red-500" : "border-stone-700"}`}
+                            style={{ borderLeftColor: BARVA_MODULA[p.modul] }}
+                          >
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-xs text-stone-400 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-sm inline-block shrink-0" style={{ backgroundColor: BARVA_MODULA[p.modul] }} />
+                                {p.modul} · {p.stevilka}
+                              </span>
+                              {zamujen && <span className="text-[10px] text-red-400 font-semibold">ZAMUJA</span>}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
+                            <div className="font-semibold text-stone-100 truncate text-sm">{p.stranka || "—"}</div>
+                            <div className="text-xs text-stone-400 truncate">{p.opis}</div>
+                            {p.rok && (
+                              <div className="text-[11px] text-stone-500 mt-0.5">
+                                Rok: {new Date(p.rok).toLocaleDateString("sl-SI")}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+
+          {podatkiGrafa.length > 0 && (
+            <div className="w-64 shrink-0 bg-stone-900 rounded-2xl border border-stone-800 p-3 flex flex-col min-h-0">
+              <p className="text-center text-stone-400 text-xs uppercase font-semibold mb-1 shrink-0">
+                Delež v proizvodnji
+              </p>
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={podatkiGrafa}
+                      dataKey="stevilo"
+                      nameKey="naziv"
+                      cx="50%"
+                      cy="45%"
+                      outerRadius="65%"
+                      label={({ delez }) => `${delez}%`}
+                      labelLine={false}
+                    >
+                      {podatkiGrafa.map((entry) => (
+                        <Cell key={entry.naziv} fill={BARVA_MODULA[entry.naziv]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
+                      labelStyle={{ color: "#fff" }}
+                      formatter={(value, naziv) => [`${value} naročil`, naziv]}
+                    />
+                    <Legend wrapperStyle={{ color: "#a8a29e", fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
       )}
 
-      {!nalaganje && postavke.filter((p) => p.stolpec !== "prevzeto").length > 0 && (() => {
-        const aktivne = postavke.filter((p) => p.stolpec !== "prevzeto");
-        const poModulu = { Police: 0, Pulti: 0, Spomenik: 0 };
-        aktivne.forEach((p) => { poModulu[p.modul] = (poModulu[p.modul] || 0) + 1; });
-        const podatkiGrafa = Object.entries(poModulu)
-          .filter(([, stevilo]) => stevilo > 0)
-          .map(([modul, stevilo]) => ({
-            naziv: modul,
-            stevilo,
-            delez: Math.round((stevilo / aktivne.length) * 100),
-          }));
-        return (
-          <div className="mt-8 bg-stone-900 rounded-2xl border border-stone-800 p-5 max-w-md mx-auto">
-            <p className="text-center text-stone-400 text-sm uppercase font-semibold mb-2">
-              Trenutno v proizvodnji — delež po segmentu
-            </p>
-            <div style={{ width: "100%", height: 240 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={podatkiGrafa}
-                    dataKey="stevilo"
-                    nameKey="naziv"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={85}
-                    label={({ naziv, delez }) => `${naziv} ${delez}%`}
-                    labelLine={{ stroke: "#57534e" }}
-                  >
-                    {podatkiGrafa.map((entry) => (
-                      <Cell key={entry.naziv} fill={BARVA_MODULA[entry.naziv]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
-                    labelStyle={{ color: "#fff" }}
-                    formatter={(value, naziv) => [`${value} naročil`, naziv]}
-                  />
-                  <Legend wrapperStyle={{ color: "#a8a29e", fontSize: 12 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        );
-      })()}
-
-      <div className="text-center text-stone-700 text-xs mt-8">
+      <div className="text-center text-stone-700 text-[10px] mt-2 shrink-0">
         {uraOsvezitve && `Osveženo ${uraOsvezitve.toLocaleTimeString("sl-SI")} · `}samodejno se osvežuje vsakih 45 sekund
       </div>
     </div>
