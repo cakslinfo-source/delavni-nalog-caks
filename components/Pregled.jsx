@@ -1,14 +1,15 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const STOLPCI = [
   { id: "sprejeto", naziv: "Sprejeto", barva: "#78716c" },
   { id: "izdelavi", naziv: "V izdelavi", barva: "#f97316" },
   { id: "pripravljeno", naziv: "Pripravljeno", barva: "#0ea5e9" },
-  { id: "prevzeto", naziv: "Prevzeto", barva: "#1e40af" },
 ];
+
+const BARVA_MODULA = { Police: "#dc2626", Pulti: "#a855f7", Spomenik: "#eab308" };
 
 function mapPoliceStatus(status) {
   if (status === "Sprejeto") return "sprejeto";
@@ -118,7 +119,7 @@ export default function Pregled() {
       {nalaganje ? (
         <div className="text-center text-stone-500 py-24 text-lg">Nalagam …</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           {STOLPCI.map((stolpec) => {
             const postavkeStolpca = postavke.filter((p) => p.stolpec === stolpec.id);
             return (
@@ -140,14 +141,18 @@ export default function Pregled() {
                     <div className="text-stone-600 text-sm text-center py-8">— prazno —</div>
                   ) : (
                     postavkeStolpca.map((p) => {
-                      const zamujen = p.rok && new Date(p.rok) < new Date(new Date().toDateString()) && stolpec.id !== "prevzeto";
+                      const zamujen = p.rok && new Date(p.rok) < new Date(new Date().toDateString());
                       return (
                         <div
                           key={`${p.modul}-${p.id}`}
-                          className={`rounded-xl p-3 bg-stone-800 border ${zamujen ? "border-red-500" : "border-stone-700"}`}
+                          className={`rounded-xl p-3 bg-stone-800 border-l-4 border ${zamujen ? "border-red-500" : "border-stone-700"}`}
+                          style={{ borderLeftColor: BARVA_MODULA[p.modul] }}
                         >
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-stone-400">{IKONA[p.modul]} {p.modul} · {p.stevilka}</span>
+                            <span className="text-xs text-stone-400 flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: BARVA_MODULA[p.modul] }} />
+                              {p.modul} · {p.stevilka}
+                            </span>
                             {zamujen && <span className="text-[10px] text-red-400 font-semibold">ZAMUJA</span>}
                           </div>
                           <div className="font-semibold text-stone-100 truncate">{p.stranka || "—"}</div>
@@ -167,6 +172,52 @@ export default function Pregled() {
           })}
         </div>
       )}
+
+      {!nalaganje && postavke.filter((p) => p.stolpec !== "prevzeto").length > 0 && (() => {
+        const aktivne = postavke.filter((p) => p.stolpec !== "prevzeto");
+        const poModulu = { Police: 0, Pulti: 0, Spomenik: 0 };
+        aktivne.forEach((p) => { poModulu[p.modul] = (poModulu[p.modul] || 0) + 1; });
+        const podatkiGrafa = Object.entries(poModulu)
+          .filter(([, stevilo]) => stevilo > 0)
+          .map(([modul, stevilo]) => ({
+            naziv: modul,
+            stevilo,
+            delez: Math.round((stevilo / aktivne.length) * 100),
+          }));
+        return (
+          <div className="mt-8 bg-stone-900 rounded-2xl border border-stone-800 p-5 max-w-md mx-auto">
+            <p className="text-center text-stone-400 text-sm uppercase font-semibold mb-2">
+              Trenutno v proizvodnji — delež po segmentu
+            </p>
+            <div style={{ width: "100%", height: 240 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={podatkiGrafa}
+                    dataKey="stevilo"
+                    nameKey="naziv"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={85}
+                    label={({ naziv, delez }) => `${naziv} ${delez}%`}
+                    labelLine={{ stroke: "#57534e" }}
+                  >
+                    {podatkiGrafa.map((entry) => (
+                      <Cell key={entry.naziv} fill={BARVA_MODULA[entry.naziv]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
+                    labelStyle={{ color: "#fff" }}
+                    formatter={(value, naziv) => [`${value} naročil`, naziv]}
+                  />
+                  <Legend wrapperStyle={{ color: "#a8a29e", fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="text-center text-stone-700 text-xs mt-8">
         {uraOsvezitve && `Osveženo ${uraOsvezitve.toLocaleTimeString("sl-SI")} · `}samodejno se osvežuje vsakih 45 sekund
