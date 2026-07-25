@@ -1029,6 +1029,31 @@ export default function DelovniNalogi() {
   const neplacaniPulti = pultiPodatki.filter((p) => !p.placano);
   const neplacaniSpomeniki = spomenikiPodatki.filter((s) => s.placano !== "Da");
 
+  // Opomniki za bližajoče se ali zamujene roke — Police + Pulti + Spomeniki skupaj.
+  const opominjeniRoki = (() => {
+    const danes = new Date();
+    danes.setHours(0, 0, 0, 0);
+    const cezTriDni = new Date(danes);
+    cezTriDni.setDate(cezTriDni.getDate() + 3);
+    const seznam = [];
+    nalogi.forEach((n) => {
+      if (!n.rok || n.status === "Prevzeto") return;
+      const rok = new Date(n.rok);
+      if (rok <= cezTriDni) seznam.push({ vrsta: "Police", stevilka: n.stevilka, stranka: n.stranka, rok: n.rok, zamujen: rok < danes, id: n.id });
+    });
+    pultiPodatki.forEach((p) => {
+      if (!p.datumMontaze || p.status === "zakljuceno") return;
+      const rok = new Date(p.datumMontaze);
+      if (rok <= cezTriDni) seznam.push({ vrsta: "Pulti", stevilka: p.stevilka, stranka: p.stranka?.ime, rok: p.datumMontaze, zamujen: rok < danes, id: p.id });
+    });
+    spomenikiPodatki.forEach((s) => {
+      if (!s.montaza || s.status === "prevzeto") return;
+      const rok = new Date(s.montaza);
+      if (rok <= cezTriDni) seznam.push({ vrsta: "Spomenik", stevilka: s.stevilka, stranka: s.stranka?.ime, rok: s.montaza, zamujen: rok < danes, id: s.id });
+    });
+    return seznam.sort((a, b) => (a.rok < b.rok ? -1 : 1));
+  })();
+
   const edinstveneStranke = [...new Set(nalogi.map((n) => n.stranka).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "sl")
   );
@@ -1052,6 +1077,21 @@ export default function DelovniNalogi() {
   });
 
   const steviloZaPoslatiRacun = nalogi.filter((n) => n.racun === "poslati").length;
+
+  // Skupno iskanje po Pultih in Spomenikih (poleg glavnega seznama Delovnih nalogov).
+  const iskanjeDrugje = iskanje.trim().length >= 2
+    ? {
+        pulti: pultiPodatki.filter((p) => {
+          const niz = `${p.stranka?.ime || ""} ${p.stevilka || ""}`.toLowerCase();
+          return niz.includes(iskanje.toLowerCase());
+        }),
+        spomeniki: spomenikiPodatki.filter((s) => {
+          const niz = `${s.stranka?.ime || ""} ${s.stevilka || ""} ${s.lokacija || ""}`.toLowerCase();
+          return niz.includes(iskanje.toLowerCase());
+        }),
+      }
+    : { pulti: [], spomeniki: [] };
+
 
   const skupajM2Obrazec = obrazec.postavke.reduce((vsota, p) => vsota + m2Postavke(p), 0);
 
@@ -1190,6 +1230,23 @@ export default function DelovniNalogi() {
 
         {!naloziLoading && pogled === "seznam" && (
           <div>
+            {opominjeniRoki.length > 0 && (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 mb-4">
+                <p className="text-xs font-semibold text-amber-800 uppercase mb-2">⏰ Bližajoči/zamujeni roki ({opominjeniRoki.length})</p>
+                <div className="space-y-1">
+                  {opominjeniRoki.map((r) => (
+                    <div key={`${r.vrsta}-${r.id}`} className="flex items-center justify-between text-sm">
+                      <span className={r.zamujen ? "text-red-700 font-medium" : "text-amber-800"}>
+                        {r.vrsta === "Police" ? "📋" : r.vrsta === "Pulti" ? "🪨" : "🪦"} {r.stevilka} · {r.stranka}
+                      </span>
+                      <span className={r.zamujen ? "text-red-700 font-semibold" : "text-amber-700"}>
+                        {r.zamujen ? "Zamujeno — " : ""}{new Date(r.rok).toLocaleDateString("sl-SI")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {adminOdklenjen && nalogi.length > 0 && (
               <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mb-4">
                 <div className="flex items-center justify-between mb-3">
@@ -1475,6 +1532,24 @@ export default function DelovniNalogi() {
               </div>
             </div>
 
+            {(iskanjeDrugje.pulti.length > 0 || iskanjeDrugje.spomeniki.length > 0) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm space-y-1.5">
+                <p className="text-xs font-semibold text-blue-800 uppercase">Najdeno tudi v drugih modulih</p>
+                {iskanjeDrugje.pulti.map((p) => (
+                  <a key={p.id} href="/pulti" className="flex items-center justify-between text-blue-700 hover:underline">
+                    <span>🪨 [Pulti] {p.stevilka} · {p.stranka?.ime}</span>
+                    <ChevronRight size={14} />
+                  </a>
+                ))}
+                {iskanjeDrugje.spomeniki.map((s) => (
+                  <a key={s.id} href="/spomeniki" className="flex items-center justify-between text-blue-700 hover:underline">
+                    <span>🪦 [Spomenik] {s.stevilka} · {s.stranka?.ime}</span>
+                    <ChevronRight size={14} />
+                  </a>
+                ))}
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-1.5 mb-5">
               <button
                 onClick={() => setFilterStatusi([])}
@@ -1659,6 +1734,13 @@ export default function DelovniNalogi() {
             const c = parseFloat(String(n.cena).replace(",", "."));
             return v + (isNaN(c) ? 0 : c);
           }, 0);
+          const pultiStranke = pultiPodatki.filter((p) => p.stranka?.ime === izbranaStranka);
+          const spomenikiStranke = spomenikiPodatki.filter((s) => s.stranka?.ime === izbranaStranka);
+          const casovnica = [
+            ...naroceilaStranke.map((n) => ({ vrsta: "Police", stevilka: n.stevilka, datum: n.datumVnosa || n.datum, opis: n.opis, cena: n.cena, id: n.id })),
+            ...pultiStranke.map((p) => ({ vrsta: "Pulti", stevilka: p.stevilka, datum: p.datum, opis: "Pult", cena: p.ponudbenaCena, id: p.id })),
+            ...spomenikiStranke.map((s) => ({ vrsta: "Spomenik", stevilka: s.stevilka, datum: s.datum, opis: s.material || "Spomenik", cena: s.cena, id: s.id })),
+          ].sort((a, b) => (a.datum || "") < (b.datum || "") ? 1 : -1);
           return (
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -1702,6 +1784,29 @@ export default function DelovniNalogi() {
                       )}
                     </button>
                   ))}
+                </div>
+              )}
+
+              {casovnica.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-stone-200">
+                  <p className="carved text-sm uppercase text-stone-500 mb-2">Celotna časovnica — vsi moduli ({casovnica.length})</p>
+                  <div className="space-y-1.5">
+                    {casovnica.map((z) => (
+                      <div key={`${z.vrsta}-${z.id}`} className="flex items-center justify-between text-sm bg-white border border-stone-100 rounded-lg px-3 py-2">
+                        <div className="min-w-0">
+                          <span className="text-xs text-stone-400 mr-1.5">
+                            {z.vrsta === "Police" ? "📋" : z.vrsta === "Pulti" ? "🪨" : "🪦"} {z.vrsta}
+                          </span>
+                          <span className="font-medium text-stone-700">{z.stevilka}</span>
+                          <span className="text-stone-500 truncate"> · {z.opis}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <span className="text-xs text-stone-400">{z.datum ? new Date(z.datum).toLocaleDateString("sl-SI") : ""}</span>
+                          {adminOdklenjen && z.cena && <span className="text-stone-600 font-medium">{parseFloat(String(z.cena).replace(",", ".")).toFixed(2)} €</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -3103,13 +3208,24 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
           <p className="carved text-sm uppercase text-stone-700 shrink-0">Dobavnica</p>
         </div>
 
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-2 text-sm border-b border-stone-200 pb-2">
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Št.</span><span className="font-semibold text-stone-800">{nalog.stevilka}</span></span>
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Kupec</span><span className="font-semibold text-stone-800">{nalog.stranka}</span></span>
-          {nalog.telefon && (
-            <span><span className="text-xs text-stone-400 uppercase mr-1">Tel</span><span className="text-stone-700">{nalog.telefon}</span></span>
-          )}
-          <span><span className="text-xs text-stone-400 uppercase mr-1">Datum</span><span className="text-stone-700">{danes}</span></span>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm border-b border-stone-200 pb-2 flex-1">
+            <span><span className="text-xs text-stone-400 uppercase mr-1">Št.</span><span className="font-semibold text-stone-800">{nalog.stevilka}</span></span>
+            <span><span className="text-xs text-stone-400 uppercase mr-1">Kupec</span><span className="font-semibold text-stone-800">{nalog.stranka}</span></span>
+            {nalog.telefon && (
+              <span><span className="text-xs text-stone-400 uppercase mr-1">Tel</span><span className="text-stone-700">{nalog.telefon}</span></span>
+            )}
+            <span><span className="text-xs text-stone-400 uppercase mr-1">Datum</span><span className="text-stone-700">{danes}</span></span>
+          </div>
+          <div className="text-center shrink-0">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(`https://delavni-nalog-caks.vercel.app/status/${nalog.id}`)}`}
+              alt="QR koda za status naročila"
+              width={90}
+              height={90}
+            />
+            <p className="text-[9px] text-stone-400 mt-0.5">Preveri status</p>
+          </div>
         </div>
 
         {postavkeZaPrikaz.length > 0 && (
