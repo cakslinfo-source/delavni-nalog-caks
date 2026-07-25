@@ -390,6 +390,9 @@ export default function Pulti() {
           <a href="/spomeniki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">
             Spomeniki
           </a>
+          <a href="/pregled" target="_blank" rel="noopener noreferrer" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">
+            📺 Pregled
+          </a>
           <button
             onClick={() => {
               window.location.href = window.location.pathname + "?osvezeno=" + Date.now();
