@@ -288,6 +288,7 @@ export default function Spomeniki() {
         <div className="flex gap-2">
           <a href="/" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Police</a>
           <a href="/sestanki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Sestanki</a>
+          <a href="/pregled" target="_blank" rel="noopener noreferrer" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">📺 Pregled</a>
           <button
             onClick={() => { window.location.href = window.location.pathname + "?osvezeno=" + Date.now(); }}
             className="text-xs bg-gray-800 px-3 py-2 rounded-lg"
