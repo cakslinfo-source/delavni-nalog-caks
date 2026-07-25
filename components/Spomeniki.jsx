@@ -49,6 +49,46 @@ function prazenSpomenik() {
   };
 }
 
+function prenesiVarnostnoKopijoSpomeniki(spomeniki) {
+  const danes = new Date().toISOString().slice(0, 10);
+  const vsebina = JSON.stringify(spomeniki, null, 2);
+  const blob = new Blob([vsebina], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `varnostna-kopija-spomeniki-${danes}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function obnoviIzDatotekeSpomeniki(event, shraniSeznam) {
+  const datoteka = event.target.files && event.target.files[0];
+  if (!datoteka) return;
+  const bralnik = new FileReader();
+  bralnik.onload = async (e) => {
+    try {
+      const podatki = JSON.parse(e.target.result);
+      if (!Array.isArray(podatki)) {
+        alert("Datoteka ni veljavna varnostna kopija (pričakovan je seznam naročil).");
+        return;
+      }
+      const potrdi = window.confirm(
+        `Ali res želiš obnoviti podatke iz te datoteke? Vsebuje ${podatki.length} naročil in bo PREPISALA trenutni seznam. Tega dejanja ni mogoče razveljaviti.`
+      );
+      if (potrdi) {
+        await shraniSeznam(podatki);
+        alert("Podatki so bili uspešno obnovljeni.");
+      }
+    } catch (err) {
+      alert("Napaka pri branju datoteke — preveri, da je to prava .json varnostna kopija.");
+    }
+  };
+  bralnik.readAsText(datoteka);
+  event.target.value = "";
+}
+
 function eur(x) {
   const v = parseFloat(String(x).replace(",", "."));
   if (isNaN(v)) return "—";
@@ -254,6 +294,12 @@ export default function Spomeniki() {
           >
             ⟳ Osveži
           </button>
+          <button
+            onClick={() => { if (vprasajPin()) setPogled("admin"); }}
+            className="text-xs bg-gray-800 px-3 py-2 rounded-lg"
+          >
+            🔒 Admin
+          </button>
         </div>
       </div>
 
@@ -411,6 +457,34 @@ export default function Spomeniki() {
           nalog={spomeniki.find((x) => x.id === izbran)}
           nazaj={() => setPogled("podrobnosti")}
         />
+      )}
+
+      {pogled === "admin" && (
+        <div className="p-3 space-y-3">
+          <button onClick={() => setPogled("seznam")} className="text-sm text-gray-500">← Nazaj</button>
+          <h2 className="font-bold text-lg">Admin — Spomeniki</h2>
+          <div className="bg-white rounded-xl p-3 space-y-2">
+            <div className="font-semibold text-sm">Varnostna kopija naročil</div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => prenesiVarnostnoKopijoSpomeniki(spomeniki)}
+                className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                ⬇ Prenesi kopijo zdaj
+              </button>
+              <label className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">
+                📄 Obnovi iz datoteke
+                <input
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={(e) => obnoviIzDatotekeSpomeniki(e, (podatki) => posodobiSpomenike(() => podatki))}
+                />
+              </label>
+            </div>
+            <p className="text-xs text-gray-500">Priporočamo ročni prenos vsake toliko časa, za vsak slučaj.</p>
+          </div>
+        </div>
       )}
 
       {pogled === "seznam" && (
