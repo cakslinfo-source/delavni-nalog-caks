@@ -1249,7 +1249,15 @@ function TiskPonudbePulti({ nalog, cenik, nazaj }) {
       <div className="ponudba-pulti-list bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
         <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
           <div className="font-bold text-lg">ČAKŠ <span className="text-red-600">· Pulti</span></div>
-          <div className="text-sm uppercase font-semibold text-gray-600">Ponudba</div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm uppercase font-semibold text-gray-600">Ponudba</div>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(`https://delavni-nalog-caks.vercel.app/status/${nalog.id}`)}`}
+              alt="QR koda za status"
+              width={70}
+              height={70}
+            />
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm border-b border-gray-200 pb-2 mb-3">
