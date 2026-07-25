@@ -882,7 +882,15 @@ function TiskDelovniList({ nalog, nazaj }) {
       <div className="spomenik-list bg-white rounded-xl p-4 sm:p-6 border border-gray-200 text-sm">
         <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
           <div className="font-bold text-lg">ČAKŠ <span className="text-red-600">· Spomenik</span></div>
-          <div className="text-sm uppercase font-semibold text-gray-600">Delovni list</div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm uppercase font-semibold text-gray-600">Delovni list</div>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(`https://delavni-nalog-caks.vercel.app/status/${nalog.id}`)}`}
+              alt="QR koda za status"
+              width={70}
+              height={70}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-gray-200 pb-2 mb-2">
