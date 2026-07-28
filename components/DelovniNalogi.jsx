@@ -776,6 +776,17 @@ export default function DelovniNalogi() {
             postavke: Array.isArray(n.postavke) && n.postavke.length ? n.postavke : [novaPostavka()],
           }));
           setNalogi(popravljeni);
+
+          // Če je v povezavi (npr. iz QR kode na delovnem listu) naveden ?nalog=ID,
+          // samodejno odpremo pregled tega naloga z vsemi podatki.
+          try {
+            const parametri = new URLSearchParams(window.location.search);
+            const idIzPovezave = parametri.get("nalog");
+            if (idIzPovezave && popravljeni.some((n) => String(n.id) === String(idIzPovezave))) {
+              setAktivniId(idIzPovezave);
+              setPogled("podrobnosti");
+            }
+          } catch (e2) {}
         }
       } catch (e) {
         setNalogi([]);
@@ -3098,8 +3109,8 @@ function TiskNaloga({ nalog, onZapri }) {
           />
           <p className="carved text-sm uppercase text-stone-700 shrink-0">Delovni nalog</p>
           <img
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(`https://delavni-nalog-caks.vercel.app/status/${nalog.id}`)}`}
-            alt="QR koda za status naročila"
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(`https://delavni-nalog-caks.vercel.app/?nalog=${nalog.id}`)}`}
+            alt="QR koda za odpiranje naloga"
             width={70}
             height={70}
             className="shrink-0"
