@@ -1065,6 +1065,21 @@ export default function DelovniNalogi() {
     value: nalogi.filter((n) => n.status === s).length,
   })).filter((d) => d.value > 0);
 
+  // Pregled po izvajalcu (kdo je prevzel/opravil naročilo) in vrsti police (Zunanje/Notranje).
+  const poIzvajalcu = (() => {
+    const zIzvajalcem = nalogi.filter((n) => n.izvajalec);
+    const skupaj = zIzvajalcem.length;
+    const skupine = {};
+    zIzvajalcem.forEach((n) => {
+      if (!skupine[n.izvajalec]) skupine[n.izvajalec] = { skupaj: 0, Zunanje: 0, Notranje: 0, Ostalo: 0 };
+      skupine[n.izvajalec].skupaj++;
+      if (n.tip === "Zunanje") skupine[n.izvajalec].Zunanje++;
+      else if (n.tip === "Notranje") skupine[n.izvajalec].Notranje++;
+      else skupine[n.izvajalec].Ostalo++;
+    });
+    return { skupaj, seznam: Object.entries(skupine).sort((a, b) => b[1].skupaj - a[1].skupaj) };
+  })();
+
   const skupnaVrednostVseh = nalogi.reduce((v, n) => {
     const c = parseFloat(String(n.cena).replace(",", "."));
     return v + (isNaN(c) ? 0 : c);
@@ -1408,6 +1423,33 @@ export default function DelovniNalogi() {
                     );
                   })()}
                 </div>
+
+                {poIzvajalcu.seznam.length > 0 && (
+                  <div className="border-t border-stone-700 pt-3 mt-3">
+                    <p className="text-xs font-medium text-stone-400 uppercase mb-2">Prevzeto po izvajalcu in vrsti</p>
+                    <div className="space-y-2">
+                      {poIzvajalcu.seznam.map(([ime, s]) => {
+                        const delez = poIzvajalcu.skupaj > 0 ? Math.round((s.skupaj / poIzvajalcu.skupaj) * 100) : 0;
+                        return (
+                          <div key={ime} className="bg-stone-800/60 rounded-lg px-3 py-2">
+                            <div className="flex items-center justify-between text-sm mb-1">
+                              <span className="text-stone-200 font-medium">{ime}</span>
+                              <span className="text-stone-400">{s.skupaj} naročil · {delez}%</span>
+                            </div>
+                            <div className="w-full bg-stone-700 rounded-full h-1.5 mb-1.5">
+                              <div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${delez}%` }} />
+                            </div>
+                            <div className="flex gap-3 text-[11px] text-stone-500">
+                              {s.Zunanje > 0 && <span>Zunanje: {s.Zunanje}</span>}
+                              {s.Notranje > 0 && <span>Notranje: {s.Notranje}</span>}
+                              {s.Ostalo > 0 && <span>Ostalo: {s.Ostalo}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {(() => {
                   const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
