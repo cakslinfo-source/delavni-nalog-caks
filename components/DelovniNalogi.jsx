@@ -1065,20 +1065,19 @@ export default function DelovniNalogi() {
     value: nalogi.filter((n) => n.status === s).length,
   })).filter((d) => d.value > 0);
 
-  // Pregled po izvajalcu (kdo je prevzel/opravil naročilo) in vrsti police (Zunanje/Notranje).
-  const poIzvajalcu = (() => {
-    const zIzvajalcem = nalogi.filter((n) => n.izvajalec);
-    const skupaj = zIzvajalcem.length;
+  function stevecPoPolju(polje) {
     const skupine = {};
-    zIzvajalcem.forEach((n) => {
-      if (!skupine[n.izvajalec]) skupine[n.izvajalec] = { skupaj: 0, Zunanje: 0, Notranje: 0, Ostalo: 0 };
-      skupine[n.izvajalec].skupaj++;
-      if (n.tip === "Zunanje") skupine[n.izvajalec].Zunanje++;
-      else if (n.tip === "Notranje") skupine[n.izvajalec].Notranje++;
-      else skupine[n.izvajalec].Ostalo++;
+    nalogi.forEach((n) => {
+      const vrednost = n[polje];
+      if (!vrednost) return;
+      skupine[vrednost] = (skupine[vrednost] || 0) + 1;
     });
-    return { skupaj, seznam: Object.entries(skupine).sort((a, b) => b[1].skupaj - a[1].skupaj) };
-  })();
+    return Object.entries(skupine)
+      .map(([ime, stevilo]) => ({ ime, stevilo }))
+      .sort((a, b) => b.stevilo - a.stevilo);
+  }
+  const podatkiOddal = stevecPoPolju("oddal");
+  const podatkiPrevzel = stevecPoPolju("prevzel");
 
   const skupnaVrednostVseh = nalogi.reduce((v, n) => {
     const c = parseFloat(String(n.cena).replace(",", "."));
@@ -1424,29 +1423,44 @@ export default function DelovniNalogi() {
                   })()}
                 </div>
 
-                {poIzvajalcu.seznam.length > 0 && (
+                {podatkiOddal.length > 0 && (
                   <div className="border-t border-stone-700 pt-3 mt-3">
-                    <p className="text-xs font-medium text-stone-400 uppercase mb-2">Prevzeto po izvajalcu in vrsti</p>
-                    <div className="space-y-2">
-                      {poIzvajalcu.seznam.map(([ime, s]) => {
-                        const delez = poIzvajalcu.skupaj > 0 ? Math.round((s.skupaj / poIzvajalcu.skupaj) * 100) : 0;
-                        return (
-                          <div key={ime} className="bg-stone-800/60 rounded-lg px-3 py-2">
-                            <div className="flex items-center justify-between text-sm mb-1">
-                              <span className="text-stone-200 font-medium">{ime}</span>
-                              <span className="text-stone-400">{s.skupaj} naročil · {delez}%</span>
-                            </div>
-                            <div className="w-full bg-stone-700 rounded-full h-1.5 mb-1.5">
-                              <div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${delez}%` }} />
-                            </div>
-                            <div className="flex gap-3 text-[11px] text-stone-500">
-                              {s.Zunanje > 0 && <span>Zunanje: {s.Zunanje}</span>}
-                              {s.Notranje > 0 && <span>Notranje: {s.Notranje}</span>}
-                              {s.Ostalo > 0 && <span>Ostalo: {s.Ostalo}</span>}
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <p className="text-xs font-medium text-stone-400 uppercase mb-2">Kdo je oddal naročila</p>
+                    <div style={{ width: "100%", height: Math.max(120, podatkiOddal.length * 34) }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={podatkiOddal} layout="vertical" margin={{ top: 4, right: 24, left: 4, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#44403c" horizontal={false} />
+                          <XAxis type="number" allowDecimals={false} tick={{ fill: "#a8a29e", fontSize: 10 }} />
+                          <YAxis type="category" dataKey="ime" width={70} tick={{ fill: "#d6d3d1", fontSize: 12 }} />
+                          <Tooltip
+                            contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
+                            labelStyle={{ color: "#fff" }}
+                            formatter={(value) => [`${value} naročil`, "Oddal"]}
+                          />
+                          <Bar dataKey="stevilo" radius={[0, 4, 4, 0]} fill="#dc2626" label={{ position: "right", fill: "#d6d3d1", fontSize: 11 }} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+                {podatkiPrevzel.length > 0 && (
+                  <div className="border-t border-stone-700 pt-3 mt-3">
+                    <p className="text-xs font-medium text-stone-400 uppercase mb-2">Kdo je prevzel naročila</p>
+                    <div style={{ width: "100%", height: Math.max(120, podatkiPrevzel.length * 34) }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={podatkiPrevzel} layout="vertical" margin={{ top: 4, right: 24, left: 4, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#44403c" horizontal={false} />
+                          <XAxis type="number" allowDecimals={false} tick={{ fill: "#a8a29e", fontSize: 10 }} />
+                          <YAxis type="category" dataKey="ime" width={70} tick={{ fill: "#d6d3d1", fontSize: 12 }} />
+                          <Tooltip
+                            contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
+                            labelStyle={{ color: "#fff" }}
+                            formatter={(value) => [`${value} naročil`, "Prevzel"]}
+                          />
+                          <Bar dataKey="stevilo" radius={[0, 4, 4, 0]} fill="#0ea5e9" label={{ position: "right", fill: "#d6d3d1", fontSize: 11 }} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
                 )}
