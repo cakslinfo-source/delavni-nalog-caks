@@ -599,6 +599,56 @@ async function posljiDokumentPoMailu(selector, naslov, imeDatoteke, na, zadeva, 
   }
 }
 
+function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
+  const vrstice = casovnica
+    .map(
+      (z) => `
+        <tr style="border-bottom:1px solid #f0efee;">
+          <td style="padding:6px 8px;">${z.vrsta === "Police" ? "📋 Police" : z.vrsta === "Pulti" ? "🪨 Pulti" : "🪦 Spomenik"}</td>
+          <td style="padding:6px 8px;font-weight:600;">${z.stevilka || ""}</td>
+          <td style="padding:6px 8px;">${(z.opis || "").replace(/</g, "&lt;")}</td>
+          <td style="padding:6px 8px;">${z.datum ? new Date(z.datum).toLocaleDateString("sl-SI") : ""}</td>
+          ${adminOdklenjen ? `<td style="padding:6px 8px;">${z.cena ? parseFloat(String(z.cena).replace(",", ".")).toFixed(2) + " €" : ""}</td>` : ""}
+        </tr>`
+    )
+    .join("");
+
+  const html =
+    `<!DOCTYPE html><html lang="sl"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+    `<title>Časovnica — ${stranka}</title>` +
+    `<style>
+      body{font-family:system-ui,sans-serif;background:#f5f5f4;margin:0;padding:24px;}
+      .navodilo{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:14px;max-width:800px;margin-left:auto;margin-right:auto;}
+      .ovoj{max-width:800px;margin:0 auto;background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:24px;}
+      table{width:100%;border-collapse:collapse;font-size:13px;}
+      thead tr{text-align:left;border-bottom:1px solid #d6d3d1;color:#78716c;}
+      @media print { .navodilo{ display:none !important; } body{ background:#fff !important; padding:0 !important; } .ovoj{ max-width:100% !important; border:none !important; } }
+    </style></head><body>` +
+    `<div class="navodilo">To je prenesena datoteka za tiskanje. Uporabi Ctrl+P (Cmd+P na Mac) ali meni brskalnika &rarr; Natisni / Shrani kot PDF.</div>` +
+    `<div class="ovoj">` +
+    `<div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #1c1917;padding-bottom:8px;margin-bottom:12px;">` +
+    `<strong style="font-size:18px;">ČAKŠ · Časovnica stranke</strong>` +
+    `<span style="font-size:13px;color:#78716c;">${new Date().toLocaleDateString("sl-SI")}</span>` +
+    `</div>` +
+    `<p style="font-size:16px;font-weight:600;margin-bottom:12px;">${stranka}</p>` +
+    `<table><thead><tr>` +
+    `<th style="padding:6px 8px;">Modul</th><th style="padding:6px 8px;">Številka</th><th style="padding:6px 8px;">Opis</th><th style="padding:6px 8px;">Datum</th>` +
+    (adminOdklenjen ? `<th style="padding:6px 8px;">Cena</th>` : "") +
+    `</tr></thead><tbody>${vrstice}</tbody></table>` +
+    `</div></body></html>`;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `casovnica-${stranka.replace(/[\\/:*?"<>|]/g, "").trim()}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 const ADMIN_PIN = "1991";
 
 export default function DelovniNalogi() {
@@ -1813,13 +1863,7 @@ export default function DelovniNalogi() {
                   <div className="flex items-center justify-between mb-2">
                     <p className="carved text-sm uppercase text-stone-500">Celotna časovnica — vsi moduli ({casovnica.length})</p>
                     <button
-                      onClick={() =>
-                        prenesiHTMLDokument(
-                          ".stranka-tisk-list",
-                          `Časovnica — ${izbranaStranka}`,
-                          `casovnica-${izbranaStranka.replace(/[\\/:*?"<>|]/g, "").trim()}.html`
-                        )
-                      }
+                      onClick={() => natisniCasovnicoStranke(izbranaStranka, casovnica, adminOdklenjen)}
                       className="text-xs px-3 py-1.5 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 transition-colors flex items-center gap-1"
                     >
                       <Printer size={13} /> Natisni časovnico
@@ -1841,40 +1885,6 @@ export default function DelovniNalogi() {
                         </div>
                       </div>
                     ))}
-                  </div>
-
-                  <div className="stranka-tisk-list hidden">
-                    <div style={{ fontFamily: "system-ui, sans-serif", padding: "16px" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "2px solid #1c1917", paddingBottom: "8px", marginBottom: "12px" }}>
-                        <strong style={{ fontSize: "18px" }}>ČAKŠ · Časovnica stranke</strong>
-                        <span style={{ fontSize: "13px", color: "#78716c" }}>{new Date().toLocaleDateString("sl-SI")}</span>
-                      </div>
-                      <p style={{ fontSize: "16px", fontWeight: 600, marginBottom: "12px" }}>{izbranaStranka}</p>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                        <thead>
-                          <tr style={{ textAlign: "left", borderBottom: "1px solid #d6d3d1", color: "#78716c" }}>
-                            <th style={{ padding: "4px 6px" }}>Modul</th>
-                            <th style={{ padding: "4px 6px" }}>Številka</th>
-                            <th style={{ padding: "4px 6px" }}>Opis</th>
-                            <th style={{ padding: "4px 6px" }}>Datum</th>
-                            {adminOdklenjen && <th style={{ padding: "4px 6px" }}>Cena</th>}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {casovnica.map((z) => (
-                            <tr key={`tisk-${z.vrsta}-${z.id}`} style={{ borderBottom: "1px solid #f0efee" }}>
-                              <td style={{ padding: "5px 6px" }}>{z.vrsta}</td>
-                              <td style={{ padding: "5px 6px", fontWeight: 600 }}>{z.stevilka}</td>
-                              <td style={{ padding: "5px 6px" }}>{z.opis}</td>
-                              <td style={{ padding: "5px 6px" }}>{z.datum ? new Date(z.datum).toLocaleDateString("sl-SI") : ""}</td>
-                              {adminOdklenjen && (
-                                <td style={{ padding: "5px 6px" }}>{z.cena ? `${parseFloat(String(z.cena).replace(",", ".")).toFixed(2)} €` : ""}</td>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
                   </div>
                 </div>
               )}
