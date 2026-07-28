@@ -620,6 +620,7 @@ export default function DelovniNalogi() {
   const [pinNapaka, setPinNapaka] = useState("");
   const [izbranaStranka, setIzbranaStranka] = useState(null);
   const [izbranMesec, setIzbranMesec] = useState(null);
+  const [iskanjeStranke, setIskanjeStranke] = useState("");
 
   const [rocniMaterial, setRocniMaterial] = useState({});
 
@@ -1698,11 +1699,22 @@ export default function DelovniNalogi() {
                 ← Nazaj na seznam
               </button>
             </div>
+            <div className="relative mb-4">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+              <input
+                value={iskanjeStranke}
+                onChange={(e) => setIskanjeStranke(e.target.value)}
+                placeholder="Vpiši ime stranke, da jo najdeš…"
+                className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-stone-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500"
+              />
+            </div>
             {edinstveneStranke.length === 0 ? (
               <p className="text-sm text-stone-500">Ni še nobene stranke.</p>
             ) : (
               <div className="space-y-2">
-                {edinstveneStranke.map((stranka) => {
+                {edinstveneStranke
+                  .filter((stranka) => stranka.toLowerCase().includes(iskanjeStranke.toLowerCase()))
+                  .map((stranka) => {
                   const naroceilaStranke = nalogi.filter((n) => n.stranka === stranka);
                   const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da");
                   const odprtaVsota = odprta.reduce((v, n) => {
@@ -1798,7 +1810,21 @@ export default function DelovniNalogi() {
 
               {casovnica.length > 0 && (
                 <div className="mt-6 pt-4 border-t border-stone-200">
-                  <p className="carved text-sm uppercase text-stone-500 mb-2">Celotna časovnica — vsi moduli ({casovnica.length})</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="carved text-sm uppercase text-stone-500">Celotna časovnica — vsi moduli ({casovnica.length})</p>
+                    <button
+                      onClick={() =>
+                        prenesiHTMLDokument(
+                          ".stranka-tisk-list",
+                          `Časovnica — ${izbranaStranka}`,
+                          `casovnica-${izbranaStranka.replace(/[\\/:*?"<>|]/g, "").trim()}.html`
+                        )
+                      }
+                      className="text-xs px-3 py-1.5 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 transition-colors flex items-center gap-1"
+                    >
+                      <Printer size={13} /> Natisni časovnico
+                    </button>
+                  </div>
                   <div className="space-y-1.5">
                     {casovnica.map((z) => (
                       <div key={`${z.vrsta}-${z.id}`} className="flex items-center justify-between text-sm bg-white border border-stone-100 rounded-lg px-3 py-2">
@@ -1815,6 +1841,40 @@ export default function DelovniNalogi() {
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="stranka-tisk-list hidden">
+                    <div style={{ fontFamily: "system-ui, sans-serif", padding: "16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "2px solid #1c1917", paddingBottom: "8px", marginBottom: "12px" }}>
+                        <strong style={{ fontSize: "18px" }}>ČAKŠ · Časovnica stranke</strong>
+                        <span style={{ fontSize: "13px", color: "#78716c" }}>{new Date().toLocaleDateString("sl-SI")}</span>
+                      </div>
+                      <p style={{ fontSize: "16px", fontWeight: 600, marginBottom: "12px" }}>{izbranaStranka}</p>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                        <thead>
+                          <tr style={{ textAlign: "left", borderBottom: "1px solid #d6d3d1", color: "#78716c" }}>
+                            <th style={{ padding: "4px 6px" }}>Modul</th>
+                            <th style={{ padding: "4px 6px" }}>Številka</th>
+                            <th style={{ padding: "4px 6px" }}>Opis</th>
+                            <th style={{ padding: "4px 6px" }}>Datum</th>
+                            {adminOdklenjen && <th style={{ padding: "4px 6px" }}>Cena</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {casovnica.map((z) => (
+                            <tr key={`tisk-${z.vrsta}-${z.id}`} style={{ borderBottom: "1px solid #f0efee" }}>
+                              <td style={{ padding: "5px 6px" }}>{z.vrsta}</td>
+                              <td style={{ padding: "5px 6px", fontWeight: 600 }}>{z.stevilka}</td>
+                              <td style={{ padding: "5px 6px" }}>{z.opis}</td>
+                              <td style={{ padding: "5px 6px" }}>{z.datum ? new Date(z.datum).toLocaleDateString("sl-SI") : ""}</td>
+                              {adminOdklenjen && (
+                                <td style={{ padding: "5px 6px" }}>{z.cena ? `${parseFloat(String(z.cena).replace(",", ".")).toFixed(2)} €` : ""}</td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
