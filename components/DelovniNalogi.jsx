@@ -59,6 +59,12 @@ function prazenObrazec() {
     popustSkupaj: "",
     vrsta: "narocilo",
     veljavnostPonudbe: "",
+    tipStranke: "fizicna",
+    davcnaStevilka: "",
+    maticnaStevilka: "",
+    zastopnik: "",
+    objekt: "",
+    naslovPodjetja: "",
     slikaNarocila: null,
     dxfDatoteka: null,
     postavke: [novaPostavka()],
@@ -919,6 +925,12 @@ export default function DelovniNalogi() {
       popustSkupaj: nalog.popustSkupaj || "",
       rokUra: nalog.rokUra || "",
       veljavnostPonudbe: nalog.veljavnostPonudbe || "",
+      tipStranke: nalog.tipStranke || "fizicna",
+      davcnaStevilka: nalog.davcnaStevilka || "",
+      maticnaStevilka: nalog.maticnaStevilka || "",
+      zastopnik: nalog.zastopnik || "",
+      objekt: nalog.objekt || "",
+      naslovPodjetja: nalog.naslovPodjetja || "",
       slikaNarocila: nalog.slikaNarocila || null,
       dxfDatoteka: nalog.dxfDatoteka || null,
       postavke: nalog.postavke.length ? nalog.postavke : [novaPostavka()],
@@ -2116,7 +2128,36 @@ export default function DelovniNalogi() {
 
             <div className="grid sm:grid-cols-2 gap-4 mb-6">
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-stone-500 mb-1">Stranka *</label>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Vrsta stranke</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setObrazec({ ...obrazec, tipStranke: "fizicna" })}
+                    className={`flex-1 text-sm py-2 rounded-lg border transition-colors ${
+                      obrazec.tipStranke === "fizicna"
+                        ? "bg-stone-700 text-white border-stone-700 font-medium"
+                        : "bg-white text-stone-600 border-stone-300 hover:border-stone-500"
+                    }`}
+                  >
+                    Stranka
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setObrazec({ ...obrazec, tipStranke: "pravna" })}
+                    className={`flex-1 text-sm py-2 rounded-lg border transition-colors ${
+                      obrazec.tipStranke === "pravna"
+                        ? "bg-stone-700 text-white border-stone-700 font-medium"
+                        : "bg-white text-stone-600 border-stone-300 hover:border-stone-500"
+                    }`}
+                  >
+                    Podjetje
+                  </button>
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-stone-500 mb-1">
+                  {obrazec.tipStranke === "pravna" ? "Naziv podjetja *" : "Stranka *"}
+                </label>
                 <input
                   value={obrazec.stranka}
                   onChange={(e) => {
@@ -2130,7 +2171,7 @@ export default function DelovniNalogi() {
                     });
                   }}
                   className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  placeholder="Ime in priimek / podjetje"
+                  placeholder={obrazec.tipStranke === "pravna" ? "npr. Gradbeništvo d.o.o." : "Ime in priimek"}
                   list="seznam-strank"
                   autoComplete="off"
                 />
@@ -2140,6 +2181,57 @@ export default function DelovniNalogi() {
                   ))}
                 </datalist>
               </div>
+
+              {obrazec.tipStranke === "pravna" && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Davčna številka</label>
+                    <input
+                      value={obrazec.davcnaStevilka}
+                      onChange={(e) => setObrazec({ ...obrazec, davcnaStevilka: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                      placeholder="SI12345678"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Matična številka</label>
+                    <input
+                      value={obrazec.maticnaStevilka}
+                      onChange={(e) => setObrazec({ ...obrazec, maticnaStevilka: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                      placeholder="1234567000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Zastopnik podjetja</label>
+                    <input
+                      value={obrazec.zastopnik}
+                      onChange={(e) => setObrazec({ ...obrazec, zastopnik: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                      placeholder="Ime in priimek"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Objekt</label>
+                    <input
+                      value={obrazec.objekt}
+                      onChange={(e) => setObrazec({ ...obrazec, objekt: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                      placeholder="npr. Stanovanjski objekt, Maribor"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Naslov podjetja</label>
+                    <input
+                      value={obrazec.naslovPodjetja}
+                      onChange={(e) => setObrazec({ ...obrazec, naslovPodjetja: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                      placeholder="Ulica, poštna številka, kraj"
+                    />
+                  </div>
+                </>
+              )}
+
               <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1">Telefon</label>
                 <input
@@ -2533,6 +2625,16 @@ export default function DelovniNalogi() {
             </div>
 
             <div className="space-y-4 text-sm">
+              {aktivniNalog.tipStranke === "pravna" && (
+                <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 space-y-1">
+                  <p className="text-xs font-medium text-stone-500 uppercase mb-1">Podjetje</p>
+                  <Vrstica label="Davčna številka" vrednost={aktivniNalog.davcnaStevilka} />
+                  <Vrstica label="Matična številka" vrednost={aktivniNalog.maticnaStevilka} />
+                  <Vrstica label="Zastopnik" vrednost={aktivniNalog.zastopnik} />
+                  <Vrstica label="Objekt" vrednost={aktivniNalog.objekt} />
+                  <Vrstica label="Naslov podjetja" vrednost={aktivniNalog.naslovPodjetja} />
+                </div>
+              )}
               <Vrstica label="Opis dela" vrednost={aktivniNalog.opis} />
               <Vrstica
                 label="Cena"
