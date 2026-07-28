@@ -671,6 +671,7 @@ export default function DelovniNalogi() {
   const [izbranaStranka, setIzbranaStranka] = useState(null);
   const [izbranMesec, setIzbranMesec] = useState(null);
   const [iskanjeStranke, setIskanjeStranke] = useState("");
+  const [kdoPrevzame, setKdoPrevzame] = useState("");
 
   const [rocniMaterial, setRocniMaterial] = useState({});
 
@@ -1034,8 +1035,14 @@ export default function DelovniNalogi() {
     setPogled("seznam");
   }
 
-  async function spremeniStatus(id, status) {
-    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, status } : n)));
+  async function spremeniStatus(id, status, kdo) {
+    await posodobiNaloge((os) =>
+      os.map((n) =>
+        n.id === id
+          ? { ...n, status, zgodovina: [...(n.zgodovina || []), { status, datum: new Date().toISOString(), kdo: kdo || "" }] }
+          : n
+      )
+    );
   }
 
   async function spremeniPlacano(id, placano) {
@@ -1077,7 +1084,21 @@ export default function DelovniNalogi() {
       .sort((a, b) => b.stevilo - a.stevilo);
   }
   const podatkiOddal = stevecPoPolju("oddal");
-  const podatkiPrevzel = stevecPoPolju("prevzel");
+
+  // "Prevzel" tukaj pomeni: kdo je prevzel nalog ob premiku v naslednjo fazo
+  // (V izdelavi, Pripravljeno, Prevzeto) — beleženo v zgodovini vsakega naloga.
+  const podatkiPrevzel = (() => {
+    const skupine = {};
+    nalogi.forEach((n) => {
+      (n.zgodovina || []).forEach((z) => {
+        if (!z.kdo || z.status === "Sprejeto") return;
+        skupine[z.kdo] = (skupine[z.kdo] || 0) + 1;
+      });
+    });
+    return Object.entries(skupine)
+      .map(([ime, stevilo]) => ({ ime, stevilo }))
+      .sort((a, b) => b.stevilo - a.stevilo);
+  })();
 
   const skupnaVrednostVseh = nalogi.reduce((v, n) => {
     const c = parseFloat(String(n.cena).replace(",", "."));
@@ -2708,12 +2729,26 @@ export default function DelovniNalogi() {
             )}
 
             <div className="mt-5 pt-4 border-t border-stone-100">
+              <label className="block text-xs font-medium text-stone-500 mb-1.5">Kdo prevzame nalog ob spremembi statusa? (neobvezno)</label>
+              <select
+                value={kdoPrevzame}
+                onChange={(e) => setKdoPrevzame(e.target.value)}
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white mb-2"
+              >
+                <option value="">— izberi —</option>
+                {DELAVCI.map((ime) => (
+                  <option key={ime}>{ime}</option>
+                ))}
+              </select>
               <label className="block text-xs font-medium text-stone-500 mb-1.5">Spremeni status</label>
               <div className="flex flex-wrap gap-2">
                 {STATUSI.map((s) => (
                   <button
                     key={s}
-                    onClick={() => spremeniStatus(aktivniNalog.id, s)}
+                    onClick={() => {
+                      spremeniStatus(aktivniNalog.id, s, kdoPrevzame);
+                      setKdoPrevzame("");
+                    }}
                     className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                       aktivniNalog.status === s
                         ? STATUS_BARVE[s]
