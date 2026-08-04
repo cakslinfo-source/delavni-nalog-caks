@@ -258,7 +258,7 @@ function prenesiHTMLDokumentPulti(selector, naslov, imeDatoteke) {
 }
 
 function prazenKos() {
-  return { naziv: "", dolzina: "", sirina: "" };
+  return { naziv: "", dolzina: "", sirina: "", debelina: "" };
 }
 
 function prazenNalog() {
@@ -294,6 +294,7 @@ export default function Pulti() {
   const [nalaganje, setNalaganje] = useState(true);
   const [napaka, setNapaka] = useState("");
   const [pogled, setPogled] = useState("seznam");
+  const [strankeBaza, setStrankeBaza] = useState([]);
   const [filter, setFilter] = useState("vsi");
   const [obrazec, setObrazec] = useState(null);
   const [izbran, setIzbran] = useState(null);
@@ -311,6 +312,21 @@ export default function Pulti() {
       })
       .catch(() => setNapaka("Napaka pri nalaganju podatkov."))
       .finally(() => setNalaganje(false));
+
+    // Skupna baza strank iz Delovnih nalogov (Police) — za samodokončanje pri vnosu.
+    fetch("/api/nalogi", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((podatki) => {
+        if (!Array.isArray(podatki)) return;
+        const seznam = {};
+        podatki.forEach((n) => {
+          if (n.stranka && !seznam[n.stranka]) {
+            seznam[n.stranka] = { ime: n.stranka, telefon: n.telefon || "", email: n.email || "" };
+          }
+        });
+        setStrankeBaza(Object.values(seznam));
+      })
+      .catch(() => {});
   }, []);
 
   async function shraniNaloge(novi) {
@@ -439,6 +455,7 @@ export default function Pulti() {
         <Obrazec
           zacetni={obrazec}
           cenik={cenik}
+          strankeBaza={strankeBaza}
           preklici={() => setPogled(obrazec && obrazec._urejanje ? "podrobnosti" : "seznam")}
           shrani={(nal) => {
             const izr = izracunNaloga(nal, cenik);
@@ -496,11 +513,23 @@ export default function Pulti() {
             setIzbran(nal.id);
             setPogled("tiskPonudbe");
           }}
+          natisniDelovniList={(nal) => {
+            setIzbran(nal.id);
+            setPogled("tiskDelovniList");
+          }}
         />
       )}
 
       {pogled === "tiskPonudbe" && (
         <TiskPonudbePulti
+          nalog={nalogi.find((x) => x.id === izbran)}
+          cenik={cenik}
+          nazaj={() => setPogled("podrobnosti")}
+        />
+      )}
+
+      {pogled === "tiskDelovniList" && (
+        <TiskDelovnegaListaPulti
           nalog={nalogi.find((x) => x.id === izbran)}
           cenik={cenik}
           nazaj={() => setPogled("podrobnosti")}
@@ -608,7 +637,7 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
 
 // ===================== OBRAZEC =====================
 
-function Obrazec({ zacetni, cenik, shrani, preklici }) {
+function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
   const [nal, setNal] = useState(zacetni);
   const [odpreteSkupine, setOdpreteSkupine] = useState({});
   const izr = izracunNaloga(nal, cenik);
@@ -649,10 +678,26 @@ function Obrazec({ zacetni, cenik, shrani, preklici }) {
           <input
             className={inp}
             value={nal.stranka.ime}
-            onChange={(e) =>
-              setNal({ ...nal, stranka: { ...nal.stranka, ime: e.target.value } })
-            }
+            onChange={(e) => {
+              const ime = e.target.value;
+              const najdena = (strankeBaza || []).find((s) => s.ime.toLowerCase() === ime.toLowerCase());
+              setNal({
+                ...nal,
+                stranka: {
+                  ...nal.stranka,
+                  ime,
+                  telefon: najdena && !nal.stranka.telefon ? najdena.telefon : nal.stranka.telefon,
+                },
+              });
+            }}
+            list="seznam-strank-pulti"
+            autoComplete="off"
           />
+          <datalist id="seznam-strank-pulti">
+            {(strankeBaza || []).map((s) => (
+              <option key={s.ime} value={s.ime} />
+            ))}
+          </datalist>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -754,9 +799,9 @@ function Obrazec({ zacetni, cenik, shrani, preklici }) {
       <div className="bg-white rounded-xl p-3 space-y-2">
         <div className="font-semibold text-sm">Kosi (mere za razrez)</div>
         {nal.kosi.map((kos, i) => (
-          <div key={i} className="flex gap-2 items-center">
+          <div key={i} className="flex gap-2 items-center flex-wrap">
             <input
-              className={`${inp} flex-1`}
+              className={`${inp} flex-1 min-w-[140px]`}
               placeholder={`Kos ${i + 1} (npr. Pult ob steni)`}
               value={kos.naziv}
               onChange={(e) => nastaviKos(i, "naziv", e.target.value)}
@@ -774,6 +819,13 @@ function Obrazec({ zacetni, cenik, shrani, preklici }) {
               inputMode="decimal"
               value={kos.sirina}
               onChange={(e) => nastaviKos(i, "sirina", e.target.value)}
+            />
+            <input
+              className={`${inp} w-20`}
+              placeholder="Deb."
+              inputMode="decimal"
+              value={kos.debelina}
+              onChange={(e) => nastaviKos(i, "debelina", e.target.value)}
             />
             {nal.kosi.length > 1 && (
               <button
@@ -982,7 +1034,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici }) {
 
 // ===================== PODROBNOSTI =====================
 
-function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni }) {
+function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, natisniDelovniList }) {
   const [kdoOpravil, setKdoOpravil] = useState("");
   if (!nalog)
     return (
@@ -1090,7 +1142,7 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
           {nalog.kosi.map((kos, i) => (
             <div key={i} className="flex justify-between text-gray-600">
               <span>{kos.naziv || `Kos ${i + 1}`}</span>
-              <span>{kos.dolzina || "–"} × {kos.sirina || "–"} cm</span>
+              <span>{kos.dolzina || "–"} × {kos.sirina || "–"}{kos.debelina ? ` × ${kos.debelina}` : ""} cm</span>
             </div>
           ))}
         </div>
@@ -1201,6 +1253,9 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
         <button onClick={() => natisni(nalog)} className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-semibold">
           Natisni ponudbo
         </button>
+        <button onClick={() => natisniDelovniList(nalog)} className="flex-1 bg-stone-700 text-white rounded-xl py-3 font-semibold">
+          Natisni delovni list
+        </button>
       </div>
 
       <div className="flex gap-2">
@@ -1216,6 +1271,104 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
 }
 
 // ===================== CENIK (ADMIN) =====================
+
+function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
+  if (!nalog) return <div className="p-4">Nalog ne obstaja. <button onClick={nazaj} className="text-red-600 underline">Nazaj</button></div>;
+
+  const material = najdiMaterial(cenik, nalog.materialId);
+  const kosiZaPrikaz = (nalog.kosi || []).filter((k) => k.naziv || k.dolzina || k.sirina);
+  const storitveZUporabo = izracunStoritev(nalog, cenik).filter((s) => s.kolicina > 0);
+  const danes = new Date().toLocaleDateString("sl-SI");
+  const strankaVarno = (nalog.stranka?.ime || "").replace(/[\\/:*?"<>|]/g, "").trim();
+
+  return (
+    <div className="p-3 space-y-3">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .delovni-list-pulti, .delovni-list-pulti * { visibility: visible; }
+          .delovni-list-pulti { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
+          .delovni-list-pulti-brez { display: none !important; }
+        }
+      `}</style>
+
+      <div className="delovni-list-pulti-brez flex flex-wrap gap-2">
+        <button
+          onClick={() => prenesiHTMLDokumentPulti(".delovni-list-pulti", `Delovni list ${nalog.stevilka || ""}`, `delovni-list-${nalog.stevilka || "pult"}${strankaVarno ? " " + strankaVarno : ""}.html`)}
+          className="bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
+        >
+          Prenesi / natisni datoteko
+        </button>
+        <button onClick={nazaj} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100">
+          Nazaj
+        </button>
+      </div>
+
+      <div className="delovni-list-pulti bg-white rounded-xl p-4 sm:p-6 border border-gray-200 text-sm">
+        <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
+          <div className="font-bold text-lg">ČAKŠ <span className="text-red-600">· Pulti</span></div>
+          <div className="text-sm uppercase font-semibold text-gray-600">Delovni list</div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-gray-200 pb-2 mb-2">
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Št.:</span><span className="font-semibold">{nalog.stevilka}</span></div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Stranka:</span><span className="font-semibold">{nalog.stranka?.ime}</span></div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Datum:</span>{danes}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Montaža:</span>{nalog.datumMontaze ? new Date(nalog.datumMontaze).toLocaleDateString("sl-SI") : "—"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Material:</span>{material ? material.naziv : "—"}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Debelina:</span>{material?.tip === "m2" ? `${nalog.debelina} cm` : "—"}</div>
+        </div>
+
+        {kosiZaPrikaz.length > 0 && (
+          <div className="mb-3">
+            <div className="text-xs text-gray-400 uppercase mb-1">Kosi</div>
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="text-left text-xs uppercase text-gray-400 border-b border-gray-200">
+                  <th className="py-1">Naziv</th>
+                  <th className="py-1">Dolžina</th>
+                  <th className="py-1">Širina</th>
+                  <th className="py-1">Debelina</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kosiZaPrikaz.map((k, i) => (
+                  <tr key={i} className="border-b border-gray-100">
+                    <td className="py-1">{k.naziv || `Kos ${i + 1}`}</td>
+                    <td className="py-1">{k.dolzina || "–"}</td>
+                    <td className="py-1">{k.sirina || "–"}</td>
+                    <td className="py-1">{k.debelina || nalog.debelina || "–"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {storitveZUporabo.length > 0 && (
+          <div className="mb-3">
+            <div className="text-xs text-gray-400 uppercase mb-1">Storitve</div>
+            <ul className="list-disc pl-5 space-y-0.5">
+              {storitveZUporabo.map((s) => (
+                <li key={s.id}>{s.naziv} × {s.kolicina} {s.enota}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {nalog.dxf && <p className="mb-1"><span className="text-xs text-gray-400 uppercase mr-1">DXF:</span>{nalog.dxf}</p>}
+
+        {nalog.opombe && (
+          <p className="mt-3 pt-2 border-t border-gray-200"><span className="text-xs text-gray-400 uppercase mr-1">Opombe:</span>{nalog.opombe}</p>
+        )}
+
+        <p className="text-xs text-gray-500 mt-4 pt-2 border-t border-gray-200">
+          Kamnoseštvo Čakš · 031 235 146
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function TiskPonudbePulti({ nalog, cenik, nazaj }) {
   if (!nalog) return <div className="p-4">Nalog ne obstaja. <button onClick={nazaj} className="text-red-600 underline">Nazaj</button></div>;
