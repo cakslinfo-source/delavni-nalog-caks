@@ -277,6 +277,9 @@ function prazenNalog() {
     popust: "",
     ponudbenaCena: null,
     dxf: "",
+    steklokeramika: "",
+    korito: "",
+    ostaliIzrezi: "",
     dxfDatoteka: null,
     skica: null,
     datumMontaze: "",
@@ -885,6 +888,39 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
         ))}
       </div>
 
+      {/* IZREZI - PODROBNOSTI */}
+      <div className="bg-white rounded-xl p-3 space-y-2">
+        <div className="font-semibold text-sm">Izrezi — podrobnosti (znamka, model, mere)</div>
+        <div>
+          <label className={lbl}>Steklokeramika</label>
+          <input
+            className={inp}
+            value={nal.steklokeramika}
+            onChange={(e) => setNal({ ...nal, steklokeramika: e.target.value })}
+            placeholder="npr. Bora Pura 796x519"
+          />
+        </div>
+        <div>
+          <label className={lbl}>Korito</label>
+          <input
+            className={inp}
+            value={nal.korito}
+            onChange={(e) => setNal({ ...nal, korito: e.target.value })}
+            placeholder="npr. Alveus 490x390"
+          />
+        </div>
+        <div>
+          <label className={lbl}>Ostali izrezi</label>
+          <textarea
+            className={inp}
+            rows={2}
+            value={nal.ostaliIzrezi}
+            onChange={(e) => setNal({ ...nal, ostaliIzrezi: e.target.value })}
+            placeholder="npr. vtičnica, luknja za armaturo ..."
+          />
+        </div>
+      </div>
+
       {/* OSTALO */}
       <div className="bg-white rounded-xl p-3 space-y-2">
         <div className="grid grid-cols-2 gap-2">
@@ -1076,6 +1112,13 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
         </div>
         {nalog.sprejel && (
           <div className="text-xs text-gray-500">Sprejel: {nalog.sprejel}</div>
+        )}
+        {(nalog.steklokeramika || nalog.korito || nalog.ostaliIzrezi) && (
+          <div className="text-sm bg-gray-50 rounded-lg p-2 space-y-0.5">
+            {nalog.steklokeramika && <div><span className="text-gray-400">Steklokeramika: </span>{nalog.steklokeramika}</div>}
+            {nalog.korito && <div><span className="text-gray-400">Korito: </span>{nalog.korito}</div>}
+            {nalog.ostaliIzrezi && <div><span className="text-gray-400">Ostali izrezi: </span>{nalog.ostaliIzrezi}</div>}
+          </div>
         )}
         {nalog.dxf && <div className="text-xs text-gray-500">DXF: {nalog.dxf}</div>}
         {nalog.dxfDatoteka && (
@@ -1353,6 +1396,15 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
                 <li key={s.id}>{s.naziv} × {s.kolicina} {s.enota}</li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {(nalog.steklokeramika || nalog.korito || nalog.ostaliIzrezi) && (
+          <div className="mb-3">
+            <div className="text-xs text-gray-400 uppercase mb-1">Izrezi — podrobnosti</div>
+            {nalog.steklokeramika && <p><span className="text-xs text-gray-400 uppercase mr-1">Steklokeramika:</span>{nalog.steklokeramika}</p>}
+            {nalog.korito && <p><span className="text-xs text-gray-400 uppercase mr-1">Korito:</span>{nalog.korito}</p>}
+            {nalog.ostaliIzrezi && <p><span className="text-xs text-gray-400 uppercase mr-1">Ostalo:</span>{nalog.ostaliIzrezi}</p>}
           </div>
         )}
 
