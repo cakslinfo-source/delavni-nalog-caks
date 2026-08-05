@@ -10,15 +10,21 @@ const ZAPOSLENI_PROIZVODNJA = ["Luka", "Miha", "Rok", "Mersad", "Patrik"];
 const ZAPOSLENI_SPREJEM = ["Luka", "Miha", "Jože", "Timea", "Žan", "Žiga"];
 
 const STATUSI = [
-  { id: "ponudba", naziv: "Ponudba", barva: "bg-gray-500" },
-  { id: "izmera", naziv: "Izmera", barva: "bg-blue-500" },
-  { id: "cad", naziv: "Priprava CAD", barva: "bg-indigo-500" },
-  { id: "razrez", naziv: "Razrez", barva: "bg-yellow-500" },
-  { id: "izrezi", naziv: "Obdelava izrezov", barva: "bg-orange-500" },
-  { id: "brusenje", naziv: "Brušenje", barva: "bg-purple-500" },
-  { id: "montaza", naziv: "Montaža", barva: "bg-red-600" },
-  { id: "zakljuceno", naziv: "Zaključeno", barva: "bg-green-600" },
+  { id: "sprejeto", naziv: "Sprejeto", barva: "bg-gray-500" },
+  { id: "izdelavi", naziv: "V izdelavi", barva: "bg-orange-500" },
+  { id: "pripravljeno", naziv: "Pripravljeno", barva: "bg-sky-500" },
+  { id: "prevzeto", naziv: "Prevzeto", barva: "bg-blue-800" },
 ];
+
+// Preslikava starih statusov (pred poenotenjem s Policami) v nove.
+function normalizirajStatusPulti(status) {
+  if (["sprejeto", "izdelavi", "pripravljeno", "prevzeto"].includes(status)) return status;
+  if (["ponudba", "izmera", "cad"].includes(status)) return "sprejeto";
+  if (["razrez", "izrezi", "brusenje"].includes(status)) return "izdelavi";
+  if (status === "montaza") return "pripravljeno";
+  if (status === "zakljuceno") return "prevzeto";
+  return "sprejeto";
+}
 
 const DDV = 0.22;
 
@@ -298,7 +304,7 @@ function prazenNalog() {
     datum: new Date().toISOString().slice(0, 10),
     stranka: { ime: "", telefon: "", email: "", naslov: "" },
     sprejel: "",
-    status: "ponudba",
+    status: "sprejeto",
     materialId: "",
     debelina: "2",
     steviloPlosc: "",
@@ -339,7 +345,7 @@ export default function Pulti() {
       fetch("/api/cenik-pulti").then((r) => r.json()),
     ])
       .then(([p, c]) => {
-        setNalogi(Array.isArray(p) ? p : []);
+        setNalogi((Array.isArray(p) ? p : []).map((x) => ({ ...x, status: normalizirajStatusPulti(x.status) })));
 
         // Če je v povezavi (npr. iz QR kode na delovnem listu) naveden ?nalog=ID,
         // samodejno odpremo pregled tega naloga.
@@ -512,7 +518,7 @@ export default function Pulti() {
               nal.stevilka = novaStevilka();
               nal.ponudbenaCena = izr.zDdv;
               nal.zgodovina = [
-                { status: "ponudba", datum: new Date().toISOString(), kdo: nal.sprejel || "" },
+                { status: nal.status || "sprejeto", datum: new Date().toISOString(), kdo: nal.sprejel || "" },
               ];
               novi = [nal, ...nalogi];
             }
@@ -687,7 +693,7 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
                   {nal.placano && <span className="text-green-600 ml-1">✓</span>}
                 </span>
               </div>
-              {nal.datumMontaze && nal.status !== "zakljuceno" && (
+              {nal.datumMontaze && nal.status !== "prevzeto" && (
                 <div className="text-xs text-red-600 mt-1">
                   Montaža: {nal.datumMontaze}
                 </div>
