@@ -21,6 +21,8 @@ function mapPoliceStatus(status) {
 }
 
 function mapPultiStatus(status) {
+  if (["sprejeto", "izdelavi", "pripravljeno", "prevzeto"].includes(status)) return status;
+  // stari statusi (pred poenotenjem s Policami)
   if (["ponudba", "izmera", "cad"].includes(status)) return "sprejeto";
   if (["razrez", "izrezi", "brusenje"].includes(status)) return "izdelavi";
   if (status === "montaza") return "pripravljeno";
