@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ===================== NASTAVITVE =====================
 
@@ -340,6 +340,18 @@ export default function Pulti() {
     ])
       .then(([p, c]) => {
         setNalogi(Array.isArray(p) ? p : []);
+
+        // Če je v povezavi (npr. iz QR kode na delovnem listu) naveden ?nalog=ID,
+        // samodejno odpremo pregled tega naloga.
+        try {
+          const parametri = new URLSearchParams(window.location.search);
+          const idIzPovezave = parametri.get("nalog");
+          if (idIzPovezave && Array.isArray(p) && p.some((x) => String(x.id) === String(idIzPovezave))) {
+            const najden = p.find((x) => String(x.id) === String(idIzPovezave));
+            setIzbran(najden.id);
+            setPogled("podrobnosti");
+          }
+        } catch (e2) {}
         const veljaven = c && Array.isArray(c.materiali) && Array.isArray(c.storitve);
         setCenik(veljaven ? c : PRIVZETI_CENIK);
       })
@@ -550,6 +562,10 @@ export default function Pulti() {
             setIzbran(nal.id);
             setPogled("tiskDelovniList");
           }}
+          odpriDobavnico={(nal) => {
+            setIzbran(nal.id);
+            setPogled("dobavnica");
+          }}
         />
       )}
 
@@ -566,6 +582,22 @@ export default function Pulti() {
           nalog={nalogi.find((x) => x.id === izbran)}
           cenik={cenik}
           nazaj={() => setPogled("podrobnosti")}
+        />
+      )}
+
+      {pogled === "dobavnica" && (
+        <DobavnicaPulti
+          nalog={nalogi.find((x) => x.id === izbran)}
+          nazaj={() => setPogled("podrobnosti")}
+          shraniPodpis={(nal, podatkiPodpisa, ime) => {
+            shraniNaloge(
+              nalogi.map((x) =>
+                x.id === nal.id
+                  ? { ...x, podpisPrevzemnika: podatkiPodpisa, podpisIme: ime, podpisDatum: new Date().toISOString() }
+                  : x
+              )
+            );
+          }}
         />
       )}
 
@@ -1138,6 +1170,35 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
               alert("Vnesi ime stranke.");
               return;
             }
+
+            // Validacijska opozorila — ne blokirajo, samo opozorijo na verjetne napake.
+            const opozorila = [];
+            if (!nal.materialId) {
+              opozorila.push("• Material ni izbran.");
+            }
+            (nal.kosi || []).forEach((k, i) => {
+              const oznaka = k.naziv || `Kos ${i + 1}`;
+              if (k.nacinCene === "kos") {
+                if (!n(k.cenaKos)) opozorila.push(`• ${oznaka}: fiksna cena ni vpisana.`);
+              } else {
+                if ((k.naziv || k.dolzina || k.sirina) && (!n(k.dolzina) || !n(k.sirina))) {
+                  opozorila.push(`• ${oznaka}: manjka dolžina ali širina.`);
+                }
+                if (n(k.dolzina) > 400 || n(k.sirina) > 400) {
+                  opozorila.push(`• ${oznaka}: mera nad 400 cm — preveri, ali je pravilna.`);
+                }
+              }
+            });
+            if (izr.zDdv <= 0) {
+              opozorila.push("• Skupna cena je 0 € — preveri material, mere ali storitve.");
+            }
+            if (opozorila.length > 0) {
+              const nadaljuj = window.confirm(
+                "Opozorila pred shranjevanjem:\n\n" + opozorila.join("\n") + "\n\nAli vseeno shranim?"
+              );
+              if (!nadaljuj) return;
+            }
+
             shrani(nal);
           }}
           className="flex-1 bg-red-600 text-white rounded-xl py-3 font-semibold"
@@ -1151,7 +1212,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
 
 // ===================== PODROBNOSTI =====================
 
-function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, natisniDelovniList }) {
+function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, natisniDelovniList, odpriDobavnico }) {
   const [kdoOpravil, setKdoOpravil] = useState("");
   if (!nalog)
     return (
@@ -1408,6 +1469,9 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
           Natisni delovni list
         </button>
       </div>
+      <button onClick={() => odpriDobavnico(nalog)} className="w-full bg-emerald-700 text-white rounded-xl py-3 font-semibold">
+        📄 Dobavnica {nalog.podpisPrevzemnika ? "✓ (podpisana)" : "+ e-podpis"}
+      </button>
 
       <div className="flex gap-2">
         <button onClick={() => uredi(nalog)} className="flex-1 bg-gray-800 text-white rounded-xl py-3 font-semibold">
@@ -1459,7 +1523,15 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
       <div className="delovni-list-pulti bg-white rounded-xl p-4 sm:p-6 border border-gray-200 text-sm">
         <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
           <div className="font-bold text-lg">ČAKŠ <span className="text-red-600">· Pulti</span></div>
-          <div className="text-sm uppercase font-semibold text-gray-600">Delovni list</div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm uppercase font-semibold text-gray-600">Delovni list</div>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(`https://delavni-nalog-caks.vercel.app/pulti?nalog=${nalog.id}`)}`}
+              alt="QR koda za odpiranje naloga"
+              width={70}
+              height={70}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-gray-200 pb-2 mb-2">
@@ -1875,6 +1947,254 @@ function CenikAdmin({ cenik, shrani, nazaj, nalogi, shraniNaloge }) {
       >
         Shrani cenik
       </button>
+    </div>
+  );
+}
+
+// ===================== E-PODPIS =====================
+
+function PodpisniPadPulti({ zacetnoIme, onPreklici, onShrani }) {
+  const platnoRef = useRef(null);
+  const risemRef = useRef(false);
+  const zadnjaTockaRef = useRef(null);
+  const [prazno, setPrazno] = useState(true);
+  const [ime, setIme] = useState(zacetnoIme || "");
+
+  useEffect(() => {
+    const platno = platnoRef.current;
+    if (!platno) return;
+    const ctx = platno.getContext("2d");
+    const razmerje = window.devicePixelRatio || 1;
+    const sirina = platno.clientWidth;
+    const visina = platno.clientHeight;
+    platno.width = sirina * razmerje;
+    platno.height = visina * razmerje;
+    ctx.scale(razmerje, razmerje);
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#111827";
+  }, []);
+
+  function tockaIzDogodka(e) {
+    const platno = platnoRef.current;
+    const rect = platno.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function zacniRisanje(e) {
+    e.preventDefault();
+    risemRef.current = true;
+    zadnjaTockaRef.current = tockaIzDogodka(e);
+  }
+
+  function risi(e) {
+    if (!risemRef.current) return;
+    e.preventDefault();
+    const ctx = platnoRef.current.getContext("2d");
+    const tocka = tockaIzDogodka(e);
+    ctx.beginPath();
+    ctx.moveTo(zadnjaTockaRef.current.x, zadnjaTockaRef.current.y);
+    ctx.lineTo(tocka.x, tocka.y);
+    ctx.stroke();
+    zadnjaTockaRef.current = tocka;
+    if (prazno) setPrazno(false);
+  }
+
+  function koncajRisanje() {
+    risemRef.current = false;
+  }
+
+  function pocisti() {
+    const platno = platnoRef.current;
+    const ctx = platno.getContext("2d");
+    ctx.clearRect(0, 0, platno.width, platno.height);
+    setPrazno(true);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl p-4 w-full max-w-md">
+        <h3 className="font-bold text-base mb-3">Elektronski podpis prevzemnika</h3>
+        <input
+          value={ime}
+          onChange={(e) => setIme(e.target.value)}
+          placeholder="Ime in priimek prevzemnika"
+          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm mb-3"
+        />
+        <p className="text-xs text-gray-500 mb-1.5">Podpiši s prstom ali miško v spodnje polje:</p>
+        <canvas
+          ref={platnoRef}
+          className="w-full border-2 border-dashed border-gray-300 rounded-lg touch-none"
+          style={{ height: "160px" }}
+          onMouseDown={zacniRisanje}
+          onMouseMove={risi}
+          onMouseUp={koncajRisanje}
+          onMouseLeave={koncajRisanje}
+          onTouchStart={zacniRisanje}
+          onTouchMove={risi}
+          onTouchEnd={koncajRisanje}
+        />
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={pocisti}
+            className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-300"
+          >
+            Počisti
+          </button>
+          <button
+            onClick={onPreklici}
+            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-gray-600"
+          >
+            Prekliči
+          </button>
+          <button
+            onClick={() => {
+              if (prazno) {
+                alert("Prosim, najprej se podpiši.");
+                return;
+              }
+              if (!ime.trim()) {
+                alert("Vnesi ime prevzemnika.");
+                return;
+              }
+              onShrani(platnoRef.current.toDataURL("image/png"), ime.trim());
+            }}
+            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 text-white"
+          >
+            Shrani podpis
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===================== DOBAVNICA =====================
+
+function DobavnicaPulti({ nalog, nazaj, shraniPodpis }) {
+  const [podpisovanje, setPodpisovanje] = useState(false);
+  if (!nalog) return <div className="p-4">Nalog ne obstaja. <button onClick={nazaj} className="text-red-600 underline">Nazaj</button></div>;
+
+  const danes = new Date().toLocaleDateString("sl-SI");
+  const strankaVarno = (nalog.stranka?.ime || "").replace(/[\\/:*?"<>|]/g, "").trim();
+  const kosiZaPrikaz = (nalog.kosi || []).filter((k) => k.naziv || k.dolzina || k.sirina || k.cenaKos);
+
+  return (
+    <div className="p-3 space-y-3">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .dobavnica-pulti, .dobavnica-pulti * { visibility: visible; }
+          .dobavnica-pulti { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
+          .dobavnica-pulti-brez { display: none !important; }
+        }
+      `}</style>
+
+      <div className="dobavnica-pulti-brez flex flex-wrap gap-2">
+        <button
+          onClick={() => prenesiHTMLDokumentPulti(".dobavnica-pulti", `Dobavnica ${nalog.stevilka || ""}`, `dobavnica-${nalog.stevilka || "pult"}${strankaVarno ? " " + strankaVarno : ""}.html`)}
+          className="bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
+        >
+          Prenesi / natisni datoteko
+        </button>
+        {!nalog.podpisPrevzemnika && (
+          <button
+            onClick={() => setPodpisovanje(true)}
+            className="bg-red-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
+          >
+            ✍ Podpiši prevzem
+          </button>
+        )}
+        <button onClick={nazaj} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100">
+          Nazaj
+        </button>
+      </div>
+
+      <div className="dobavnica-pulti bg-white rounded-xl p-4 sm:p-6 border border-gray-200 text-sm">
+        <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
+          <div className="font-bold text-lg">ČAKŠ <span className="text-red-600">· Pulti</span></div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm uppercase font-semibold text-gray-600">Dobavnica</div>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(`https://delavni-nalog-caks.vercel.app/status/${nalog.id}`)}`}
+              alt="QR koda za status"
+              width={70}
+              height={70}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-gray-200 pb-2 mb-3">
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Št.:</span><span className="font-semibold">{nalog.stevilka}</span></div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Datum:</span>{danes}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Kupec:</span><span className="font-semibold">{nalog.stranka?.ime}</span></div>
+          {nalog.stranka?.telefon && <div><span className="text-xs text-gray-400 uppercase mr-1">Tel:</span>{nalog.stranka.telefon}</div>}
+        </div>
+
+        {kosiZaPrikaz.length > 0 && (
+          <div className="mb-3">
+            <div className="text-xs text-gray-400 uppercase mb-1">Dobavljeno</div>
+            <ul className="list-disc pl-5 space-y-0.5">
+              {kosiZaPrikaz.map((k, i) => (
+                <li key={i}>
+                  {k.naziv || `Kos ${i + 1}`}
+                  {k.nacinCene !== "kos" && k.dolzina && k.sirina ? ` — ${k.dolzina} × ${k.sirina} × ${k.debelina || "2"} cm` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {nalog.opombe && (
+          <div className="text-sm bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-4">
+            <span className="text-xs text-gray-400 uppercase block mb-0.5">Opombe</span>
+            {nalog.opombe}
+          </div>
+        )}
+
+        {nalog.podpisPrevzemnika ? (
+          <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-6 pt-2">
+            <div>
+              <p className="text-xs text-gray-400 uppercase mb-1">Blago izdal</p>
+              <div className="border-b border-gray-400 h-12" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase mb-1">Blago prevzel: {nalog.podpisIme}</p>
+              <img src={nalog.podpisPrevzemnika} alt="Podpis prevzemnika" className="h-14 object-contain" />
+              <p className="text-[10px] text-gray-400">Podpisano: {nalog.podpisDatum ? new Date(nalog.podpisDatum).toLocaleString("sl-SI") : ""}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-6 pt-2">
+            <div>
+              <p className="text-xs text-gray-400 uppercase mb-1">Blago izdal</p>
+              <div className="border-b border-gray-400 h-12" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase mb-1">Blago prevzel (podpis)</p>
+              <div className="border-b border-gray-400 h-12" />
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-gray-500 mt-4 pt-2 border-t border-gray-200">
+          Kamnoseštvo Čakš · 031 235 146
+        </p>
+      </div>
+
+      {podpisovanje && (
+        <PodpisniPadPulti
+          zacetnoIme={nalog.stranka?.ime || ""}
+          onPreklici={() => setPodpisovanje(false)}
+          onShrani={(podatkiPodpisa, ime) => {
+            shraniPodpis(nalog, podatkiPodpisa, ime);
+            setPodpisovanje(false);
+          }}
+        />
+      )}
     </div>
   );
 }
