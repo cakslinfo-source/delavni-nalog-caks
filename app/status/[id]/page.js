@@ -10,14 +10,19 @@ const STATUS_BARVE_POLICE = {
 };
 
 const STATUS_NAZIV_PULTI = {
-  ponudba: "Ponudba",
-  izmera: "Izmera",
-  cad: "Priprava CAD",
-  razrez: "Razrez",
-  izrezi: "Obdelava izrezov",
-  brusenje: "Brušenje",
-  montaza: "Montaža",
-  zakljuceno: "Zaključeno",
+  sprejeto: "Sprejeto",
+  izdelavi: "V izdelavi",
+  pripravljeno: "Pripravljeno",
+  prevzeto: "Prevzeto",
+  // stari statusi (pred poenotenjem)
+  ponudba: "Sprejeto",
+  izmera: "Sprejeto",
+  cad: "Sprejeto",
+  razrez: "V izdelavi",
+  izrezi: "V izdelavi",
+  brusenje: "V izdelavi",
+  montaza: "Pripravljeno",
+  zakljuceno: "Prevzeto",
 };
 
 const STATUS_NAZIV_SPOMENIKI = {
