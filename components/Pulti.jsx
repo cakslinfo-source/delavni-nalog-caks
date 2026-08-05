@@ -94,13 +94,37 @@ function skupnaKvadratura(kosi) {
 
 function izracunMateriala(nalog, cenik) {
   const material = najdiMaterial(cenik, nalog.materialId);
-  if (!material) return { m2: 0, cena: 0, naziv: "" };
+  if (!material) return { m2: 0, cena: 0, naziv: "", m2_2cm: 0, cena_2cm: 0, m2_3cm: 0, cena_3cm: 0 };
   if (material.tip === "plosca") {
-    return { steviloPlosc: n(nalog.steviloPlosc), cena: n(nalog.steviloPlosc) * n(material.cenaPlosca), naziv: material.naziv };
+    return {
+      steviloPlosc: n(nalog.steviloPlosc),
+      cena: n(nalog.steviloPlosc) * n(material.cenaPlosca),
+      naziv: material.naziv,
+      m2_2cm: 0,
+      cena_2cm: 0,
+      m2_3cm: 0,
+      cena_3cm: 0,
+    };
   }
-  const m2 = skupnaKvadratura(nalog.kosi);
-  const cenaM2 = nalog.debelina === "3" ? material.cena3cm : material.cena2cm;
-  return { m2, cena: m2 * n(cenaM2), naziv: material.naziv };
+  let m2_2cm = 0;
+  let m2_3cm = 0;
+  (nalog.kosi || []).forEach((k) => {
+    const m2Kosa = (n(k.dolzina) * n(k.sirina)) / 10000;
+    if (!m2Kosa) return;
+    if (String(k.debelina) === "3") m2_3cm += m2Kosa;
+    else m2_2cm += m2Kosa;
+  });
+  const cena_2cm = m2_2cm * n(material.cena2cm);
+  const cena_3cm = m2_3cm * n(material.cena3cm);
+  return {
+    m2: m2_2cm + m2_3cm,
+    cena: cena_2cm + cena_3cm,
+    naziv: material.naziv,
+    m2_2cm,
+    cena_2cm,
+    m2_3cm,
+    cena_3cm,
+  };
 }
 
 function izracunStoritev(nalog, cenik) {
@@ -258,7 +282,7 @@ function prenesiHTMLDokumentPulti(selector, naslov, imeDatoteke) {
 }
 
 function prazenKos() {
-  return { naziv: "", dolzina: "", sirina: "", debelina: "" };
+  return { naziv: "", dolzina: "", sirina: "", debelina: "2" };
 }
 
 function prazenNalog() {
@@ -266,7 +290,7 @@ function prazenNalog() {
     id: Date.now(),
     stevilka: "",
     datum: new Date().toISOString().slice(0, 10),
-    stranka: { ime: "", telefon: "", naslov: "" },
+    stranka: { ime: "", telefon: "", email: "", naslov: "" },
     sprejel: "",
     status: "ponudba",
     materialId: "",
@@ -690,6 +714,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
                   ...nal.stranka,
                   ime,
                   telefon: najdena && !nal.stranka.telefon ? najdena.telefon : nal.stranka.telefon,
+                  email: najdena && !nal.stranka.email ? najdena.email : nal.stranka.email,
                 },
               });
             }}
@@ -714,15 +739,27 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
             />
           </div>
           <div>
-            <label className={lbl}>Naslov (montaža)</label>
+            <label className={lbl}>E-mail</label>
             <input
+              type="email"
               className={inp}
-              value={nal.stranka.naslov}
+              value={nal.stranka.email}
               onChange={(e) =>
-                setNal({ ...nal, stranka: { ...nal.stranka, naslov: e.target.value } })
+                setNal({ ...nal, stranka: { ...nal.stranka, email: e.target.value } })
               }
+              placeholder="stranka@example.com"
             />
           </div>
+        </div>
+        <div>
+          <label className={lbl}>Naslov (montaža)</label>
+          <input
+            className={inp}
+            value={nal.stranka.naslov}
+            onChange={(e) =>
+              setNal({ ...nal, stranka: { ...nal.stranka, naslov: e.target.value } })
+            }
+          />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -767,21 +804,14 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
         </select>
 
         {material && material.tip === "m2" && (
-          <div className="grid grid-cols-2 gap-2 items-center">
-            <div>
-              <label className={lbl}>Debelina</label>
-              <select
-                className={inp}
-                value={nal.debelina}
-                onChange={(e) => setNal({ ...nal, debelina: e.target.value })}
-              >
-                <option value="2">2 cm</option>
-                <option value="3">3 cm</option>
-              </select>
-            </div>
-            <div className="text-sm text-gray-500 pt-4">
-              Skupna kvadratura: <span className="font-semibold text-black">{skupnaKvadratura(nal.kosi).toFixed(2)} m²</span>
-            </div>
+          <div className="text-sm text-gray-600 space-y-0.5 bg-gray-50 rounded-lg p-2">
+            <div>Debelina se izbere pri vsakem kosu posebej (spodaj).</div>
+            {izr.material.m2_2cm > 0 && (
+              <div>2 cm: <span className="font-semibold text-black">{izr.material.m2_2cm.toFixed(2)} m²</span> = {eur(izr.material.cena_2cm)}</div>
+            )}
+            {izr.material.m2_3cm > 0 && (
+              <div>3 cm: <span className="font-semibold text-black">{izr.material.m2_3cm.toFixed(2)} m²</span> = {eur(izr.material.cena_3cm)}</div>
+            )}
           </div>
         )}
 
@@ -823,13 +853,14 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
               value={kos.sirina}
               onChange={(e) => nastaviKos(i, "sirina", e.target.value)}
             />
-            <input
-              className={`${inp} w-20`}
-              placeholder="Deb."
-              inputMode="decimal"
-              value={kos.debelina}
+            <select
+              className={`${inp} w-24`}
+              value={kos.debelina || "2"}
               onChange={(e) => nastaviKos(i, "debelina", e.target.value)}
-            />
+            >
+              <option value="2">2 cm</option>
+              <option value="3">3 cm</option>
+            </select>
             {nal.kosi.length > 1 && (
               <button
                 onClick={() => setNal({ ...nal, kosi: nal.kosi.filter((_, j) => j !== i) })}
@@ -1029,10 +1060,16 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
           <span>{eur(izr.osnova)}</span>
         </div>
         {izr.popust > 0 && (
-          <div className="flex justify-between text-red-400">
-            <span>Popust ({nal.popust}%)</span>
-            <span>−{eur(izr.popust)}</span>
-          </div>
+          <>
+            <div className="flex justify-between text-red-400">
+              <span>Popust ({nal.popust}%)</span>
+              <span>−{eur(izr.popust)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Osnova po popustu</span>
+              <span>{eur(izr.brezDdv)}</span>
+            </div>
+          </>
         )}
         <div className="flex justify-between">
           <span>DDV 22%</span>
@@ -1108,6 +1145,7 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
         <div className="text-sm">
           <div className="font-semibold">{nalog.stranka?.ime}</div>
           {nalog.stranka?.telefon && <div>{nalog.stranka.telefon}</div>}
+          {nalog.stranka?.email && <div className="text-gray-600">{nalog.stranka.email}</div>}
           {nalog.stranka?.naslov && <div className="text-gray-600">{nalog.stranka.naslov}</div>}
         </div>
         {nalog.sprejel && (
@@ -1163,13 +1201,22 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
       <div className="bg-white rounded-xl p-3 text-sm space-y-1">
         <div className="font-semibold">
           {material ? material.naziv : "Material ni izbran"}
-          {material?.tip === "m2" && ` · ${nalog.debelina}cm`}
         </div>
         {material?.tip === "m2" ? (
-          <div className="flex justify-between text-gray-600">
-            <span>Kvadratura ({skupnaKvadratura(nalog.kosi).toFixed(2)} m²)</span>
-            <span>{eur(izr.material.cena)}</span>
-          </div>
+          <>
+            {izr.material.m2_2cm > 0 && (
+              <div className="flex justify-between text-gray-600">
+                <span>2 cm ({izr.material.m2_2cm.toFixed(2)} m²)</span>
+                <span>{eur(izr.material.cena_2cm)}</span>
+              </div>
+            )}
+            {izr.material.m2_3cm > 0 && (
+              <div className="flex justify-between text-gray-600">
+                <span>3 cm ({izr.material.m2_3cm.toFixed(2)} m²)</span>
+                <span>{eur(izr.material.cena_3cm)}</span>
+              </div>
+            )}
+          </>
         ) : material?.tip === "plosca" ? (
           <div className="flex justify-between text-gray-600">
             <span>Število plošč ({nalog.steviloPlosc || 0})</span>
@@ -1319,6 +1366,7 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
   if (!nalog) return <div className="p-4">Nalog ne obstaja. <button onClick={nazaj} className="text-red-600 underline">Nazaj</button></div>;
 
   const material = najdiMaterial(cenik, nalog.materialId);
+  const materialIzracun = izracunMateriala(nalog, cenik);
   const kosiZaPrikaz = (nalog.kosi || []).filter((k) => k.naziv || k.dolzina || k.sirina);
   const storitveZUporabo = izracunStoritev(nalog, cenik).filter((s) => s.kolicina > 0);
   const danes = new Date().toLocaleDateString("sl-SI");
@@ -1359,7 +1407,35 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
           <div><span className="text-xs text-gray-400 uppercase mr-1">Datum:</span>{danes}</div>
           <div><span className="text-xs text-gray-400 uppercase mr-1">Montaža:</span>{nalog.datumMontaze ? new Date(nalog.datumMontaze).toLocaleDateString("sl-SI") : "—"}</div>
           <div><span className="text-xs text-gray-400 uppercase mr-1">Material:</span>{material ? material.naziv : "—"}</div>
-          <div><span className="text-xs text-gray-400 uppercase mr-1">Debelina:</span>{material?.tip === "m2" ? `${nalog.debelina} cm` : "—"}</div>
+          <div></div>
+          {material?.tip === "m2" && (
+            <div className="col-span-2 space-y-0.5">
+              {materialIzracun.m2_2cm > 0 && (
+                <div>
+                  <span className="text-xs text-gray-400 uppercase mr-1">2 cm:</span>
+                  {materialIzracun.m2_2cm.toFixed(2)} m²
+                  <span className="text-xs text-gray-400 uppercase mx-1">=</span>
+                  <span className="font-semibold">{eur(materialIzracun.cena_2cm)}</span>
+                </div>
+              )}
+              {materialIzracun.m2_3cm > 0 && (
+                <div>
+                  <span className="text-xs text-gray-400 uppercase mr-1">3 cm:</span>
+                  {materialIzracun.m2_3cm.toFixed(2)} m²
+                  <span className="text-xs text-gray-400 uppercase mx-1">=</span>
+                  <span className="font-semibold">{eur(materialIzracun.cena_3cm)}</span>
+                </div>
+              )}
+            </div>
+          )}
+          {material?.tip === "plosca" && (
+            <div className="col-span-2">
+              <span className="text-xs text-gray-400 uppercase mr-1">Št. plošč:</span>
+              {nalog.steviloPlosc || 0}
+              <span className="text-xs text-gray-400 uppercase mx-1">· Cena materiala:</span>
+              <span className="font-semibold">{eur(materialIzracun.cena)}</span>
+            </div>
+          )}
         </div>
 
         {kosiZaPrikaz.length > 0 && (
@@ -1393,7 +1469,7 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
             <div className="text-xs text-gray-400 uppercase mb-1">Storitve</div>
             <ul className="list-disc pl-5 space-y-0.5">
               {storitveZUporabo.map((s) => (
-                <li key={s.id}>{s.naziv} × {s.kolicina} {s.enota}</li>
+                <li key={s.id}>{s.naziv} × {s.kolicina} {s.enota} — <span className="font-medium">{eur(s.skupaj)}</span></li>
               ))}
             </ul>
           </div>
@@ -1481,8 +1557,13 @@ function TiskPonudbePulti({ nalog, cenik, nazaj }) {
         <div className="mb-3 pb-2 border-b border-gray-200 text-sm">
           <span className="text-xs text-gray-400 uppercase mr-1">Material</span>
           <span className="font-semibold">{material ? material.naziv : "—"}</span>
-          {material?.tip === "m2" && ` · ${nalog.debelina}cm · ${skupnaKvadratura(nalog.kosi).toFixed(2)} m²`}
           {material?.tip === "plosca" && ` · ${nalog.steviloPlosc || 0} plošč`}
+          {material?.tip === "m2" && (
+            <div className="mt-0.5">
+              {izr.material.m2_2cm > 0 && <div>2 cm: {izr.material.m2_2cm.toFixed(2)} m² = {eur(izr.material.cena_2cm)}</div>}
+              {izr.material.m2_3cm > 0 && <div>3 cm: {izr.material.m2_3cm.toFixed(2)} m² = {eur(izr.material.cena_3cm)}</div>}
+            </div>
+          )}
         </div>
 
         {(nalog.kosi || []).some((k) => k.naziv || k.dolzina || k.sirina) && (
@@ -1493,6 +1574,7 @@ function TiskPonudbePulti({ nalog, cenik, nazaj }) {
                 <tr className="text-left text-xs uppercase text-gray-400 border-b border-gray-200">
                   <th className="py-1">Naziv</th>
                   <th className="py-1">Mere (cm)</th>
+                  <th className="py-1">Deb.</th>
                 </tr>
               </thead>
               <tbody>
@@ -1500,6 +1582,7 @@ function TiskPonudbePulti({ nalog, cenik, nazaj }) {
                   <tr key={i} className="border-b border-gray-100">
                     <td className="py-1">{k.naziv || `Kos ${i + 1}`}</td>
                     <td className="py-1">{k.dolzina || "–"} × {k.sirina || "–"}</td>
+                    <td className="py-1">{k.debelina || "2"} cm</td>
                   </tr>
                 ))}
               </tbody>
@@ -1535,6 +1618,7 @@ function TiskPonudbePulti({ nalog, cenik, nazaj }) {
           <span>Material: <span className="font-semibold">{eur(izr.material.cena)}</span></span>
           <span>Storitve: <span className="font-semibold">{eur(izr.storitveSkupaj)}</span></span>
           {izr.popust > 0 && <span>Popust ({nalog.popust}%): <span className="font-semibold">−{eur(izr.popust)}</span></span>}
+          {izr.popust > 0 && <span>Osnova po popustu: <span className="font-semibold">{eur(izr.brezDdv)}</span></span>}
           <span>DDV 22%: <span className="font-semibold">{eur(izr.ddv)}</span></span>
           <span className="text-base font-bold">Skupaj z DDV: {eur(izr.zDdv)}</span>
         </div>
