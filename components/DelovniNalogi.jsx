@@ -1083,9 +1083,24 @@ export default function DelovniNalogi() {
 
   const aktivniNalog = nalogi.find((n) => n.id === aktivniId);
 
+  // Graf statusov zajame vse tri module — statusi so poenoteni, stare Pulti statuse preslika.
+  function mapModulStatusNaPolice(status) {
+    if (status === "sprejeto" || status === "Sprejeto") return "Sprejeto";
+    if (status === "izdelavi" || status === "V izdelavi") return "V izdelavi";
+    if (status === "pripravljeno" || status === "Pripravljeno") return "Pripravljeno";
+    if (status === "prevzeto" || status === "Prevzeto") return "Prevzeto";
+    if (["ponudba", "izmera", "cad"].includes(status)) return "Sprejeto";
+    if (["razrez", "izrezi", "brusenje"].includes(status)) return "V izdelavi";
+    if (status === "montaza") return "Pripravljeno";
+    if (status === "zakljuceno") return "Prevzeto";
+    return "Sprejeto";
+  }
   const podatkiGrafa = STATUSI.map((s) => ({
     name: s,
-    value: nalogi.filter((n) => n.status === s).length,
+    value:
+      nalogi.filter((n) => n.status === s).length +
+      pultiPodatki.filter((p) => mapModulStatusNaPolice(p.status) === s).length +
+      spomenikiPodatki.filter((sp) => mapModulStatusNaPolice(sp.status) === s).length,
   })).filter((d) => d.value > 0);
 
   function stevecPoPolju(polje) {
@@ -1626,9 +1641,9 @@ export default function DelovniNalogi() {
               </div>
             )}
 
-            {nalogi.length > 0 && (
+            {podatkiGrafa.length > 0 && (
               <div className="bg-white border border-stone-200 rounded-xl p-4 mb-5">
-                <p className="text-xs font-medium text-stone-500 uppercase mb-1">Stanje naročil</p>
+                <p className="text-xs font-medium text-stone-500 uppercase mb-1">Stanje naročil — vsi moduli (Police + Pulti + Spomeniki)</p>
                 <div className="flex items-center">
                   <div style={{ width: "140px", height: "140px" }} className="shrink-0">
                     <ResponsiveContainer width="100%" height="100%">
