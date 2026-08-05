@@ -108,7 +108,12 @@ function izracunMateriala(nalog, cenik) {
   }
   let m2_2cm = 0;
   let m2_3cm = 0;
+  let cenaPoKosih = 0;
   (nalog.kosi || []).forEach((k) => {
+    if (k.nacinCene === "kos") {
+      cenaPoKosih += n(k.cenaKos);
+      return;
+    }
     const m2Kosa = (n(k.dolzina) * n(k.sirina)) / 10000;
     if (!m2Kosa) return;
     if (String(k.debelina) === "3") m2_3cm += m2Kosa;
@@ -118,12 +123,13 @@ function izracunMateriala(nalog, cenik) {
   const cena_3cm = m2_3cm * n(material.cena3cm);
   return {
     m2: m2_2cm + m2_3cm,
-    cena: cena_2cm + cena_3cm,
+    cena: cena_2cm + cena_3cm + cenaPoKosih,
     naziv: material.naziv,
     m2_2cm,
     cena_2cm,
     m2_3cm,
     cena_3cm,
+    cena_kos: cenaPoKosih,
   };
 }
 
@@ -282,7 +288,7 @@ function prenesiHTMLDokumentPulti(selector, naslov, imeDatoteke) {
 }
 
 function prazenKos() {
-  return { naziv: "", dolzina: "", sirina: "", debelina: "2" };
+  return { naziv: "", dolzina: "", sirina: "", debelina: "2", nacinCene: "m2", cenaKos: "" };
 }
 
 function prazenNalog() {
@@ -812,6 +818,9 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
             {izr.material.m2_3cm > 0 && (
               <div>3 cm: <span className="font-semibold text-black">{izr.material.m2_3cm.toFixed(2)} m²</span> = {eur(izr.material.cena_3cm)}</div>
             )}
+            {izr.material.cena_kos > 0 && (
+              <div>Kosi s fiksno ceno: <span className="font-semibold text-black">{eur(izr.material.cena_kos)}</span></div>
+            )}
           </div>
         )}
 
@@ -832,42 +841,76 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
       <div className="bg-white rounded-xl p-3 space-y-2">
         <div className="font-semibold text-sm">Kosi (mere za razrez)</div>
         {nal.kosi.map((kos, i) => (
-          <div key={i} className="flex gap-2 items-center flex-wrap">
-            <input
-              className={`${inp} flex-1 min-w-[140px]`}
-              placeholder={`Kos ${i + 1} (npr. Pult ob steni)`}
-              value={kos.naziv}
-              onChange={(e) => nastaviKos(i, "naziv", e.target.value)}
-            />
-            <input
-              className={`${inp} w-20`}
-              placeholder="Dolž."
-              inputMode="decimal"
-              value={kos.dolzina}
-              onChange={(e) => nastaviKos(i, "dolzina", e.target.value)}
-            />
-            <input
-              className={`${inp} w-20`}
-              placeholder="Šir."
-              inputMode="decimal"
-              value={kos.sirina}
-              onChange={(e) => nastaviKos(i, "sirina", e.target.value)}
-            />
-            <select
-              className={`${inp} w-24`}
-              value={kos.debelina || "2"}
-              onChange={(e) => nastaviKos(i, "debelina", e.target.value)}
-            >
-              <option value="2">2 cm</option>
-              <option value="3">3 cm</option>
-            </select>
-            {nal.kosi.length > 1 && (
+          <div key={i} className="border border-gray-200 rounded-lg p-2.5 space-y-2">
+            <div className="flex gap-2 items-center">
+              <input
+                className={`${inp} flex-1 min-w-[140px]`}
+                placeholder={`Kos ${i + 1} (npr. Pult ob steni)`}
+                value={kos.naziv}
+                onChange={(e) => nastaviKos(i, "naziv", e.target.value)}
+              />
+              {nal.kosi.length > 1 && (
+                <button
+                  onClick={() => setNal({ ...nal, kosi: nal.kosi.filter((_, j) => j !== i) })}
+                  className="text-red-600 text-lg px-1 shrink-0"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2">
               <button
-                onClick={() => setNal({ ...nal, kosi: nal.kosi.filter((_, j) => j !== i) })}
-                className="text-red-600 text-lg px-1"
+                type="button"
+                onClick={() => nastaviKos(i, "nacinCene", "m2")}
+                className={`flex-1 text-xs py-1.5 rounded-lg border ${
+                  (kos.nacinCene || "m2") === "m2" ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-600 border-gray-300"
+                }`}
               >
-                ×
+                Cena po m²
               </button>
+              <button
+                type="button"
+                onClick={() => nastaviKos(i, "nacinCene", "kos")}
+                className={`flex-1 text-xs py-1.5 rounded-lg border ${
+                  kos.nacinCene === "kos" ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-600 border-gray-300"
+                }`}
+              >
+                Fiksna cena za kos
+              </button>
+            </div>
+            {kos.nacinCene === "kos" ? (
+              <input
+                className={inp}
+                placeholder="Cena za ta kos (€)"
+                inputMode="decimal"
+                value={kos.cenaKos}
+                onChange={(e) => nastaviKos(i, "cenaKos", e.target.value)}
+              />
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  className={`${inp} flex-1`}
+                  placeholder="Dolž. (cm)"
+                  inputMode="decimal"
+                  value={kos.dolzina}
+                  onChange={(e) => nastaviKos(i, "dolzina", e.target.value)}
+                />
+                <input
+                  className={`${inp} flex-1`}
+                  placeholder="Šir. (cm)"
+                  inputMode="decimal"
+                  value={kos.sirina}
+                  onChange={(e) => nastaviKos(i, "sirina", e.target.value)}
+                />
+                <select
+                  className={`${inp} w-24 shrink-0`}
+                  value={kos.debelina || "2"}
+                  onChange={(e) => nastaviKos(i, "debelina", e.target.value)}
+                >
+                  <option value="2">2 cm</option>
+                  <option value="3">3 cm</option>
+                </select>
+              </div>
             )}
           </div>
         ))}
@@ -894,17 +937,18 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
               <span className="text-gray-400">{odpreteSkupine[skupina.naziv] ? "▲" : "▼"}</span>
             </button>
             {odpreteSkupine[skupina.naziv] && (
-              <div className="px-3 pb-3 space-y-2">
+              <div className="px-3 pb-2 divide-y divide-gray-100">
                 {skupina.ids.map((id) => {
                   const s = cenik.storitve.find((x) => x.id === id);
                   if (!s) return null;
                   return (
-                    <div key={id} className="flex items-center gap-2">
-                      <span className="flex-1 text-xs text-gray-600">
+                    <div key={id} className="flex items-center gap-2 py-2">
+                      <span className="text-xs text-gray-600 shrink-0">
                         {s.naziv} <span className="text-gray-400">({eur(s.cena)}/{s.enota})</span>
                       </span>
+                      <span className="flex-1 border-b border-dotted border-gray-300 translate-y-[-2px]" />
                       <input
-                        className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right"
+                        className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right shrink-0"
                         inputMode="decimal"
                         placeholder="0"
                         value={nal.storitve?.[id] || ""}
@@ -1216,6 +1260,12 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
                 <span>{eur(izr.material.cena_3cm)}</span>
               </div>
             )}
+            {izr.material.cena_kos > 0 && (
+              <div className="flex justify-between text-gray-600">
+                <span>Kosi s fiksno ceno</span>
+                <span>{eur(izr.material.cena_kos)}</span>
+              </div>
+            )}
           </>
         ) : material?.tip === "plosca" ? (
           <div className="flex justify-between text-gray-600">
@@ -1232,7 +1282,11 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
           {nalog.kosi.map((kos, i) => (
             <div key={i} className="flex justify-between text-gray-600">
               <span>{kos.naziv || `Kos ${i + 1}`}</span>
-              <span>{kos.dolzina || "–"} × {kos.sirina || "–"}{kos.debelina ? ` × ${kos.debelina}` : ""} cm</span>
+              <span>
+                {kos.nacinCene === "kos"
+                  ? `Fiksna cena: ${eur(n(kos.cenaKos))}`
+                  : `${kos.dolzina || "–"} × ${kos.sirina || "–"}${kos.debelina ? ` × ${kos.debelina}` : ""} cm`}
+              </span>
             </div>
           ))}
         </div>
@@ -1273,30 +1327,37 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
         </button>
       </div>
 
-      {naslednji && (
-        <div className="bg-white rounded-xl p-3 space-y-2">
-          <div className="text-sm font-semibold">Naslednja faza: {naslednji.naziv}</div>
-          <select
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-            value={kdoOpravil}
-            onChange={(e) => setKdoOpravil(e.target.value)}
-          >
-            <option value="">Kdo opravi? (neobvezno)</option>
-            {ZAPOSLENI_PROIZVODNJA.map((z) => (
-              <option key={z}>{z}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => {
-              spremeniStatus(nalog, naslednji.id, kdoOpravil);
-              setKdoOpravil("");
-            }}
-            className={`w-full text-white rounded-xl py-3 font-semibold ${naslednji.barva}`}
-          >
-            Premakni v: {naslednji.naziv} →
-          </button>
+      <div className="bg-white rounded-xl p-3 space-y-2">
+        <div className="text-sm font-semibold">Spremeni status</div>
+        <select
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+          value={kdoOpravil}
+          onChange={(e) => setKdoOpravil(e.target.value)}
+        >
+          <option value="">Kdo opravi? (neobvezno)</option>
+          {ZAPOSLENI_PROIZVODNJA.map((z) => (
+            <option key={z}>{z}</option>
+          ))}
+        </select>
+        <div className="flex flex-wrap gap-2">
+          {STATUSI.map((st) => (
+            <button
+              key={st.id}
+              onClick={() => {
+                spremeniStatus(nalog, st.id, kdoOpravil);
+                setKdoOpravil("");
+              }}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                nalog.status === st.id
+                  ? `${st.barva} text-white border-transparent font-medium`
+                  : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+              }`}
+            >
+              {st.naziv}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {(nalog.zgodovina || []).length > 0 && (
         <div className="bg-white rounded-xl p-3 text-xs text-gray-500 space-y-1">
@@ -1426,6 +1487,12 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
                   <span className="font-semibold">{eur(materialIzracun.cena_3cm)}</span>
                 </div>
               )}
+              {materialIzracun.cena_kos > 0 && (
+                <div>
+                  <span className="text-xs text-gray-400 uppercase mr-1">Kosi s fiksno ceno:</span>
+                  <span className="font-semibold">{eur(materialIzracun.cena_kos)}</span>
+                </div>
+              )}
             </div>
           )}
           {material?.tip === "plosca" && (
@@ -1454,9 +1521,9 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
                 {kosiZaPrikaz.map((k, i) => (
                   <tr key={i} className="border-b border-gray-100">
                     <td className="py-1">{k.naziv || `Kos ${i + 1}`}</td>
-                    <td className="py-1">{k.dolzina || "–"}</td>
-                    <td className="py-1">{k.sirina || "–"}</td>
-                    <td className="py-1">{k.debelina || nalog.debelina || "–"}</td>
+                    <td className="py-1">{k.nacinCene === "kos" ? `Fiksna cena: ${eur(n(k.cenaKos))}` : k.dolzina || "–"}</td>
+                    <td className="py-1">{k.nacinCene === "kos" ? "—" : k.sirina || "–"}</td>
+                    <td className="py-1">{k.nacinCene === "kos" ? "—" : k.debelina || nalog.debelina || "–"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1562,6 +1629,7 @@ function TiskPonudbePulti({ nalog, cenik, nazaj }) {
             <div className="mt-0.5">
               {izr.material.m2_2cm > 0 && <div>2 cm: {izr.material.m2_2cm.toFixed(2)} m² = {eur(izr.material.cena_2cm)}</div>}
               {izr.material.m2_3cm > 0 && <div>3 cm: {izr.material.m2_3cm.toFixed(2)} m² = {eur(izr.material.cena_3cm)}</div>}
+              {izr.material.cena_kos > 0 && <div>Kosi s fiksno ceno: {eur(izr.material.cena_kos)}</div>}
             </div>
           )}
         </div>
@@ -1581,8 +1649,8 @@ function TiskPonudbePulti({ nalog, cenik, nazaj }) {
                 {nalog.kosi.map((k, i) => (
                   <tr key={i} className="border-b border-gray-100">
                     <td className="py-1">{k.naziv || `Kos ${i + 1}`}</td>
-                    <td className="py-1">{k.dolzina || "–"} × {k.sirina || "–"}</td>
-                    <td className="py-1">{k.debelina || "2"} cm</td>
+                    <td className="py-1">{k.nacinCene === "kos" ? `Fiksna cena: ${eur(n(k.cenaKos))}` : `${k.dolzina || "–"} × ${k.sirina || "–"}`}</td>
+                    <td className="py-1">{k.nacinCene === "kos" ? "—" : `${k.debelina || "2"} cm`}</td>
                   </tr>
                 ))}
               </tbody>
