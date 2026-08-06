@@ -263,13 +263,10 @@ function ponudbaPultiSMS(nalog, izr) {
   return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besediloPonudbePulti(nalog, izr))}`;
 }
 
-function prenesiHTMLDokumentPulti(selector, naslov, imeDatoteke) {
+function zgradiHTMLDokumentPulti(selector, naslov) {
   const el = document.querySelector(selector);
-  if (!el) {
-    alert("Ni bilo mogoče najti vsebine za izpis.");
-    return;
-  }
-  const html =
+  if (!el) return null;
+  return (
     "<!DOCTYPE html><html lang=\"sl\"><head><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
     "<title>" + naslov + "</title>" +
@@ -281,7 +278,16 @@ function prenesiHTMLDokumentPulti(selector, naslov, imeDatoteke) {
     "</style></head><body>" +
     "<div class=\"navodilo\">To je prenesena datoteka za tiskanje. Uporabi Ctrl+P (Cmd+P na Mac) ali meni brskalnika &rarr; Natisni / Shrani kot PDF.</div>" +
     "<div class=\"ovoj\">" + el.outerHTML + "</div>" +
-    "</body></html>";
+    "</body></html>"
+  );
+}
+
+function prenesiHTMLDokumentPulti(selector, naslov, imeDatoteke) {
+  const html = zgradiHTMLDokumentPulti(selector, naslov);
+  if (!html) {
+    alert("Ni bilo mogoče najti vsebine za izpis.");
+    return;
+  }
   const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -291,6 +297,34 @@ function prenesiHTMLDokumentPulti(selector, naslov, imeDatoteke) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+async function posljiDokumentPoMailuPulti(selector, naslov, imeDatoteke, na, zadeva, besedilo) {
+  const html = zgradiHTMLDokumentPulti(selector, naslov);
+  if (!html) {
+    alert("Ni bilo mogoče najti vsebine za pošiljanje.");
+    return false;
+  }
+  if (!na) {
+    alert("Stranka nima vnesenega e-mail naslova.");
+    return false;
+  }
+  try {
+    const res = await fetch("/api/posljidobavnico", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ na, zadeva, besedilo, imeDatoteke, vsebinaDatoteke: html }),
+    });
+    const odgovor = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(`Pošiljanje ni uspelo (${res.status}): ${odgovor.napaka || ""}\n${odgovor.podrobnosti || ""}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    alert("Napaka pri pošiljanju e-pošte. Preveri povezavo.");
+    return false;
+  }
 }
 
 function prazenKos() {
@@ -2242,10 +2276,27 @@ const NAVODILA_VZDRZEVANJE = [
 
 function PrevzemPulti({ nalog, nazaj, shraniPodpisPrevzema }) {
   const [podpisovanje, setPodpisovanje] = useState(false);
+  const [posiljam, setPosiljam] = useState(false);
   if (!nalog) return <div className="p-4">Nalog ne obstaja. <button onClick={nazaj} className="text-red-600 underline">Nazaj</button></div>;
 
   const danes = new Date().toLocaleDateString("sl-SI");
   const strankaVarno = (nalog.stranka?.ime || "").replace(/[\\/:*?"<>|]/g, "").trim();
+  const imeDatoteke = `zapisnik-prevzem-${nalog.stevilka || "pult"}${strankaVarno ? " " + strankaVarno : ""}.html`;
+
+  async function poslji() {
+    if (posiljam) return;
+    setPosiljam(true);
+    const uspeh = await posljiDokumentPoMailuPulti(
+      ".prevzem-pulti",
+      `Zapisnik o prevzemu ${nalog.stevilka || ""}`,
+      imeDatoteke,
+      nalog.stranka?.email,
+      `Zapisnik o prevzemu ${nalog.stevilka || ""} — Kamnoseštvo Čakš`,
+      `Pozdravljeni ${nalog.stranka?.ime || ""},\n\nv priponki pošiljamo zapisnik o prevzemu vaših kuhinjskih pultov (${nalog.stevilka || ""}).\n\nZa vsa vprašanja smo dosegljivi na 031 235 146.\n\nLep pozdrav,\nKamnoseštvo Čakš`
+    );
+    setPosiljam(false);
+    if (uspeh) alert("Zapisnik je bil uspešno poslan na e-mail stranke.");
+  }
 
   return (
     <div className="p-3 space-y-3">
@@ -2260,11 +2311,20 @@ function PrevzemPulti({ nalog, nazaj, shraniPodpisPrevzema }) {
 
       <div className="prevzem-pulti-brez flex flex-wrap gap-2">
         <button
-          onClick={() => prenesiHTMLDokumentPulti(".prevzem-pulti", `Zapisnik o prevzemu ${nalog.stevilka || ""}`, `zapisnik-prevzem-${nalog.stevilka || "pult"}${strankaVarno ? " " + strankaVarno : ""}.html`)}
+          onClick={() => prenesiHTMLDokumentPulti(".prevzem-pulti", `Zapisnik o prevzemu ${nalog.stevilka || ""}`, imeDatoteke)}
           className="bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
         >
           Prenesi / natisni datoteko
         </button>
+        {nalog.stranka?.email && (
+          <button
+            onClick={poslji}
+            disabled={posiljam}
+            className="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-60"
+          >
+            {posiljam ? "Pošiljam …" : "📧 Pošlji na e-mail"}
+          </button>
+        )}
         {!nalog.prevzemPodpis && (
           <button
             onClick={() => setPodpisovanje(true)}
