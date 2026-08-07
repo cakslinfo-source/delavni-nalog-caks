@@ -224,7 +224,9 @@ function datotekaVBase64(file) {
 
 const MAX_DATOTEKA_MB = 4;
 
-async function obravnavajNalozenoDatoteko(event, nastavi) {
+// Datoteke (DXF, skice) se shranjujejo LOČENO od naloga (v /api/priloge-pulti),
+// nalog hrani samo lahek sklic { ime, tip, kljuc } — enako kot pri Policah, da se izognemo napaki 413.
+async function nalozisPrilogoPulti(event, nastaviReferenco) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   if (file.size > MAX_DATOTEKA_MB * 1024 * 1024) {
@@ -233,12 +235,50 @@ async function obravnavajNalozenoDatoteko(event, nastavi) {
     return;
   }
   try {
-    const rezultat = await datotekaVBase64(file);
-    nastavi(rezultat);
+    const podatki = await datotekaVBase64(file);
+    const kljuc = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const res = await fetch("/api/priloge-pulti", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kljuc, podatki }),
+    });
+    if (!res.ok) throw new Error();
+    nastaviReferenco({ ime: file.name, tip: file.type, kljuc });
   } catch (e) {
-    alert("Napaka pri nalaganju datoteke.");
+    alert("Napaka pri nalaganju datoteke. Preveri povezavo.");
   }
   event.target.value = "";
+}
+
+function PrilogaPregledPulti({ referenca, slikaRazred }) {
+  const [podatkiURL, setPodatkiURL] = useState(null);
+  const [nalaga, setNalaga] = useState(true);
+
+  useEffect(() => {
+    let odjava = false;
+    setNalaga(true);
+    fetch(`/api/priloge-pulti?kljuc=${encodeURIComponent(referenca.kljuc)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((p) => {
+        if (!odjava && p && p.podatki) setPodatkiURL(p.podatki);
+      })
+      .finally(() => {
+        if (!odjava) setNalaga(false);
+      });
+    return () => { odjava = true; };
+  }, [referenca.kljuc]);
+
+  if (nalaga) return <p className="text-xs text-gray-400">Nalagam prilogo …</p>;
+  if (!podatkiURL) return <p className="text-xs text-gray-400">Priloge ni bilo mogoče naložiti.</p>;
+
+  const jeSlika = referenca.tip && referenca.tip.startsWith("image/");
+  return jeSlika ? (
+    <img src={podatkiURL} alt={referenca.ime} className={slikaRazred || "max-h-80 rounded-lg mx-auto"} />
+  ) : (
+    <a href={podatkiURL} download={referenca.ime} className="text-sm text-blue-600 underline block">
+      📎 Prenesi {referenca.ime}
+    </a>
+  );
 }
 
 function besediloPonudbePulti(nalog, izr) {
@@ -764,6 +804,8 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
 
 function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
   const [nal, setNal] = useState(zacetni);
+  const [nalagamDxf, setNalagamDxf] = useState(false);
+  const [nalagamSkico, setNalagamSkico] = useState(false);
   const [odpreteSkupine, setOdpreteSkupine] = useState({});
   const izr = izracunNaloga(nal, cenik);
   const material = najdiMaterial(cenik, nal.materialId);
@@ -1136,22 +1178,26 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
             <input
               type="file"
               accept=".dxf,.dwg"
-              onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setNal({ ...nal, dxfDatoteka: rez }))}
+              onChange={(e) => {
+                setNalagamDxf(true);
+                nalozisPrilogoPulti(e, (rez) => {
+                  setNal((trenutni) => ({ ...trenutni, dxfDatoteka: rez }));
+                  setNalagamDxf(false);
+                });
+              }}
+              disabled={nalagamDxf}
               className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
             />
           )}
+          {nalagamDxf && <p className="text-xs text-gray-400 mt-1">Nalagam …</p>}
         </div>
         <div className="sm:col-span-2">
           <label className={lbl}>Skica / delovni list z izmere (slika ali PDF)</label>
           {nal.skica ? (
             <div className="bg-stone-100 rounded-lg p-2">
-              {nal.skica.tip && nal.skica.tip.startsWith("image/") ? (
-                <img src={nal.skica.podatki} alt="Skica" className="max-h-64 rounded-lg mx-auto" />
-              ) : (
-                <div className="flex items-center justify-between text-sm px-2 py-1">
-                  <span className="truncate text-stone-700">📄 {nal.skica.ime}</span>
-                </div>
-              )}
+              <div className="flex items-center justify-between text-sm px-2 py-1">
+                <span className="truncate text-stone-700">📄 {nal.skica.ime}</span>
+              </div>
               <button
                 type="button"
                 onClick={() => setNal({ ...nal, skica: null })}
@@ -1165,10 +1211,18 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
               type="file"
               accept="image/*,application/pdf"
               capture="environment"
-              onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setNal({ ...nal, skica: rez }))}
+              onChange={(e) => {
+                setNalagamSkico(true);
+                nalozisPrilogoPulti(e, (rez) => {
+                  setNal((trenutni) => ({ ...trenutni, skica: rez }));
+                  setNalagamSkico(false);
+                });
+              }}
+              disabled={nalagamSkico}
               className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
             />
           )}
+          {nalagamSkico && <p className="text-xs text-gray-400 mt-1">Nalagam …</p>}
         </div>
         <div>
           <label className={lbl}>Opombe</label>
@@ -1325,13 +1379,17 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
         )}
         {nalog.dxf && <div className="text-xs text-gray-500">DXF: {nalog.dxf}</div>}
         {nalog.dxfDatoteka && (
-          <a
-            href={nalog.dxfDatoteka.podatki}
-            download={nalog.dxfDatoteka.ime}
-            className="text-xs text-blue-600 underline block"
-          >
-            📎 Prenesi DXF datoteko ({nalog.dxfDatoteka.ime})
-          </a>
+          nalog.dxfDatoteka.kljuc ? (
+            <PrilogaPregledPulti referenca={nalog.dxfDatoteka} />
+          ) : (
+            <a
+              href={nalog.dxfDatoteka.podatki}
+              download={nalog.dxfDatoteka.ime}
+              className="text-xs text-blue-600 underline block"
+            >
+              📎 Prenesi DXF datoteko ({nalog.dxfDatoteka.ime})
+            </a>
+          )
         )}
         {nalog.datumMontaze && (
           <div className="text-sm text-red-600 font-semibold">
@@ -1348,7 +1406,9 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
       {nalog.skica && (
         <div className="bg-white rounded-xl p-3">
           <div className="font-semibold text-sm mb-2">Skica / delovni list z izmere</div>
-          {nalog.skica.tip && nalog.skica.tip.startsWith("image/") ? (
+          {nalog.skica.kljuc ? (
+            <PrilogaPregledPulti referenca={nalog.skica} />
+          ) : nalog.skica.tip && nalog.skica.tip.startsWith("image/") ? (
             <img src={nalog.skica.podatki} alt="Skica" className="max-h-80 rounded-lg mx-auto" />
           ) : (
             <a
