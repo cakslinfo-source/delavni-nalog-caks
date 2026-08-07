@@ -6,6 +6,46 @@ const ADMIN_PIN = "1991";
 
 const TIPI_IZMERE = ["Spomenik", "Stopnice", "Napis", "Police", "Kuhinja", "Pokrivalne plošče", "Ostalo"];
 
+function prenesiVarnostnoKopijoSestanki(sestanki) {
+  const danes = new Date().toISOString().slice(0, 10);
+  const vsebina = JSON.stringify(sestanki, null, 2);
+  const blob = new Blob([vsebina], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `varnostna-kopija-sestanki-${danes}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function obnoviIzDatotekeSestanki(event, shraniSeznam) {
+  const datoteka = event.target.files && event.target.files[0];
+  if (!datoteka) return;
+  const bralnik = new FileReader();
+  bralnik.onload = async (e) => {
+    try {
+      const podatki = JSON.parse(e.target.result);
+      if (!Array.isArray(podatki)) {
+        alert("Datoteka ni veljavna varnostna kopija (pričakovan je seznam sestankov).");
+        return;
+      }
+      const potrdi = window.confirm(
+        `Ali res želiš obnoviti podatke iz te datoteke? Vsebuje ${podatki.length} sestankov in bo PREPISALA trenutni seznam. Tega dejanja ni mogoče razveljaviti.`
+      );
+      if (potrdi) {
+        await shraniSeznam(podatki);
+        alert("Podatki so bili uspešno obnovljeni.");
+      }
+    } catch (err) {
+      alert("Napaka pri branju datoteke — preveri, da je to prava .json varnostna kopija.");
+    }
+  };
+  bralnik.readAsText(datoteka);
+  event.target.value = "";
+}
+
 function prazenSestanek() {
   return {
     id: Date.now(),
@@ -81,6 +121,8 @@ export default function Sestanki() {
   const [sestanki, setSestanki] = useState([]);
   const [nalaganje, setNalaganje] = useState(true);
   const [napaka, setNapaka] = useState("");
+  const [shranjujem, setShranjujem] = useState(false);
+  const [zadnjaVerzija, setZadnjaVerzija] = useState(0);
   const [pogled, setPogled] = useState("seznam");
   const [obrazec, setObrazec] = useState(null);
   const [izbran, setIzbran] = useState(null);
@@ -92,25 +134,69 @@ export default function Sestanki() {
   });
 
   useEffect(() => {
-    fetch("/api/sestanki")
-      .then((r) => r.json())
+    fetch("/api/sestanki", { cache: "no-store" })
+      .then((r) => {
+        setZadnjaVerzija(Number(r.headers.get("X-Verzija")) || 0);
+        return r.json();
+      })
       .then((p) => setSestanki(Array.isArray(p) ? p : []))
       .catch(() => setNapaka("Napaka pri nalaganju podatkov."))
       .finally(() => setNalaganje(false));
   }, []);
 
-  async function shrani(novi) {
-    setSestanki(novi);
+  async function shraniSeznam(noviSeznam, pricakovanaVerzija) {
+    setSestanki(noviSeznam);
+    setShranjujem(true);
+    let uspeh = false;
     try {
-      const r = await fetch("/api/sestanki", {
+      const res = await fetch("/api/sestanki", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(novi),
+        body: JSON.stringify({ seznam: noviSeznam, pricakovanaVerzija }),
       });
-      if (!r.ok) throw new Error();
-    } catch {
-      setNapaka("Napaka pri shranjevanju! Preveri povezavo.");
+      const odgovor = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        setNapaka(
+          odgovor.zastarelaAplikacija
+            ? "Aplikacija na tej napravi je zastarela. Osveži stran in poskusi znova."
+            : "Nekdo drug je medtem spremenil podatke. Stran se je osvežila – preveri in poskusi znova."
+        );
+        try {
+          const svezRes = await fetch("/api/sestanki", { cache: "no-store" });
+          const sveziPodatki = await svezRes.json();
+          if (Array.isArray(sveziPodatki)) setSestanki(sveziPodatki);
+          setZadnjaVerzija(Number(svezRes.headers.get("X-Verzija")) || 0);
+        } catch (e2) {}
+      } else if (!res.ok) {
+        setNapaka(`Shranjevanje ni uspelo (${res.status}). ${odgovor.napaka || ""}`.trim());
+      } else {
+        setNapaka("");
+        if (odgovor.verzija !== undefined) setZadnjaVerzija(odgovor.verzija);
+        uspeh = true;
+      }
+    } catch (e) {
+      setNapaka("Napaka pri shranjevanju. Preveri povezavo.");
+    } finally {
+      setShranjujem(false);
     }
+    return uspeh;
+  }
+
+  async function posodobiSestanke(transformFn) {
+    let osnova = sestanki;
+    let verzija = zadnjaVerzija;
+    try {
+      const res = await fetch("/api/sestanki", { cache: "no-store" });
+      const sveze = await res.json();
+      verzija = Number(res.headers.get("X-Verzija")) || 0;
+      if (Array.isArray(sveze)) osnova = sveze;
+    } catch (e) {}
+    const novi = transformFn(osnova);
+    return await shraniSeznam(novi, verzija);
+  }
+
+  async function shrani(novi) {
+    return await posodobiSestanke(() => novi);
   }
 
   function vprasajPin() {
@@ -165,6 +251,12 @@ export default function Sestanki() {
             title="Osveži aplikacijo"
           >
             ⟳ Osveži
+          </button>
+          <button
+            onClick={() => { if (vprasajPin()) setPogled("admin"); }}
+            className="text-xs bg-gray-800 px-3 py-2 rounded-lg"
+          >
+            🔒 Admin
           </button>
         </div>
       </div>
@@ -234,19 +326,46 @@ export default function Sestanki() {
         />
       )}
 
+      {pogled === "admin" && (
+        <div className="p-3 space-y-3">
+          <button onClick={() => setPogled("seznam")} className="text-sm text-gray-500">← Nazaj</button>
+          <h2 className="font-bold text-lg">Admin — Sestanki</h2>
+          <div className="bg-white rounded-xl p-3 space-y-2">
+            <div className="font-semibold text-sm">Varnostna kopija sestankov</div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => prenesiVarnostnoKopijoSestanki(sestanki)}
+                className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                ⬇ Prenesi kopijo zdaj
+              </button>
+              <label className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">
+                📄 Obnovi iz datoteke
+                <input
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={(e) => obnoviIzDatotekeSestanki(e, (podatki) => posodobiSestanke(() => podatki))}
+                />
+              </label>
+            </div>
+            <p className="text-xs text-gray-500">Priporočamo ročni prenos vsake toliko časa, za vsak slučaj.</p>
+          </div>
+        </div>
+      )}
+
       {pogled === "obrazec" && (
         <Obrazec
           zacetni={obrazec}
           preklici={() => setPogled(obrazec && obrazec._urejanje ? "podrobnosti" : "seznam")}
           shrani={(s) => {
-            let novi;
-            if (s._urejanje) {
-              delete s._urejanje;
-              novi = sestanki.map((x) => (x.id === s.id ? s : x));
-            } else {
-              novi = [s, ...sestanki];
-            }
-            shrani(novi);
+            posodobiSestanke((os) => {
+              if (s._urejanje) {
+                delete s._urejanje;
+                return os.map((x) => (x.id === s.id ? s : x));
+              }
+              return [s, ...os];
+            });
             setIzbran(s.id);
             setPogled("podrobnosti");
           }}
@@ -259,12 +378,12 @@ export default function Sestanki() {
           nazaj={() => setPogled("seznam")}
           uredi={(s) => { setObrazec({ ...s, _urejanje: true }); setPogled("obrazec"); }}
           preklopiOpravljeno={(s) => {
-            shrani(sestanki.map((x) => (x.id === s.id ? { ...x, opravljeno: !x.opravljeno } : x)));
+            posodobiSestanke((os) => os.map((x) => (x.id === s.id ? { ...x, opravljeno: !x.opravljeno } : x)));
           }}
           izbrisi={(s) => {
             if (!vprasajPin()) return;
             if (!confirm(`Res izbrišem sestanek s stranko ${s.stranka.ime}?`)) return;
-            shrani(sestanki.filter((x) => x.id !== s.id));
+            posodobiSestanke((os) => os.filter((x) => x.id !== s.id));
             setPogled("seznam");
           }}
         />
