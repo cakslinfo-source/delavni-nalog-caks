@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const ADMIN_PIN = "1991";
 
@@ -433,6 +433,7 @@ export default function Spomeniki() {
             setPogled("seznam");
           }}
           natisni={(nal) => { setIzbran(nal.id); setPogled("tiskanje"); }}
+          odpriPrevzem={(nal) => { setIzbran(nal.id); setPogled("prevzem"); }}
           pretvoriVNarocilo={(nal) => {
             if (!confirm(`Ponudbo ${nal.stevilka} pretvorim v pravo naročilo? Dobi novo številko.`)) return;
             posodobiSpomenike((os) => {
@@ -457,6 +458,22 @@ export default function Spomeniki() {
         <TiskDelovniList
           nalog={spomeniki.find((x) => x.id === izbran)}
           nazaj={() => setPogled("podrobnosti")}
+        />
+      )}
+
+      {pogled === "prevzem" && (
+        <PrevzemniZapisnikSpomenik
+          nalog={spomeniki.find((x) => x.id === izbran)}
+          nazaj={() => setPogled("podrobnosti")}
+          shraniPrevzem={(nal, podatkiPodpisa, ime) => {
+            posodobiSpomenike((os) =>
+              os.map((x) =>
+                x.id === nal.id
+                  ? { ...x, prevzemPodpis: podatkiPodpisa, prevzemPodpisIme: ime, prevzemPodpisDatum: new Date().toISOString() }
+                  : x
+              )
+            );
+          }}
         />
       )}
 
@@ -815,13 +832,10 @@ function izvoziDonatoniCSVSpomenik(nalog) {
   URL.revokeObjectURL(url);
 }
 
-function prenesiHTMLDokumentSpomenik(selector, naslov, imeDatoteke) {
+function zgradiHTMLDokumentSpomenik(selector, naslov) {
   const el = document.querySelector(selector);
-  if (!el) {
-    alert("Ni bilo mogoče najti vsebine za izpis.");
-    return;
-  }
-  const html =
+  if (!el) return null;
+  return (
     "<!DOCTYPE html><html lang=\"sl\"><head><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
     "<title>" + naslov + "</title>" +
@@ -833,7 +847,16 @@ function prenesiHTMLDokumentSpomenik(selector, naslov, imeDatoteke) {
     "</style></head><body>" +
     "<div class=\"navodilo\">To je prenesena datoteka za tiskanje. Uporabi Ctrl+P (Cmd+P na Mac) ali meni brskalnika &rarr; Natisni / Shrani kot PDF.</div>" +
     "<div class=\"ovoj\">" + el.outerHTML + "</div>" +
-    "</body></html>";
+    "</body></html>"
+  );
+}
+
+function prenesiHTMLDokumentSpomenik(selector, naslov, imeDatoteke) {
+  const html = zgradiHTMLDokumentSpomenik(selector, naslov);
+  if (!html) {
+    alert("Ni bilo mogoče najti vsebine za izpis.");
+    return;
+  }
   const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -843,6 +866,34 @@ function prenesiHTMLDokumentSpomenik(selector, naslov, imeDatoteke) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+async function posljiDokumentPoMailuSpomenik(selector, naslov, imeDatoteke, na, zadeva, besedilo) {
+  const html = zgradiHTMLDokumentSpomenik(selector, naslov);
+  if (!html) {
+    alert("Ni bilo mogoče najti vsebine za pošiljanje.");
+    return false;
+  }
+  if (!na) {
+    alert("Stranka nima vnesenega e-mail naslova.");
+    return false;
+  }
+  try {
+    const res = await fetch("/api/posljidobavnico", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ na, zadeva, besedilo, imeDatoteke, vsebinaDatoteke: html }),
+    });
+    const odgovor = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(`Pošiljanje ni uspelo (${res.status}): ${odgovor.napaka || ""}\n${odgovor.podrobnosti || ""}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    alert("Napaka pri pošiljanju e-pošte. Preveri povezavo.");
+    return false;
+  }
 }
 
 function TiskDelovniList({ nalog, nazaj }) {
@@ -949,7 +1000,7 @@ function TiskDelovniList({ nalog, nazaj }) {
   );
 }
 
-function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, pretvoriVNarocilo }) {
+function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, pretvoriVNarocilo, odpriPrevzem }) {
   const [kdoOpravil, setKdoOpravil] = useState("");
   if (!nalog)
     return (
@@ -1096,6 +1147,10 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
         🖨 Natisni delovni list
       </button>
 
+      <button onClick={() => odpriPrevzem(nalog)} className="w-full bg-indigo-700 text-white rounded-xl py-3 font-semibold">
+        📋 Prevzemni zapisnik {nalog.prevzemPodpis ? "✓ (podpisan)" : "+ e-podpis"}
+      </button>
+
       <button onClick={() => izvoziDonatoniCSVSpomenik(nalog)} className="w-full bg-stone-700 text-white rounded-xl py-3 font-semibold">
         ⬇ CSV Donatoni
       </button>
@@ -1104,6 +1159,280 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
         <button onClick={() => uredi(nalog)} className="flex-1 bg-gray-800 text-white rounded-xl py-3 font-semibold">Uredi</button>
         <button onClick={() => izbrisi(nalog)} className="flex-1 bg-red-100 text-red-600 rounded-xl py-3 font-semibold">Izbriši</button>
       </div>
+    </div>
+  );
+}
+
+// ===================== E-PODPIS =====================
+
+function PodpisniPadSpomenik({ zacetnoIme, onPreklici, onShrani }) {
+  const platnoRef = useRef(null);
+  const risemRef = useRef(false);
+  const zadnjaTockaRef = useRef(null);
+  const [prazno, setPrazno] = useState(true);
+  const [ime, setIme] = useState(zacetnoIme || "");
+
+  useEffect(() => {
+    const platno = platnoRef.current;
+    if (!platno) return;
+    const ctx = platno.getContext("2d");
+    const razmerje = window.devicePixelRatio || 1;
+    const sirina = platno.clientWidth;
+    const visina = platno.clientHeight;
+    platno.width = sirina * razmerje;
+    platno.height = visina * razmerje;
+    ctx.scale(razmerje, razmerje);
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#111827";
+  }, []);
+
+  function tockaIzDogodka(e) {
+    const platno = platnoRef.current;
+    const rect = platno.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function zacniRisanje(e) {
+    e.preventDefault();
+    risemRef.current = true;
+    zadnjaTockaRef.current = tockaIzDogodka(e);
+  }
+
+  function risi(e) {
+    if (!risemRef.current) return;
+    e.preventDefault();
+    const ctx = platnoRef.current.getContext("2d");
+    const tocka = tockaIzDogodka(e);
+    ctx.beginPath();
+    ctx.moveTo(zadnjaTockaRef.current.x, zadnjaTockaRef.current.y);
+    ctx.lineTo(tocka.x, tocka.y);
+    ctx.stroke();
+    zadnjaTockaRef.current = tocka;
+    if (prazno) setPrazno(false);
+  }
+
+  function koncajRisanje() {
+    risemRef.current = false;
+  }
+
+  function pocisti() {
+    const platno = platnoRef.current;
+    const ctx = platno.getContext("2d");
+    ctx.clearRect(0, 0, platno.width, platno.height);
+    setPrazno(true);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl p-4 w-full max-w-md">
+        <h3 className="font-bold text-base mb-3">Elektronski podpis prevzemnika</h3>
+        <input
+          value={ime}
+          onChange={(e) => setIme(e.target.value)}
+          placeholder="Ime in priimek prevzemnika"
+          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm mb-3"
+        />
+        <p className="text-xs text-gray-500 mb-1.5">Podpiši s prstom ali miško v spodnje polje:</p>
+        <canvas
+          ref={platnoRef}
+          className="w-full border-2 border-dashed border-gray-300 rounded-lg touch-none"
+          style={{ height: "160px" }}
+          onMouseDown={zacniRisanje}
+          onMouseMove={risi}
+          onMouseUp={koncajRisanje}
+          onMouseLeave={koncajRisanje}
+          onTouchStart={zacniRisanje}
+          onTouchMove={risi}
+          onTouchEnd={koncajRisanje}
+        />
+        <div className="flex gap-2 mt-3">
+          <button onClick={pocisti} className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-300">
+            Počisti
+          </button>
+          <button onClick={onPreklici} className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-gray-600">
+            Prekliči
+          </button>
+          <button
+            onClick={() => {
+              if (prazno) {
+                alert("Prosim, najprej se podpiši.");
+                return;
+              }
+              if (!ime.trim()) {
+                alert("Vnesi ime prevzemnika.");
+                return;
+              }
+              onShrani(platnoRef.current.toDataURL("image/png"), ime.trim());
+            }}
+            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 text-white"
+          >
+            Shrani podpis
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===================== PREVZEMNI ZAPISNIK =====================
+
+const NAVODILA_SPOMENIK = [
+  "Kamna ne čistite z agresivnimi kemičnimi sredstvi (kisline, belila, industrijska čistila) — uporabljajte samo vodo in mehko krtačo.",
+  "Naravne spremembe barve ali patina zaradi vremenskih vplivov so pri naravnem kamnu normalen pojav in niso napaka izdelave.",
+  "Sveče, vaze in drugi predmeti naj ne stojijo dlje časa neposredno na polirani površini brez podstavka — lahko pustijo sledi.",
+  "Redno preverjajte pritrjenost elementov (svečnik, vaza, robniki), predvsem po zimi in obdobjih zmrzali.",
+  "Morebitno posedanje tal okoli spomenika zaradi vremenskih vplivov ni napaka izdelave in sodi v vzdrževanje pokopališča.",
+  "Za morebitno poznejše čiščenje, popravilo ali dodatne napise se obrnite na nas.",
+];
+
+function PrevzemniZapisnikSpomenik({ nalog, nazaj, shraniPrevzem }) {
+  const [podpisovanje, setPodpisovanje] = useState(false);
+  const [posiljam, setPosiljam] = useState(false);
+  if (!nalog) return <div className="p-4">Nalog ne obstaja. <button onClick={nazaj} className="text-red-600 underline">Nazaj</button></div>;
+
+  const danes = new Date().toLocaleDateString("sl-SI");
+  const strankaVarno = (nalog.stranka?.ime || "").replace(/[\\/:*?"<>|]/g, "").trim();
+  const imeDatoteke = `zapisnik-prevzem-${nalog.stevilka || "spomenik"}${strankaVarno ? " " + strankaVarno : ""}.html`;
+
+  async function poslji() {
+    if (posiljam) return;
+    setPosiljam(true);
+    const uspeh = await posljiDokumentPoMailuSpomenik(
+      ".prevzem-spomenik",
+      `Zapisnik o prevzemu ${nalog.stevilka || ""}`,
+      imeDatoteke,
+      nalog.stranka?.email,
+      `Zapisnik o prevzemu ${nalog.stevilka || ""} — Kamnoseštvo Čakš`,
+      `Pozdravljeni ${nalog.stranka?.ime || ""},\n\nv priponki pošiljamo zapisnik o prevzemu spomenika (${nalog.stevilka || ""}).\n\nZa vsa vprašanja smo dosegljivi na 031 235 146.\n\nLep pozdrav,\nKamnoseštvo Čakš`
+    );
+    setPosiljam(false);
+    if (uspeh) alert("Zapisnik je bil uspešno poslan na e-mail stranke.");
+  }
+
+  return (
+    <div className="p-3 space-y-3">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .prevzem-spomenik, .prevzem-spomenik * { visibility: visible; }
+          .prevzem-spomenik { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
+          .prevzem-spomenik-brez { display: none !important; }
+        }
+      `}</style>
+
+      <div className="prevzem-spomenik-brez flex flex-wrap gap-2">
+        <button
+          onClick={() => prenesiHTMLDokumentSpomenik(".prevzem-spomenik", `Zapisnik o prevzemu ${nalog.stevilka || ""}`, imeDatoteke)}
+          className="bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
+        >
+          Prenesi / natisni datoteko
+        </button>
+        {nalog.stranka?.email && (
+          <button
+            onClick={poslji}
+            disabled={posiljam}
+            className="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-60"
+          >
+            {posiljam ? "Pošiljam …" : "📧 Pošlji na e-mail"}
+          </button>
+        )}
+        {!nalog.prevzemPodpis && (
+          <button onClick={() => setPodpisovanje(true)} className="bg-red-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">
+            ✍ Stranka podpiše prevzem
+          </button>
+        )}
+        <button onClick={nazaj} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100">
+          Nazaj
+        </button>
+      </div>
+
+      <div className="prevzem-spomenik bg-white rounded-xl p-4 sm:p-6 border border-gray-200 text-sm">
+        <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
+          <div className="font-bold text-lg">ČAKŠ <span className="text-red-600">· Spomenik</span></div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm uppercase font-semibold text-gray-600">Zapisnik o prevzemu</div>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(`https://delavni-nalog-caks.vercel.app/status/${nalog.id}`)}`}
+              alt="QR koda za status"
+              width={70}
+              height={70}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-gray-200 pb-2 mb-3">
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Nalog št.:</span><span className="font-semibold">{nalog.stevilka}</span></div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Datum prevzema:</span>{danes}</div>
+          <div><span className="text-xs text-gray-400 uppercase mr-1">Stranka:</span><span className="font-semibold">{nalog.stranka?.ime}</span></div>
+          {nalog.lokacija && <div><span className="text-xs text-gray-400 uppercase mr-1">Lokacija:</span>{nalog.lokacija}</div>}
+        </div>
+
+        <div className="mb-4">
+          <div className="text-xs text-gray-400 uppercase mb-1.5 font-semibold">Izjava stranke ob prevzemu</div>
+          <p className="leading-relaxed">Stranka izjavlja, da je ob prevzemu <strong>pregledala spomenik</strong> in ugotovila:</p>
+          <ul className="list-disc pl-5 mt-1.5 space-y-1 leading-relaxed">
+            <li>da so vsi <strong>napisi, črke in podatki pravilni</strong> ter brez napak,</li>
+            <li>da je <strong>postavitev (montaža)</strong> izvedena pravilno in stabilno,</li>
+            <li>da na izdelku <strong>ni vidnih poškodb</strong> ali razpok,</li>
+            <li>da je izvedeno delo <strong>v skladu z dogovorom</strong>.</li>
+          </ul>
+          <p className="mt-2 leading-relaxed">
+            Stranka potrjuje, da je bila <strong>seznanjena z navodili za nego in vzdrževanje</strong> (navedena spodaj)
+            ter da s svojim podpisom <strong>potrjuje prevzem brez pripomb</strong>.
+          </p>
+        </div>
+
+        <div className="mb-4 bg-gray-50 rounded-lg p-3">
+          <div className="text-xs text-gray-400 uppercase mb-1.5 font-semibold">Navodila za nego in vzdrževanje</div>
+          <ul className="list-disc pl-5 space-y-1 leading-relaxed text-[13px]">
+            {NAVODILA_SPOMENIK.map((navodilo, i) => (
+              <li key={i}>{navodilo}</li>
+            ))}
+          </ul>
+        </div>
+
+        {nalog.prevzemPodpis ? (
+          <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-6 pt-2">
+            <div>
+              <p className="text-xs text-gray-400 uppercase mb-1">Za Kamnoseštvo Čakš</p>
+              <div className="border-b border-gray-400 h-12" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase mb-1">Stranka: {nalog.prevzemPodpisIme}</p>
+              <img src={nalog.prevzemPodpis} alt="Podpis stranke" className="h-14 object-contain" />
+              <p className="text-[10px] text-gray-400">Podpisano: {nalog.prevzemPodpisDatum ? new Date(nalog.prevzemPodpisDatum).toLocaleString("sl-SI") : ""}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-6 pt-2">
+            <div>
+              <p className="text-xs text-gray-400 uppercase mb-1">Za Kamnoseštvo Čakš</p>
+              <div className="border-b border-gray-400 h-12" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase mb-1">Stranka (podpis)</p>
+              <div className="border-b border-gray-400 h-12" />
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-gray-500 mt-4 pt-2 border-t border-gray-200">Kamnoseštvo Čakš · 031 235 146</p>
+      </div>
+
+      {podpisovanje && (
+        <PodpisniPadSpomenik
+          zacetnoIme={nalog.stranka?.ime || ""}
+          onPreklici={() => setPodpisovanje(false)}
+          onShrani={(podatkiPodpisa, ime) => {
+            shraniPrevzem(nalog, podatkiPodpisa, ime);
+            setPodpisovanje(false);
+          }}
+        />
+      )}
     </div>
   );
 }
