@@ -655,6 +655,81 @@ function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
   URL.revokeObjectURL(url);
 }
 
+function csvPolje(vrednost) {
+  const niz = String(vrednost ?? "");
+  if (niz.includes(",") || niz.includes('"') || niz.includes("\n")) {
+    return `"${niz.replace(/"/g, '""')}"`;
+  }
+  return niz;
+}
+
+function izvoziCSVVsiModuli(nalogi, pultiPodatki, spomenikiPodatki, od, doDatuma) {
+  const glave = ["Modul", "Številka", "Datum", "Stranka", "Opis", "Status", "Cena (EUR)", "Plačano"];
+  const vrstice = [glave];
+
+  const znotrajObdobja = (datum) => {
+    if (!datum) return false;
+    const d = datum.slice(0, 10);
+    return (!od || d >= od) && (!doDatuma || d <= doDatuma);
+  };
+
+  nalogi
+    .filter((n) => znotrajObdobja(n.datumVnosa))
+    .forEach((n) => {
+      vrstice.push([
+        "Police",
+        n.stevilka || "",
+        (n.datumVnosa || "").slice(0, 10),
+        n.stranka || "",
+        n.opis || "",
+        n.status || "",
+        n.cena || "",
+        n.placano === "Da" ? "Da" : "Ne",
+      ]);
+    });
+
+  pultiPodatki
+    .filter((p) => znotrajObdobja(p.datum))
+    .forEach((p) => {
+      vrstice.push([
+        "Pulti",
+        p.stevilka || "",
+        (p.datum || "").slice(0, 10),
+        p.stranka?.ime || "",
+        "Pult",
+        p.status || "",
+        p.ponudbenaCena || "",
+        p.placano ? "Da" : "Ne",
+      ]);
+    });
+
+  spomenikiPodatki
+    .filter((s) => znotrajObdobja(s.datum))
+    .forEach((s) => {
+      vrstice.push([
+        "Spomenik",
+        s.stevilka || "",
+        (s.datum || "").slice(0, 10),
+        s.stranka?.ime || "",
+        s.material || "Spomenik",
+        s.status || "",
+        s.cena || "",
+        s.placano === "Da" ? "Da" : "Ne",
+      ]);
+    });
+
+  const vsebina = "\uFEFF" + vrstice.map((v) => v.map(csvPolje).join(",")).join("\n");
+  const blob = new Blob([vsebina], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `narocila-${od || "vsa"}_do_${doDatuma || "danes"}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 const ADMIN_PIN = "1991";
 
 export default function DelovniNalogi() {
@@ -677,6 +752,8 @@ export default function DelovniNalogi() {
   const [izbranaStranka, setIzbranaStranka] = useState(null);
   const [izbranMesec, setIzbranMesec] = useState(null);
   const [iskanjeStranke, setIskanjeStranke] = useState("");
+  const [izvozOd, setIzvozOd] = useState(() => new Date().toISOString().slice(0, 8) + "01");
+  const [izvozDo, setIzvozDo] = useState(() => new Date().toISOString().slice(0, 10));
 
   const [rocniMaterial, setRocniMaterial] = useState({});
 
@@ -1160,9 +1237,13 @@ export default function DelovniNalogi() {
     return seznam.sort((a, b) => (a.rok < b.rok ? -1 : 1));
   })();
 
-  const edinstveneStranke = [...new Set(nalogi.map((n) => n.stranka).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, "sl")
-  );
+  const edinstveneStranke = [
+    ...new Set([
+      ...nalogi.map((n) => n.stranka).filter(Boolean),
+      ...pultiPodatki.map((p) => p.stranka?.ime).filter(Boolean),
+      ...spomenikiPodatki.map((s) => s.stranka?.ime).filter(Boolean),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, "sl"));
 
   function najdiPodatkeStranke(imeStranke) {
     const ujemanja = nalogi
@@ -1603,6 +1684,39 @@ export default function DelovniNalogi() {
                 </button>
 
                 <div className="border-t border-stone-700 pt-3 mt-3">
+                  <p className="text-xs font-medium text-stone-400 uppercase mb-2">Izvoz v Excel (CSV) — za računovodstvo</p>
+                  <div className="flex flex-wrap items-end gap-2 mb-2">
+                    <div>
+                      <label className="block text-[11px] text-stone-500 mb-1">Od</label>
+                      <input
+                        type="date"
+                        value={izvozOd}
+                        onChange={(e) => setIzvozOd(e.target.value)}
+                        className="text-sm px-2 py-1.5 rounded-lg border border-stone-700 bg-stone-800 text-stone-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-stone-500 mb-1">Do</label>
+                      <input
+                        type="date"
+                        value={izvozDo}
+                        onChange={(e) => setIzvozDo(e.target.value)}
+                        className="text-sm px-2 py-1.5 rounded-lg border border-stone-700 bg-stone-800 text-stone-200"
+                      />
+                    </div>
+                    <button
+                      onClick={() => izvoziCSVVsiModuli(nalogi, pultiPodatki, spomenikiPodatki, izvozOd, izvozDo)}
+                      className="text-sm px-3 py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors flex items-center gap-1.5"
+                    >
+                      <Download size={14} /> Izvozi CSV
+                    </button>
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    Vsebuje naročila iz vseh treh modulov (Police, Pulti, Spomeniki) za izbrano obdobje. Odpri neposredno v Excelu.
+                  </p>
+                </div>
+
+                <div className="border-t border-stone-700 pt-3 mt-3">
                   <p className="text-xs font-medium text-stone-400 uppercase mb-2">Varnostna kopija</p>
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -1863,11 +1977,18 @@ export default function DelovniNalogi() {
                   .filter((stranka) => stranka.toLowerCase().includes(iskanjeStranke.toLowerCase()))
                   .map((stranka) => {
                   const naroceilaStranke = nalogi.filter((n) => n.stranka === stranka);
+                  const pultiStranke = pultiPodatki.filter((p) => p.stranka?.ime === stranka);
+                  const spomenikiStranke = spomenikiPodatki.filter((s) => s.stranka?.ime === stranka);
+                  const skupajNarocil = naroceilaStranke.length + pultiStranke.length + spomenikiStranke.length;
                   const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da");
                   const odprtaVsota = odprta.reduce((v, n) => {
                     const c = parseFloat(String(n.cena).replace(",", "."));
                     return v + (isNaN(c) ? 0 : c);
                   }, 0);
+                  const skupnaVrednostStranke =
+                    naroceilaStranke.reduce((v, n) => v + steviloVarno(n.cena), 0) +
+                    pultiStranke.reduce((v, p) => v + steviloVarno(p.ponudbenaCena), 0) +
+                    spomenikiStranke.reduce((v, s) => v + steviloVarno(s.cena), 0);
                   return (
                     <button
                       key={stranka}
@@ -1877,15 +1998,18 @@ export default function DelovniNalogi() {
                       <div className="min-w-0">
                         <div className="font-semibold text-stone-800 truncate">{stranka}</div>
                         <div className="text-sm text-stone-500">
-                          {naroceilaStranke.length} naročil
+                          {skupajNarocil} naročil (vsi moduli)
                           {adminOdklenjen && odprta.length > 0 && (
                             <span className="text-red-600 font-medium"> · {odprta.length} odprtih ({odprtaVsota.toFixed(2)} €)</span>
                           )}
-                          {adminOdklenjen && odprta.length === 0 && (
+                          {adminOdklenjen && odprta.length === 0 && naroceilaStranke.length > 0 && (
                             <span className="text-emerald-600 font-medium"> · vse plačano</span>
                           )}
                         </div>
                       </div>
+                      {adminOdklenjen && skupnaVrednostStranke > 0 && (
+                        <span className="text-sm font-semibold text-stone-700 shrink-0">{skupnaVrednostStranke.toFixed(2)} €</span>
+                      )}
                       <ChevronRight size={18} className="text-stone-300 shrink-0" />
                     </button>
                   );
@@ -1898,12 +2022,15 @@ export default function DelovniNalogi() {
         {pogled === "strankaDetalji" && izbranaStranka && (() => {
           const naroceilaStranke = nalogi.filter((n) => n.stranka === izbranaStranka);
           const neplacana = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
-          const skupajNeplacano = neplacana.reduce((v, n) => {
-            const c = parseFloat(String(n.cena).replace(",", "."));
-            return v + (isNaN(c) ? 0 : c);
-          }, 0);
           const pultiStranke = pultiPodatki.filter((p) => p.stranka?.ime === izbranaStranka);
           const spomenikiStranke = spomenikiPodatki.filter((s) => s.stranka?.ime === izbranaStranka);
+          const neplacaniPultiStranke = pultiStranke.filter((p) => !p.placano);
+          const neplacaniSpomenikiStranke = spomenikiStranke.filter((s) => s.placano !== "Da");
+          const skupajNeplacano =
+            neplacana.reduce((v, n) => v + steviloVarno(n.cena), 0) +
+            neplacaniPultiStranke.reduce((v, p) => v + steviloVarno(p.ponudbenaCena), 0) +
+            neplacaniSpomenikiStranke.reduce((v, s) => v + steviloVarno(s.cena), 0);
+          const skupajNeplacanihNarocil = neplacana.length + neplacaniPultiStranke.length + neplacaniSpomenikiStranke.length;
           const casovnica = [
             ...naroceilaStranke.map((n) => ({ vrsta: "Police", stevilka: n.stevilka, datum: n.datumVnosa || n.datum, opis: n.opis, cena: n.cena, id: n.id })),
             ...pultiStranke.map((p) => ({ vrsta: "Pulti", stevilka: p.stevilka, datum: p.datum, opis: "Pult", cena: p.ponudbenaCena, id: p.id })),
@@ -1923,15 +2050,31 @@ export default function DelovniNalogi() {
 
               {adminOdklenjen && (
                 <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mb-4 flex items-center justify-between">
-                  <span className="text-sm text-stone-300">Skupaj neplačano ({neplacana.length} naročil)</span>
+                  <span className="text-sm text-stone-300">Skupaj neplačano — vsi moduli ({skupajNeplacanihNarocil} naročil)</span>
                   <span className="text-xl font-bold text-red-400">{skupajNeplacano.toFixed(2)} €</span>
                 </div>
               )}
 
-              {neplacana.length === 0 ? (
+              {neplacana.length === 0 && neplacaniPultiStranke.length === 0 && neplacaniSpomenikiStranke.length === 0 ? (
                 <p className="text-sm text-emerald-600">Vse je plačano. 🎉</p>
               ) : (
                 <div className="space-y-2">
+                  {neplacaniPultiStranke.map((p) => (
+                    <div key={`pulti-${p.id}`} className="bg-white border border-stone-200 rounded-xl px-4 py-3.5 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold text-purple-500">[Pulti] {p.stevilka}</span>
+                      </div>
+                      {adminOdklenjen && <span className="font-semibold text-red-600 shrink-0">{steviloVarno(p.ponudbenaCena).toFixed(2)} €</span>}
+                    </div>
+                  ))}
+                  {neplacaniSpomenikiStranke.map((s) => (
+                    <div key={`spomenik-${s.id}`} className="bg-white border border-stone-200 rounded-xl px-4 py-3.5 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold text-amber-600">[Spomenik] {s.stevilka}</span>
+                      </div>
+                      {adminOdklenjen && <span className="font-semibold text-red-600 shrink-0">{steviloVarno(s.cena).toFixed(2)} €</span>}
+                    </div>
+                  ))}
                   {neplacana.map((n) => (
                     <button
                       key={n.id}
