@@ -1810,6 +1810,10 @@ export default function DelovniNalogi() {
               </div>
             )}
 
+            <div className="bg-black text-lime-400 text-xs font-mono p-2 rounded mb-3">
+              DEBUG: pultiPodatki={pultiPodatki.length} · pultiZaSeznam={pultiZaSeznam.length} · filtrirani skupaj={filtrirani.length} · filtrirani Pulti={filtrirani.filter((n) => n._modul === "Pulti").length}
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-3 mb-3">
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
