@@ -735,6 +735,18 @@ const ADMIN_PIN = "1991";
 export default function DelovniNalogi() {
   const [nalogi, setNalogi] = useState([]);
   const [naloziLoading, setNaloziLoading] = useState(true);
+  const [pripravljenoVBrskalniku, setPripravljenoVBrskalniku] = useState(false);
+
+  useEffect(() => {
+    setPripravljenoVBrskalniku(true);
+    if (!document.getElementById("caks-google-fonts")) {
+      const link = document.createElement("link");
+      link.id = "caks-google-fonts";
+      link.rel = "stylesheet";
+      link.href = "https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap";
+      document.head.appendChild(link);
+    }
+  }, []);
   const [zadnjaVerzija, setZadnjaVerzija] = useState(0);
   const [potrditevShranjeno, setPotrditevShranjeno] = useState(false);
   const [napaka, setNapaka] = useState("");
@@ -1293,7 +1305,6 @@ export default function DelovniNalogi() {
   return (
     <div className="min-h-screen bg-stone-100 text-stone-800" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
         .carved {
           font-family: 'Oswald', sans-serif;
           letter-spacing: 0.04em;
@@ -1451,7 +1462,7 @@ export default function DelovniNalogi() {
                 </div>
               </div>
             )}
-            {adminOdklenjen && nalogi.length > 0 && (
+            {pripravljenoVBrskalniku && adminOdklenjen && nalogi.length > 0 && (
               <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mb-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -1763,7 +1774,7 @@ export default function DelovniNalogi() {
               </div>
             )}
 
-            {podatkiGrafa.length > 0 && (
+            {pripravljenoVBrskalniku && podatkiGrafa.length > 0 && (
               <div className="bg-white border border-stone-200 rounded-xl p-4 mb-5">
                 <p className="text-xs font-medium text-stone-500 uppercase mb-1">Stanje naročil — vsi moduli (Police + Pulti + Spomeniki)</p>
                 <div className="flex items-center">
