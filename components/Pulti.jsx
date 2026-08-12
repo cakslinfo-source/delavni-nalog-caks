@@ -285,6 +285,24 @@ function besediloPonudbePulti(nalog, izr) {
   );
 }
 
+function obvestiloPultiMailto(nalog) {
+  const zadeva = `Vaš pult ${nalog.stevilka || ""} je pripravljen`;
+  const besedilo =
+    `Pozdravljeni ${nalog.stranka?.ime || ""},\n\n` +
+    `obveščamo vas, da je vaš pult v Kamnoseštvu Čakš (${nalog.stevilka || ""}) pripravljen za prevzem.\n\n` +
+    `Prevzamete ga lahko vsak dan od 7.00 do 15.00 ali po dogovoru na številki 031 235 146.\n\n` +
+    `Lep pozdrav,\nKamnoseštvo Čakš`;
+  return `mailto:${nalog.stranka?.email || ""}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besedilo)}`;
+}
+
+function obvestiloPultiSMS(nalog) {
+  const stevilkaCista = (nalog.stranka?.telefon || "").replace(/[^0-9+]/g, "");
+  const besedilo = `Pozdravljeni ${nalog.stranka?.ime || ""}, vaš pult (${nalog.stevilka || ""}) v Kamnoseštvu Čakš je pripravljen za prevzem. Odprto vsak dan 7.00-15.00 ali po dogovoru na 031 235 146. Lep pozdrav, Kamnoseštvo Čakš`;
+  const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const locilo = jeIOS ? "&" : "?";
+  return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besedilo)}`;
+}
+
 function ponudbaPultiMailto(nalog, izr) {
   const zadeva = `Ponudba ${nalog.stevilka || ""} — Kamnoseštvo Čakš`;
   return `mailto:${nalog.stranka?.email || ""}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besediloPonudbePulti(nalog, izr))}`;
@@ -658,6 +676,10 @@ export default function Pulti() {
             };
             shraniNaloge(nalogi.map((x) => (x.id === nal.id ? posodobljen : x)));
           }}
+          oznaciObvestilo={(nal, vrsta) => {
+            const polje = vrsta === "email" ? "obvestiloEmailPoslano" : "obvestiloSmsPoslano";
+            shraniNaloge(nalogi.map((x) => (x.id === nal.id ? { ...x, [polje]: new Date().toISOString() } : x)));
+          }}
         />
       )}
 
@@ -799,6 +821,9 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
                 <div className="text-xs text-red-600 mt-1">
                   Montaža: {nal.datumMontaze}
                 </div>
+              )}
+              {(nal.obvestiloEmailPoslano || nal.obvestiloSmsPoslano) && (
+                <div className="text-xs text-emerald-600 mt-1">✓ Stranka obveščena</div>
               )}
             </div>
           );
@@ -1326,7 +1351,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
 
 // ===================== PODROBNOSTI =====================
 
-function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, natisniDelovniList, odpriDobavnico, odpriPrevzem, pretvoriVNarocilo }) {
+function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, natisniDelovniList, odpriDobavnico, odpriPrevzem, pretvoriVNarocilo, oznaciObvestilo }) {
   const [kdoOpravil, setKdoOpravil] = useState("");
   if (!nalog)
     return (
@@ -1558,6 +1583,40 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
               </div>
             );
           })}
+        </div>
+      )}
+
+      {nalog.status === "pripravljeno" && (nalog.stranka?.email || nalog.stranka?.telefon) && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 space-y-2">
+          <div className="flex items-center gap-2 text-amber-800 text-sm">
+            <span>📦 Pult je pripravljen — obvesti stranko.</span>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            {nalog.stranka?.email && (
+              <a
+                href={obvestiloPultiMailto(nalog)}
+                onClick={() => oznaciObvestilo(nalog, "email")}
+                className="bg-amber-500 hover:bg-amber-400 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+              >
+                Pošlji e-mail
+              </a>
+            )}
+            {nalog.stranka?.email && nalog.obvestiloEmailPoslano && (
+              <span className="text-xs text-emerald-700 font-medium">✓ Poslano {new Date(nalog.obvestiloEmailPoslano).toLocaleDateString("sl-SI")}</span>
+            )}
+            {nalog.stranka?.telefon && (
+              <a
+                href={obvestiloPultiSMS(nalog)}
+                onClick={() => oznaciObvestilo(nalog, "sms")}
+                className="bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+              >
+                Pošlji SMS
+              </a>
+            )}
+            {nalog.stranka?.telefon && nalog.obvestiloSmsPoslano && (
+              <span className="text-xs text-emerald-700 font-medium">✓ Poslano {new Date(nalog.obvestiloSmsPoslano).toLocaleDateString("sl-SI")}</span>
+            )}
+          </div>
         </div>
       )}
 
