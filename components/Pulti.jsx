@@ -369,6 +369,7 @@ function prazenNalog() {
   return {
     id: Date.now(),
     stevilka: "",
+    vrsta: "narocilo",
     datum: new Date().toISOString().slice(0, 10),
     stranka: { ime: "", telefon: "", email: "", naslov: "" },
     sprejel: "",
@@ -486,10 +487,11 @@ export default function Pulti() {
     return false;
   }
 
-  function novaStevilka() {
+  function novaStevilka(vrsta) {
+    const predpona = vrsta === "ponudba" ? "PO" : "P";
     const leto = new Date().getFullYear();
-    const letos = nalogi.filter((x) => (x.stevilka || "").includes(`P-${leto}`)).length;
-    return `P-${leto}-${String(letos + 1).padStart(3, "0")}`;
+    const letos = nalogi.filter((x) => (x.stevilka || "").includes(`${predpona}-${leto}`)).length;
+    return `${predpona}-${leto}-${String(letos + 1).padStart(3, "0")}`;
   }
 
   if (nalaganje)
@@ -583,7 +585,7 @@ export default function Pulti() {
               delete nal._urejanje;
               novi = nalogi.map((x) => (x.id === nal.id ? nal : x));
             } else {
-              nal.stevilka = novaStevilka();
+              nal.stevilka = novaStevilka(nal.vrsta);
               nal.ponudbenaCena = izr.zDdv;
               nal.zgodovina = [
                 { status: nal.status || "sprejeto", datum: new Date().toISOString(), kdo: nal.sprejel || "" },
@@ -643,6 +645,18 @@ export default function Pulti() {
           odpriPrevzem={(nal) => {
             setIzbran(nal.id);
             setPogled("prevzem");
+          }}
+          pretvoriVNarocilo={(nal) => {
+            if (!confirm(`Ponudbo ${nal.stevilka} pretvorim v pravi delovni nalog? Dobi novo številko.`)) return;
+            const novaStev = novaStevilka("narocilo");
+            const posodobljen = {
+              ...nal,
+              vrsta: "narocilo",
+              stevilka: novaStev,
+              status: "sprejeto",
+              zgodovina: [...(nal.zgodovina || []), { status: "sprejeto", datum: new Date().toISOString(), kdo: "" }],
+            };
+            shraniNaloge(nalogi.map((x) => (x.id === nal.id ? posodobljen : x)));
           }}
         />
       )}
@@ -770,8 +784,8 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
                   <div className="font-bold">{nal.stevilka}</div>
                   <div className="text-sm text-gray-600">{nal.stranka?.ime}</div>
                 </div>
-                <span className={`text-white text-xs px-2 py-1 rounded-full ${s.barva}`}>
-                  {s.naziv}
+                <span className={`text-white text-xs px-2 py-1 rounded-full ${nal.vrsta === "ponudba" ? "bg-blue-600" : s.barva}`}>
+                  {nal.vrsta === "ponudba" ? "Ponudba" : s.naziv}
                 </span>
               </div>
               <div className="flex justify-between items-end mt-2 text-sm">
@@ -828,8 +842,30 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
   return (
     <div className="p-3 space-y-4">
       <h2 className="font-bold text-lg">
-        {nal._urejanje ? `Urejanje ${nal.stevilka}` : "Nov nalog za pult"}
+        {nal._urejanje ? `Urejanje ${nal.stevilka}` : "Nov vnos za pult"}
       </h2>
+
+      {!nal._urejanje && (
+        <div className="bg-white rounded-xl p-3">
+          <label className="text-xs text-gray-500 mb-1 block">Vrsta vnosa</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setNal({ ...nal, vrsta: "ponudba" })}
+              className={`flex-1 text-sm py-2 rounded-lg border ${nal.vrsta === "ponudba" ? "bg-blue-600 text-white border-blue-600 font-medium" : "bg-white text-gray-600 border-gray-300"}`}
+            >
+              Ponudba
+            </button>
+            <button
+              type="button"
+              onClick={() => setNal({ ...nal, vrsta: "narocilo" })}
+              className={`flex-1 text-sm py-2 rounded-lg border ${nal.vrsta === "narocilo" ? "bg-red-600 text-white border-red-600 font-medium" : "bg-white text-gray-600 border-gray-300"}`}
+            >
+              Delovni nalog
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* STRANKA */}
       <div className="bg-white rounded-xl p-3 space-y-2">
@@ -1290,7 +1326,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
 
 // ===================== PODROBNOSTI =====================
 
-function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, natisniDelovniList, odpriDobavnico, odpriPrevzem }) {
+function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, natisniDelovniList, odpriDobavnico, odpriPrevzem, pretvoriVNarocilo }) {
   const [kdoOpravil, setKdoOpravil] = useState("");
   if (!nalog)
     return (
@@ -1314,6 +1350,18 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
       <button onClick={nazaj} className="text-sm text-gray-500">
         ← Nazaj na seznam
       </button>
+
+      {nalog.vrsta === "ponudba" && (
+        <div className="bg-blue-50 border border-blue-300 rounded-xl p-3 space-y-2">
+          <div className="text-sm text-blue-800 font-medium">To je ponudba, še ni pravi delovni nalog.</div>
+          <button
+            onClick={() => pretvoriVNarocilo(nalog)}
+            className="w-full bg-blue-600 text-white rounded-lg py-2.5 text-sm font-semibold"
+          >
+            Pretvori v delovni nalog
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl p-4 space-y-2">
         <div className="flex justify-between items-start">
@@ -1462,6 +1510,7 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
         </button>
       </div>
 
+      {nalog.vrsta !== "ponudba" && (
       <div className="bg-white rounded-xl p-3 space-y-2">
         <div className="text-sm font-semibold">Spremeni status</div>
         <select
@@ -1493,6 +1542,7 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
           ))}
         </div>
       </div>
+      )}
 
       {(nalog.zgodovina || []).length > 0 && (
         <div className="bg-white rounded-xl p-3 text-xs text-gray-500 space-y-1">
@@ -1624,16 +1674,12 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
                 <div>
                   <span className="text-xs text-gray-400 uppercase mr-1">2 cm:</span>
                   {materialIzracun.m2_2cm.toFixed(2)} m²
-                  <span className="text-xs text-gray-400 uppercase mx-1">=</span>
-                  <span className="font-semibold">{eur(materialIzracun.cena_2cm)}</span>
                 </div>
               )}
               {materialIzracun.m2_3cm > 0 && (
                 <div>
                   <span className="text-xs text-gray-400 uppercase mr-1">3 cm:</span>
                   {materialIzracun.m2_3cm.toFixed(2)} m²
-                  <span className="text-xs text-gray-400 uppercase mx-1">=</span>
-                  <span className="font-semibold">{eur(materialIzracun.cena_3cm)}</span>
                 </div>
               )}
             </div>
@@ -1642,8 +1688,6 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
             <div className="col-span-2">
               <span className="text-xs text-gray-400 uppercase mr-1">Št. plošč:</span>
               {nalog.steviloPlosc || 0}
-              <span className="text-xs text-gray-400 uppercase mx-1">· Cena materiala:</span>
-              <span className="font-semibold">{eur(materialIzracun.cena)}</span>
             </div>
           )}
         </div>
@@ -1679,7 +1723,7 @@ function TiskDelovnegaListaPulti({ nalog, cenik, nazaj }) {
             <div className="text-xs text-gray-400 uppercase mb-1">Storitve</div>
             <ul className="list-disc pl-5 space-y-0.5">
               {storitveZUporabo.map((s) => (
-                <li key={s.id}>{s.naziv} × {s.kolicina} {s.enota} — <span className="font-medium">{eur(s.skupaj)}</span></li>
+                <li key={s.id}>{s.naziv} × {s.kolicina} {s.enota}</li>
               ))}
             </ul>
           </div>
