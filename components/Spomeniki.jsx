@@ -184,7 +184,21 @@ export default function Spomeniki() {
         setZadnjaVerzija(Number(r.headers.get("X-Verzija")) || 0);
         return r.json();
       })
-      .then((p) => setSpomeniki(Array.isArray(p) ? p : []))
+      .then((p) => {
+        const seznam = Array.isArray(p) ? p : [];
+        setSpomeniki(seznam);
+
+        // Če je v povezavi (npr. iz seznama na Policah) naveden ?nalog=ID,
+        // samodejno odpremo pregled tega naloga.
+        try {
+          const parametri = new URLSearchParams(window.location.search);
+          const idIzPovezave = parametri.get("nalog");
+          if (idIzPovezave && seznam.some((x) => String(x.id) === String(idIzPovezave))) {
+            setIzbran(idIzPovezave);
+            setPogled("podrobnosti");
+          }
+        } catch (e2) {}
+      })
       .catch(() => setNapaka("Napaka pri nalaganju podatkov."))
       .finally(() => setNalaganje(false));
   }, []);
