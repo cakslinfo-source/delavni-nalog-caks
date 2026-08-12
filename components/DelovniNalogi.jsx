@@ -1272,11 +1272,14 @@ export default function DelovniNalogi() {
     opis: "Pult",
     status: p.status,
     rok: p.datumMontaze,
+    datumVnosa: p.datum ? `${p.datum}T00:00:00.000Z` : new Date(Number(p.id) || Date.now()).toISOString(),
     placano: p.placano ? "Da" : "Ne",
     _modul: "Pulti",
   }));
 
-  const filtrirani = [...nalogi, ...pultiZaSeznam].filter((n) => {
+  const filtrirani = [...nalogi, ...pultiZaSeznam]
+    .sort((a, b) => (b.datumVnosa || "").localeCompare(a.datumVnosa || ""))
+    .filter((n) => {
     const ujemaIskanje =
       n.stranka.toLowerCase().includes(iskanje.toLowerCase()) ||
       n.opis.toLowerCase().includes(iskanje.toLowerCase()) ||
@@ -1809,10 +1812,6 @@ export default function DelovniNalogi() {
                 </div>
               </div>
             )}
-
-            <div className="bg-black text-lime-400 text-xs font-mono p-2 rounded mb-3">
-              DEBUG: pultiPodatki={pultiPodatki.length} · pultiZaSeznam={pultiZaSeznam.length} · filtrirani skupaj={filtrirani.length} · filtrirani Pulti={filtrirani.filter((n) => n._modul === "Pulti").length}
-            </div>
 
             <div className="flex flex-col sm:flex-row gap-3 mb-3">
               <div className="relative flex-1">
