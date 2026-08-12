@@ -1265,19 +1265,38 @@ export default function DelovniNalogi() {
   }
 
 
+  const STATUS_IZ_MODULA = {
+    sprejeto: "Sprejeto",
+    izdelavi: "V izdelavi",
+    pripravljeno: "Pripravljeno",
+    prevzeto: "Prevzeto",
+  };
+
   const pultiZaSeznam = pultiPodatki.map((p) => ({
     id: p.id,
     stevilka: p.stevilka,
     stranka: p.stranka?.ime || "",
     opis: "Pult",
-    status: p.status,
+    status: STATUS_IZ_MODULA[p.status] || "Sprejeto",
     rok: p.datumMontaze,
     datumVnosa: p.datum ? `${p.datum}T00:00:00.000Z` : new Date(Number(p.id) || Date.now()).toISOString(),
     placano: p.placano ? "Da" : "Ne",
     _modul: "Pulti",
   }));
 
-  const filtrirani = [...nalogi, ...pultiZaSeznam]
+  const spomenikiZaSeznam = spomenikiPodatki.map((s) => ({
+    id: s.id,
+    stevilka: s.stevilka,
+    stranka: s.stranka?.ime || "",
+    opis: s.material || "Spomenik",
+    status: STATUS_IZ_MODULA[s.status] || "Sprejeto",
+    rok: s.montaza,
+    datumVnosa: s.datum ? `${s.datum}T00:00:00.000Z` : new Date(Number(s.id) || Date.now()).toISOString(),
+    placano: s.placano === "Da" ? "Da" : "Ne",
+    _modul: "Spomenik",
+  }));
+
+  const filtrirani = [...nalogi, ...pultiZaSeznam, ...spomenikiZaSeznam]
     .sort((a, b) => (b.datumVnosa || "").localeCompare(a.datumVnosa || ""))
     .filter((n) => {
     const ujemaIskanje =
@@ -1290,17 +1309,6 @@ export default function DelovniNalogi() {
   });
 
   const steviloZaPoslatiRacun = nalogi.filter((n) => n.racun === "poslati").length;
-
-  // Skupno iskanje po Spomenikih (Pulti so zdaj že vključeni neposredno v glavnem seznamu zgoraj).
-  const iskanjeDrugje = iskanje.trim().length >= 2
-    ? {
-        pulti: [],
-        spomeniki: spomenikiPodatki.filter((s) => {
-          const niz = `${s.stranka?.ime || ""} ${s.stevilka || ""} ${s.lokacija || ""}`.toLowerCase();
-          return niz.includes(iskanje.toLowerCase());
-        }),
-      }
-    : { pulti: [], spomeniki: [] };
 
 
   const skupajM2Obrazec = obrazec.postavke.reduce((vsota, p) => vsota + m2Postavke(p), 0);
@@ -1825,24 +1833,6 @@ export default function DelovniNalogi() {
               </div>
             </div>
 
-            {(iskanjeDrugje.pulti.length > 0 || iskanjeDrugje.spomeniki.length > 0) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm space-y-1.5">
-                <p className="text-xs font-semibold text-blue-800 uppercase">Najdeno tudi v drugih modulih</p>
-                {iskanjeDrugje.pulti.map((p) => (
-                  <a key={p.id} href="/pulti" className="flex items-center justify-between text-blue-700 hover:underline">
-                    <span>🪨 [Pulti] {p.stevilka} · {p.stranka?.ime}</span>
-                    <ChevronRight size={14} />
-                  </a>
-                ))}
-                {iskanjeDrugje.spomeniki.map((s) => (
-                  <a key={s.id} href="/spomeniki" className="flex items-center justify-between text-blue-700 hover:underline">
-                    <span>🪦 [Spomenik] {s.stevilka} · {s.stranka?.ime}</span>
-                    <ChevronRight size={14} />
-                  </a>
-                ))}
-              </div>
-            )}
-
             <div className="flex flex-wrap gap-1.5 mb-5">
               <button
                 onClick={() => setFilterStatusi([])}
@@ -1905,6 +1895,8 @@ export default function DelovniNalogi() {
                       onClick={() => {
                         if (n._modul === "Pulti") {
                           window.open(`/pulti?nalog=${n.id}`, "_blank");
+                        } else if (n._modul === "Spomenik") {
+                          window.open(`/spomeniki?nalog=${n.id}`, "_blank");
                         } else {
                           odpriPodrobnosti(n.id);
                         }
@@ -1912,6 +1904,8 @@ export default function DelovniNalogi() {
                       className={`w-full text-left rounded-xl px-4 py-3.5 hover:shadow-sm transition-all flex items-center justify-between gap-3 ${
                         n._modul === "Pulti"
                           ? "bg-white border-2 border-purple-300 hover:border-purple-400"
+                          : n._modul === "Spomenik"
+                          ? "bg-white border-2 border-amber-300 hover:border-amber-400"
                           : n.racun === "poslati"
                           ? "bg-yellow-200 border-2 border-yellow-500 hover:border-yellow-600"
                           : n.racun === "poslan"
@@ -1926,6 +1920,11 @@ export default function DelovniNalogi() {
                           {n._modul === "Pulti" && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 font-medium">
                               🪨 Pulti
+                            </span>
+                          )}
+                          {n._modul === "Spomenik" && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-medium">
+                              🪦 Spomenik
                             </span>
                           )}
                           <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
