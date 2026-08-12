@@ -1264,7 +1264,7 @@ export default function DelovniNalogi() {
     _modul: "Pulti",
   }));
 
-  const filtrirani = [...nalogi, ...(iskanje.trim().length > 0 ? pultiZaSeznam : [])].filter((n) => {
+  const filtrirani = [...nalogi, ...pultiZaSeznam].filter((n) => {
     const ujemaIskanje =
       n.stranka.toLowerCase().includes(iskanje.toLowerCase()) ||
       n.opis.toLowerCase().includes(iskanje.toLowerCase()) ||
