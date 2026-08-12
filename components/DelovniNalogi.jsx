@@ -1253,7 +1253,18 @@ export default function DelovniNalogi() {
   }
 
 
-  const filtrirani = nalogi.filter((n) => {
+  const pultiZaSeznam = pultiPodatki.map((p) => ({
+    id: p.id,
+    stevilka: p.stevilka,
+    stranka: p.stranka?.ime || "",
+    opis: "Pult",
+    status: p.status,
+    rok: p.datumMontaze,
+    placano: p.placano ? "Da" : "Ne",
+    _modul: "Pulti",
+  }));
+
+  const filtrirani = [...nalogi, ...pultiZaSeznam].filter((n) => {
     const ujemaIskanje =
       n.stranka.toLowerCase().includes(iskanje.toLowerCase()) ||
       n.opis.toLowerCase().includes(iskanje.toLowerCase()) ||
@@ -1265,13 +1276,10 @@ export default function DelovniNalogi() {
 
   const steviloZaPoslatiRacun = nalogi.filter((n) => n.racun === "poslati").length;
 
-  // Skupno iskanje po Pultih in Spomenikih (poleg glavnega seznama Delovnih nalogov).
+  // Skupno iskanje po Spomenikih (Pulti so zdaj že vključeni neposredno v glavnem seznamu zgoraj).
   const iskanjeDrugje = iskanje.trim().length >= 2
     ? {
-        pulti: pultiPodatki.filter((p) => {
-          const niz = `${p.stranka?.ime || ""} ${p.stevilka || ""}`.toLowerCase();
-          return niz.includes(iskanje.toLowerCase());
-        }),
+        pulti: [],
         spomeniki: spomenikiPodatki.filter((s) => {
           const niz = `${s.stranka?.ime || ""} ${s.stevilka || ""} ${s.lokacija || ""}`.toLowerCase();
           return niz.includes(iskanje.toLowerCase());
@@ -1880,9 +1888,17 @@ export default function DelovniNalogi() {
                   return (
                     <button
                       key={n.id}
-                      onClick={() => odpriPodrobnosti(n.id)}
+                      onClick={() => {
+                        if (n._modul === "Pulti") {
+                          window.open(`/pulti?nalog=${n.id}`, "_blank");
+                        } else {
+                          odpriPodrobnosti(n.id);
+                        }
+                      }}
                       className={`w-full text-left rounded-xl px-4 py-3.5 hover:shadow-sm transition-all flex items-center justify-between gap-3 ${
-                        n.racun === "poslati"
+                        n._modul === "Pulti"
+                          ? "bg-white border-2 border-purple-300 hover:border-purple-400"
+                          : n.racun === "poslati"
                           ? "bg-yellow-200 border-2 border-yellow-500 hover:border-yellow-600"
                           : n.racun === "poslan"
                           ? "bg-emerald-200 border-2 border-emerald-500 hover:border-emerald-600"
@@ -1893,6 +1909,11 @@ export default function DelovniNalogi() {
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          {n._modul === "Pulti" && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 font-medium">
+                              🪨 Pulti
+                            </span>
+                          )}
                           <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
                           {n.vrsta === "ponudba" && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-medium">
