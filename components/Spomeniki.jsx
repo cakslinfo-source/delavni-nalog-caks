@@ -1,4 +1,4 @@
-"use client";
+A"use client";
 
 import { useState, useEffect, useRef } from "react";
 
@@ -1004,6 +1004,13 @@ function TiskDelovniList({ nalog, nazaj }) {
 
         {nalog.opombe && (
           <p className="mt-3 pt-2 border-t border-gray-200"><span className="text-xs text-gray-400 uppercase mr-1">Opombe:</span>{nalog.opombe}</p>
+        )}
+
+        {nalog.slika && (
+          <div className="mt-4 pt-3 border-t border-gray-200">
+            <div className="text-xs text-gray-400 uppercase mb-2">Skica</div>
+            <SlikaPregled referenca={nalog.slika} />
+          </div>
         )}
 
         <p className="text-xs text-gray-500 mt-4 pt-2 border-t border-gray-200">
