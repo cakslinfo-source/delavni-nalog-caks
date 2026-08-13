@@ -193,8 +193,9 @@ export default function Spomeniki() {
         try {
           const parametri = new URLSearchParams(window.location.search);
           const idIzPovezave = parametri.get("nalog");
-          if (idIzPovezave && seznam.some((x) => String(x.id) === String(idIzPovezave))) {
-            setIzbran(idIzPovezave);
+          const najdenIzPovezave = seznam.find((x) => String(x.id) === String(idIzPovezave));
+          if (najdenIzPovezave) {
+            setIzbran(najdenIzPovezave.id);
             setPogled("podrobnosti");
           }
         } catch (e2) {}
