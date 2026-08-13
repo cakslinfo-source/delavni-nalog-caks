@@ -1131,19 +1131,28 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
         </button>
       </div>
 
-      {naslednji && nalog.vrsta !== "ponudba" && (
+      {nalog.vrsta !== "ponudba" && (
         <div className="bg-white rounded-xl p-3 space-y-2">
-          <div className="text-sm font-semibold">Naslednja faza: {naslednji.naziv}</div>
+          <div className="text-sm font-semibold">Spremeni status</div>
           <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white" value={kdoOpravil} onChange={(e) => setKdoOpravil(e.target.value)}>
             <option value="">Kdo opravi? (neobvezno)</option>
             {ZAPOSLENI_PROIZVODNJA.map((z) => <option key={z}>{z}</option>)}
           </select>
-          <button
-            onClick={() => { spremeniStatus(nalog, naslednji.id, kdoOpravil); setKdoOpravil(""); }}
-            className={`w-full text-white rounded-xl py-3 font-semibold ${naslednji.barva}`}
-          >
-            Premakni v: {naslednji.naziv} →
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {STATUSI.map((st) => (
+              <button
+                key={st.id}
+                onClick={() => { spremeniStatus(nalog, st.id, kdoOpravil); setKdoOpravil(""); }}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  nalog.status === st.id
+                    ? `${st.barva} text-white border-transparent font-medium`
+                    : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+                }`}
+              >
+                {st.naziv}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
