@@ -811,6 +811,20 @@ export default function DelovniNalogi() {
   useEffect(() => {
     // Naloži polne podatke iz Pultov in Spomenikov (za skupno vrednost IN skupen seznam neplačanih).
     nalozizPultiInSpomenike();
+
+    // Samodejno osveži, ko se uporabnik vrne na ta zavihek (npr. po spremembi
+    // statusa v Pultih/Spomenikih, odprtih v drugem zavihku prek klika na kartico).
+    function obOsveziZavihka() {
+      if (document.visibilityState === "visible") {
+        nalozizPultiInSpomenike();
+      }
+    }
+    document.addEventListener("visibilitychange", obOsveziZavihka);
+    window.addEventListener("focus", obOsveziZavihka);
+    return () => {
+      document.removeEventListener("visibilitychange", obOsveziZavihka);
+      window.removeEventListener("focus", obOsveziZavihka);
+    };
   }, []);
 
   useEffect(() => {
@@ -3312,6 +3326,9 @@ function TiskNaloga({ nalog, onZapri }) {
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-2 text-sm border-b border-stone-200 pb-2">
           <span><span className="text-xs text-stone-400 uppercase mr-1">Št.</span><span className="font-semibold text-stone-800">{nalog.stevilka}</span></span>
           <span><span className="text-xs text-stone-400 uppercase mr-1">Naročnik</span><span className="font-semibold text-stone-800">{nalog.stranka}</span></span>
+          {nalog.objekt && (
+            <span><span className="text-xs text-stone-400 uppercase mr-1">Objekt</span><span className="font-semibold text-stone-800">{nalog.objekt}</span></span>
+          )}
           {nalog.oddal && (
             <span><span className="text-xs text-stone-400 uppercase mr-1">Oddal</span><span className="text-stone-700">{nalog.oddal}</span></span>
           )}
