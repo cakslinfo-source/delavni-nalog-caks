@@ -27,6 +27,37 @@ const STATUS_HEX = {
   "Prevzeto": "#1e40af",
 };
 
+function segmentiPostavke(p, idx) {
+  const kolicina = parseInt(p.kolicina) || 1;
+  const steviloKosov = p.vecKosov ? Math.max(2, parseInt(p.steviloKosov) || 2) : 1;
+  const mm = (v) => {
+    const n = parseFloat(String(v).replace(",", "."));
+    return isNaN(n) ? 0 : n * 10;
+  };
+  const dolzinaMM = mm(p.dolzina);
+  const sirinaMM = mm(p.sirina);
+  const debelinaMM = mm(p.debelina);
+  const imePolice = p.naziv && p.naziv.trim() ? p.naziv.trim() : `Polica ${idx + 1}`;
+
+  if (steviloKosov <= 1) {
+    return [{ kolicina, dolzinaMM, sirinaMM, debelinaMM, imePolice, oznaka: "" }];
+  }
+
+  const segmentDolzinaMM = Math.round(dolzinaMM / steviloKosov);
+  const oznake =
+    steviloKosov === 2
+      ? ["Desna", "Leva"]
+      : Array.from({ length: steviloKosov }, (_, i) => `Kos ${i + 1}/${steviloKosov}`);
+
+  const vrstice = [];
+  for (let k = 0; k < kolicina; k++) {
+    oznake.forEach((oznaka) => {
+      vrstice.push({ kolicina: 1, dolzinaMM: segmentDolzinaMM, sirinaMM, debelinaMM, imePolice, oznaka, celaDolzinaMM: dolzinaMM, steviloKosov });
+    });
+  }
+  return vrstice;
+}
+
 function novaPostavka() {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -38,6 +69,8 @@ function novaPostavka() {
     kolicina: "1",
     cena: "",
     popust: "",
+    vecKosov: false,
+    steviloKosov: "2",
   };
 }
 
@@ -392,21 +425,14 @@ function izvoziDonatoniCSV(nalog) {
     return s;
   };
   const prveTriCrkeStranke = (nalog.stranka || "").trim().slice(0, 3).toUpperCase();
-  const vrstice = postavke.map((p, idx) => {
-    const mm = (v) => {
-      const n = parseFloat(String(v).replace(",", "."));
-      return isNaN(n) ? "" : n * 10;
-    };
-    const imePolice = p.naziv && p.naziv.trim() ? p.naziv.trim() : `Polica ${idx + 1}`;
-    const dolzinaMM = mm(p.dolzina);
-    const sirinaMM = mm(p.sirina);
-    return [
-      p.kolicina || "1",
-      dolzinaMM,
-      sirinaMM,
-      `${prveTriCrkeStranke} ${imePolice} ${dolzinaMM}x${sirinaMM}`,
-      mm(p.debelina),
-    ];
+  const vrstice = [];
+  postavke.forEach((p, idx) => {
+    segmentiPostavke(p, idx).forEach((seg) => {
+      const imeOsnova = seg.oznaka
+        ? `${prveTriCrkeStranke} ${seg.imePolice} ${seg.oznaka} (celo ${seg.celaDolzinaMM}x${seg.sirinaMM})`
+        : `${prveTriCrkeStranke} ${seg.imePolice} ${seg.dolzinaMM}x${seg.sirinaMM}`;
+      vrstice.push([seg.kolicina, seg.dolzinaMM, seg.sirinaMM, imeOsnova, seg.debelinaMM]);
+    });
   });
   const csv = [glave, ...vrstice].map((r) => r.map(ubezi).join(";")).join("\r\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -2575,6 +2601,31 @@ export default function DelovniNalogi() {
                 </span>
               </div>
 
+              <div className="bg-stone-50 border border-stone-200 rounded-lg p-2.5 mb-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-stone-500 shrink-0">Vse police isti material?</span>
+                <select
+                  className="postavka-input flex-1 min-w-[160px]"
+                  value=""
+                  onChange={(e) => {
+                    if (!e.target.value) return;
+                    setObrazec({
+                      ...obrazec,
+                      postavke: obrazec.postavke.map((p) => ({ ...p, material: e.target.value })),
+                    });
+                    setRocniMaterial({});
+                  }}
+                >
+                  <option value="">Izberi material za vse kose spodaj…</option>
+                  {Object.entries(CENIK).map(([skupina, podatki]) => (
+                    <optgroup key={skupina} label={skupina}>
+                      {podatki.materiali.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
               <div
                 className="hidden sm:grid gap-2 px-1 mb-1.5 text-xs font-medium text-stone-400 uppercase tracking-wide"
                 style={{ gridTemplateColumns: "2fr 1.6fr 1fr 1fr 1fr 0.8fr auto" }}
@@ -2695,6 +2746,30 @@ export default function DelovniNalogi() {
                       placeholder="0"
                       inputMode="decimal"
                     />
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1.5 pl-0.5">
+                    <label className="flex items-center gap-1 text-xs text-stone-500 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!p.vecKosov}
+                        onChange={(e) => posodobiPostavko(p.id, "vecKosov", e.target.checked)}
+                        className="w-3.5 h-3.5"
+                      />
+                      Ta kos je iz več kosov
+                    </label>
+                    {p.vecKosov && (
+                      <>
+                        <span className="text-xs text-stone-400">— število:</span>
+                        <input
+                          className="postavka-input"
+                          style={{ width: "55px" }}
+                          value={p.steviloKosov}
+                          onChange={(e) => posodobiPostavko(p.id, "steviloKosov", e.target.value.replace(/[^0-9]/g, ""))}
+                          placeholder="2"
+                          inputMode="numeric"
+                        />
+                      </>
+                    )}
                   </div>
                   </div>
                 ))}
@@ -3377,6 +3452,9 @@ function TiskNaloga({ nalog, onZapri }) {
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top overflow-hidden">
                       {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
+                      {p.vecKosov && (
+                        <div className="text-[10px] text-amber-600 font-medium">iz {p.steviloKosov || 2} kosov</div>
+                      )}
                     </td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top whitespace-nowrap">{p.kolicina || "1"}</td>
                   </tr>
@@ -3503,6 +3581,9 @@ function TiskPonudbe({ nalog, onZapri }) {
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top whitespace-nowrap">
                       {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
+                      {p.vecKosov && (
+                        <div className="text-[10px] text-amber-600 font-medium">iz {p.steviloKosov || 2} kosov</div>
+                      )}
                     </td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.kolicina || "1"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.popust ? `${p.popust}%` : "—"}</td>
@@ -3722,6 +3803,9 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top overflow-hidden">
                       {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
+                      {p.vecKosov && (
+                        <div className="text-[10px] text-amber-600 font-medium">iz {p.steviloKosov || 2} kosov</div>
+                      )}
                     </td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top whitespace-nowrap">{p.kolicina || "1"}</td>
                   </tr>
