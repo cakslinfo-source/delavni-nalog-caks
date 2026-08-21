@@ -326,20 +326,26 @@ function izracunajPorocilo(nalogi, obdobje) {
     .map(([kljuc, vsota]) => ({ kljuc, naziv: nazivObdobja(kljuc, obdobje), vsota }));
 }
 
+function objektVrstica(nalog) {
+  return nalog.tipStranke === "pravna" && nalog.objekt ? `Objekt: ${nalog.objekt}\n` : "";
+}
+
 function obvestiloMailto(nalog) {
   const zadeva = `Vaše naročilo ${nalog.stevilka || ""} je pripravljeno`;
   const besedilo =
     `Pozdravljeni ${nalog.stranka},\n\n` +
-    `obveščamo vas, da je vaše naročilo v Kamnoseštvu Čakš (${nalog.stevilka || ""} – ${nalog.opis || ""}) pripravljeno za prevzem.\n\n` +
-    `Prevzamete ga lahko vsak dan od 7.00 do 15.00 ali po dogovoru na številki 031 235 146.\n\n` +
+    `obveščamo vas, da je vaše naročilo v Kamnoseštvu Čakš (${nalog.stevilka || ""} – ${nalog.opis || ""}) pripravljeno za prevzem.\n` +
+    objektVrstica(nalog) +
+    `\nPrevzamete ga lahko vsak dan od 7.00 do 15.00 ali po dogovoru na številki 031 235 146.\n\n` +
     `Lep pozdrav,\nKamnoseštvo Čakš`;
   return `mailto:${nalog.email}?subject=${encodeURIComponent(zadeva)}&body=${encodeURIComponent(besedilo)}`;
 }
 
 function obvestiloSMS(nalog) {
   const stevilkaCista = (nalog.telefon || "").replace(/[^0-9+]/g, "");
+  const objektDel = nalog.tipStranke === "pravna" && nalog.objekt ? ` (objekt: ${nalog.objekt})` : "";
   const besedilo =
-    `Pozdravljeni ${nalog.stranka}, vaše naročilo (${nalog.stevilka || ""}) v Kamnoseštvu Čakš je pripravljeno za prevzem. Odprto vsak dan 7.00-15.00 ali po dogovoru na 031 235 146. Lep pozdrav, Kamnoseštvo Čakš`;
+    `Pozdravljeni ${nalog.stranka}, vaše naročilo (${nalog.stevilka || ""})${objektDel} v Kamnoseštvu Čakš je pripravljeno za prevzem. Odprto vsak dan 7.00-15.00 ali po dogovoru na 031 235 146. Lep pozdrav, Kamnoseštvo Čakš`;
   const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const locilo = jeIOS ? "&" : "?";
   return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besedilo)}`;
@@ -355,8 +361,9 @@ function besediloPonudbe(nalog) {
     : "";
   return (
     `Pozdravljeni ${nalog.stranka},\n\n` +
-    `pošiljamo vam ponudbo ${nalog.stevilka || ""} za: ${nalog.opis || ""}.\n\n` +
-    `Skupna vrednost: ${netoPoPopustu.toFixed(2)} € (z DDV: ${bruto.toFixed(2)} €).\n` +
+    `pošiljamo vam ponudbo ${nalog.stevilka || ""} za: ${nalog.opis || ""}.\n` +
+    objektVrstica(nalog) +
+    `\nSkupna vrednost: ${netoPoPopustu.toFixed(2)} € (z DDV: ${bruto.toFixed(2)} €).\n` +
     (veljavnost ? `${veljavnost}\n\n` : "\n") +
     `Za vsa vprašanja smo dosegljivi na 031 235 146.\n\n` +
     `Lep pozdrav,\nKamnoseštvo Čakš`
@@ -379,6 +386,7 @@ function dobavnicaMailto(nalog) {
   const besedilo =
     `Pozdravljeni,\n\n` +
     `v prilogi pošiljamo podpisano dobavnico ${nalog.stevilka || ""} za naročilo (${nalog.opis || ""}).\n` +
+    objektVrstica(nalog) +
     `Blago je prevzel: ${nalog.podpisIme || nalog.prevzel || nalog.stranka}${nalog.podpisDatum ? `, dne ${new Date(nalog.podpisDatum).toLocaleString("sl-SI")}` : ""}.\n\n` +
     `POMEMBNO: datoteka z dobavnico se je pravkar prenesla na ta računalnik/telefon — pred pošiljanjem jo ročno pripni k temu sporočilu.\n\n` +
     `Lep pozdrav,\nKamnoseštvo Čakš\n031 235 146`;
@@ -4007,6 +4015,7 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
               `Pozdravljeni,\n\n` +
               `v prilogi pošiljamo podpisano dobavnico ${nalog.stevilka || ""} za naročilo (${nalog.opis || ""}).\n` +
               `Stranka: ${nalog.stranka}${nalog.email ? ` (${nalog.email})` : ""}\n` +
+              objektVrstica(nalog) +
               `Blago je prevzel: ${nalog.podpisIme || nalog.prevzel || nalog.stranka}${nalog.podpisDatum ? `, dne ${new Date(nalog.podpisDatum).toLocaleString("sl-SI")}` : ""}.\n\n` +
               `Lep pozdrav,\nKamnoseštvo Čakš\n031 235 146`;
             const uspeh = await posljiDokumentPoMailu(
