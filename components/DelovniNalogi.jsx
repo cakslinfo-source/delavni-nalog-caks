@@ -441,6 +441,67 @@ function izracunajRazredePolic(nalog) {
   return Object.values(skupine).sort((a, b) => a.material.localeCompare(b.material, "sl"));
 }
 
+function generirajDXFPosevnihKosov(nalog) {
+  const posevneP = (nalog.postavke || [])
+    .filter((p) => p.naziv || p.material || p.dolzina)
+    .filter((p) => p.poseven);
+  if (posevneP.length === 0) return null;
+
+  const mm = (v) => {
+    const n = parseFloat(String(v).replace(",", "."));
+    return isNaN(n) ? 0 : n * 10;
+  };
+
+  let entitete = "";
+  let offsetY = 0;
+  const razmik = 100; // presledek med kosi v mm
+
+  posevneP.forEach((p, i) => {
+    const L = mm(p.dolzina);
+    const Wr = mm(p.sirinaDesno);
+    const Wl = mm(p.sirinaLevo);
+    const ime = p.naziv && p.naziv.trim() ? p.naziv.trim() : `Kos ${i + 1}`;
+    const plast = ime.replace(/[^a-zA-Z0-9]/g, "_") || `KOS_${i + 1}`;
+
+    // Trapez: (0,0) spodaj-levo, (L,0) spodaj-desno, (L,Wr) zgoraj-desno, (0,Wl) zgoraj-levo
+    const tocke = [
+      [0, offsetY],
+      [L, offsetY],
+      [L, offsetY + Wr],
+      [0, offsetY + Wl],
+    ];
+
+    entitete += `0\nLWPOLYLINE\n8\n${plast}\n90\n4\n70\n1\n`;
+    tocke.forEach(([x, y]) => {
+      entitete += `10\n${x.toFixed(2)}\n20\n${y.toFixed(2)}\n`;
+    });
+
+    entitete += `0\nTEXT\n8\n0\n10\n0.00\n20\n${(offsetY - 15).toFixed(2)}\n40\n10\n1\n${ime} D:${Wr.toFixed(0)} L:${Wl.toFixed(0)} dolz:${L.toFixed(0)}\n`;
+
+    offsetY += Math.max(Wr, Wl) + razmik;
+  });
+
+  return `0\nSECTION\n2\nENTITIES\n${entitete}0\nENDSEC\n0\nEOF\n`;
+}
+
+function prenesiDXFPosevnihKosov(nalog) {
+  const dxf = generirajDXFPosevnihKosov(nalog);
+  if (!dxf) {
+    alert("Ta nalog nima nobenega poševnega kosa.");
+    return;
+  }
+  const blob = new Blob([dxf], { type: "application/dxf;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const strankaVarno = (nalog.stranka || "").replace(/[\\/:*?"<>|]/g, "").trim();
+  a.download = `posevni-kosi-${nalog.stevilka || "nalog"}${strankaVarno ? " " + strankaVarno : ""}.dxf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function izvoziDonatoniCSV(nalog) {
   const postavke = (nalog.postavke || []).filter((p) => p.naziv || p.material || p.dolzina);
   const glave = ["Numero", "Larghezza", "Altezza", "Nome", "Spessore"];
@@ -3310,6 +3371,14 @@ export default function DelovniNalogi() {
                   >
                     <Download size={15} /> CSV Donatoni
                   </button>
+                  {(aktivniNalog.postavke || []).some((p) => p.poseven) && (
+                    <button
+                      onClick={() => prenesiDXFPosevnihKosov(aktivniNalog)}
+                      className="bg-amber-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-amber-500 transition-colors flex items-center gap-2"
+                    >
+                      <Download size={15} /> DXF poševni kosi
+                    </button>
+                  )}
                   <button
                     onClick={() => setPogled("izracunPolic")}
                     className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
