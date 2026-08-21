@@ -35,9 +35,12 @@ function segmentiPostavke(p, idx) {
     return isNaN(n) ? 0 : n * 10;
   };
   const dolzinaMM = mm(p.dolzina);
-  const sirinaMM = mm(p.sirina);
+  const sirinaDesnoMM = mm(p.sirinaDesno);
+  const sirinaLevoMM = mm(p.sirinaLevo);
+  const sirinaMM = p.poseven ? Math.max(sirinaDesnoMM, sirinaLevoMM) : mm(p.sirina);
   const debelinaMM = mm(p.debelina);
-  const imePolice = p.naziv && p.naziv.trim() ? p.naziv.trim() : `Polica ${idx + 1}`;
+  const imeOsnovno = p.naziv && p.naziv.trim() ? p.naziv.trim() : `Polica ${idx + 1}`;
+  const imePolice = p.poseven ? `${imeOsnovno} POŠEVNO D:${sirinaDesnoMM} L:${sirinaLevoMM}` : imeOsnovno;
 
   if (steviloKosov <= 1) {
     return [{ kolicina, dolzinaMM, sirinaMM, debelinaMM, imePolice, oznaka: "" }];
@@ -71,6 +74,9 @@ function novaPostavka() {
     popust: "",
     vecKosov: false,
     steviloKosov: "2",
+    poseven: false,
+    sirinaDesno: "",
+    sirinaLevo: "",
   };
 }
 
@@ -191,7 +197,14 @@ function najdiSkupinoMateriala(material) {
 function izracunajCenoPostavke(p) {
   const skupina = najdiSkupinoMateriala(p.material);
   if (!skupina) return null;
-  const sirina = parseFloat(String(p.sirina).replace(",", "."));
+  let sirina;
+  if (p.poseven) {
+    const sd = parseFloat(String(p.sirinaDesno).replace(",", ".")) || 0;
+    const sl = parseFloat(String(p.sirinaLevo).replace(",", ".")) || 0;
+    sirina = (sd + sl) / 2;
+  } else {
+    sirina = parseFloat(String(p.sirina).replace(",", "."));
+  }
   if (!sirina || sirina <= 0 || sirina > 50) return null;
   const sirinaZaokrozena = Math.ceil(sirina - 1e-9);
   const bracket = skupina.brackets.find((b) => sirinaZaokrozena >= b.min && sirinaZaokrozena <= b.max);
@@ -213,7 +226,14 @@ function izracunajCenoPostavke(p) {
 
 function m2Postavke(p) {
   const d = parseFloat(String(p.dolzina).replace(",", "."));
-  const s = parseFloat(String(p.sirina).replace(",", "."));
+  let s;
+  if (p.poseven) {
+    const sd = parseFloat(String(p.sirinaDesno).replace(",", ".")) || 0;
+    const sl = parseFloat(String(p.sirinaLevo).replace(",", ".")) || 0;
+    s = (sd + sl) / 2;
+  } else {
+    s = parseFloat(String(p.sirina).replace(",", "."));
+  }
   const k = parseFloat(String(p.kolicina).replace(",", ".")) || 1;
   if (!d || !s) return 0;
   return (d * s / 10000) * k;
@@ -379,7 +399,14 @@ function izracunajRazredePolic(nalog) {
 
   postavke.forEach((p) => {
     const skupinaPodatki = najdiSkupinoMateriala(p.material);
-    const sirina = parseFloat(String(p.sirina).replace(",", "."));
+    let sirina;
+    if (p.poseven) {
+      const sd = parseFloat(String(p.sirinaDesno).replace(",", ".")) || 0;
+      const sl = parseFloat(String(p.sirinaLevo).replace(",", ".")) || 0;
+      sirina = (sd + sl) / 2;
+    } else {
+      sirina = parseFloat(String(p.sirina).replace(",", "."));
+    }
     const dolzina = parseFloat(String(p.dolzina).replace(",", "."));
     const kolicina = parseFloat(String(p.kolicina).replace(",", ".")) || 1;
     const debelina = Math.round(parseFloat(String(p.debelina).replace(",", ".")));
@@ -1134,7 +1161,7 @@ export default function DelovniNalogi() {
     }
     setNapaka("");
     const ocisceniPostavki = obrazec.postavke.filter(
-      (p) => p.naziv.trim() || p.material.trim() || p.dolzina || p.sirina || p.debelina
+      (p) => p.naziv.trim() || p.material.trim() || p.dolzina || p.sirina || p.debelina || p.sirinaDesno || p.sirinaLevo
     );
     const obrazecZaShranjevanje = { ...obrazec, postavke: ocisceniPostavki.length ? ocisceniPostavki : [novaPostavka()] };
 
@@ -2698,13 +2725,32 @@ export default function DelovniNalogi() {
                       placeholder="dolžina"
                       inputMode="decimal"
                     />
-                    <input
-                      className="postavka-input"
-                      value={p.sirina}
-                      onChange={(e) => posodobiPostavko(p.id, "sirina", e.target.value)}
-                      placeholder="širina"
-                      inputMode="decimal"
-                    />
+                    {p.poseven ? (
+                      <div className="flex gap-1">
+                        <input
+                          className="postavka-input"
+                          value={p.sirinaDesno}
+                          onChange={(e) => posodobiPostavko(p.id, "sirinaDesno", e.target.value)}
+                          placeholder="šir. desno"
+                          inputMode="decimal"
+                        />
+                        <input
+                          className="postavka-input"
+                          value={p.sirinaLevo}
+                          onChange={(e) => posodobiPostavko(p.id, "sirinaLevo", e.target.value)}
+                          placeholder="šir. levo"
+                          inputMode="decimal"
+                        />
+                      </div>
+                    ) : (
+                      <input
+                        className="postavka-input"
+                        value={p.sirina}
+                        onChange={(e) => posodobiPostavko(p.id, "sirina", e.target.value)}
+                        placeholder="širina"
+                        inputMode="decimal"
+                      />
+                    )}
                     <input
                       className="postavka-input"
                       value={p.debelina}
@@ -2747,7 +2793,7 @@ export default function DelovniNalogi() {
                       inputMode="decimal"
                     />
                   </div>
-                  <div className="flex items-center gap-1.5 mt-1.5 pl-0.5">
+                  <div className="flex items-center gap-1.5 mt-1.5 pl-0.5 flex-wrap">
                     <label className="flex items-center gap-1 text-xs text-stone-500 cursor-pointer">
                       <input
                         type="checkbox"
@@ -2770,6 +2816,15 @@ export default function DelovniNalogi() {
                         />
                       </>
                     )}
+                    <label className="flex items-center gap-1 text-xs text-stone-500 cursor-pointer ml-2">
+                      <input
+                        type="checkbox"
+                        checked={!!p.poseven}
+                        onChange={(e) => posodobiPostavko(p.id, "poseven", e.target.checked)}
+                        className="w-3.5 h-3.5"
+                      />
+                      Poševno (druga širina levo/desno)
+                    </label>
                   </div>
                   </div>
                 ))}
@@ -3044,7 +3099,7 @@ export default function DelovniNalogi() {
                             <td className="py-1.5 px-2 text-stone-700">{p.naziv || "—"}</td>
                             <td className="py-1.5 px-2 text-stone-600">{p.material || "—"}</td>
                             <td className="py-1.5 px-2 text-stone-600">
-                              {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
+                              {p.dolzina || "–"} × {p.poseven ? `D:${p.sirinaDesno || "–"}/L:${p.sirinaLevo || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
                             </td>
                             <td className="py-1.5 px-2 text-stone-600">{p.kolicina || "1"}</td>
                             <td className="py-1.5 px-2 text-stone-600">{p.cena ? `${p.cena} €` : "—"}</td>
@@ -3451,7 +3506,7 @@ function TiskNaloga({ nalog, onZapri }) {
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top overflow-hidden">
-                      {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
+                      {p.dolzina || "–"} × {p.poseven ? `D:${p.sirinaDesno || "–"}/L:${p.sirinaLevo || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
                       {p.vecKosov && (
                         <div className="text-[10px] text-amber-600 font-medium">iz {p.steviloKosov || 2} kosov</div>
                       )}
@@ -3580,7 +3635,7 @@ function TiskPonudbe({ nalog, onZapri }) {
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top whitespace-nowrap">
-                      {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
+                      {p.dolzina || "–"} × {p.poseven ? `D:${p.sirinaDesno || "–"}/L:${p.sirinaLevo || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
                       {p.vecKosov && (
                         <div className="text-[10px] text-amber-600 font-medium">iz {p.steviloKosov || 2} kosov</div>
                       )}
@@ -3802,7 +3857,7 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top overflow-hidden">
-                      {p.dolzina || "–"} × {p.sirina || "–"} × {p.debelina || "–"}
+                      {p.dolzina || "–"} × {p.poseven ? `D:${p.sirinaDesno || "–"}/L:${p.sirinaLevo || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
                       {p.vecKosov && (
                         <div className="text-[10px] text-amber-600 font-medium">iz {p.steviloKosov || 2} kosov</div>
                       )}
