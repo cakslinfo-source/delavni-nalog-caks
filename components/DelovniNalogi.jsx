@@ -2790,16 +2790,16 @@ export default function DelovniNalogi() {
                       <div className="flex gap-1">
                         <input
                           className="postavka-input"
-                          value={p.sirinaDesno}
-                          onChange={(e) => posodobiPostavko(p.id, "sirinaDesno", e.target.value)}
-                          placeholder="šir. desno"
+                          value={p.sirinaLevo}
+                          onChange={(e) => posodobiPostavko(p.id, "sirinaLevo", e.target.value)}
+                          placeholder="šir. levo"
                           inputMode="decimal"
                         />
                         <input
                           className="postavka-input"
-                          value={p.sirinaLevo}
-                          onChange={(e) => posodobiPostavko(p.id, "sirinaLevo", e.target.value)}
-                          placeholder="šir. levo"
+                          value={p.sirinaDesno}
+                          onChange={(e) => posodobiPostavko(p.id, "sirinaDesno", e.target.value)}
+                          placeholder="šir. desno"
                           inputMode="decimal"
                         />
                       </div>
