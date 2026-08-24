@@ -1228,6 +1228,10 @@ export default function DelovniNalogi() {
       setNapaka("Vnesi vsaj ime stranke in opis dela.");
       return;
     }
+    if (!obrazec.oddal) {
+      setNapaka("Izberi, kdo je oddal naročilo.");
+      return;
+    }
     setNapaka("");
     const ocisceniPostavki = obrazec.postavke.filter(
       (p) => p.naziv.trim() || p.material.trim() || p.dolzina || p.sirina || p.debelina || p.sirinaDesno || p.sirinaLevo
@@ -2416,7 +2420,7 @@ export default function DelovniNalogi() {
             </h2>
 
             <div className="bg-stone-100 border border-stone-300 rounded-lg px-4 py-3 mb-5">
-              <label className="block text-xs font-medium text-stone-600 mb-1.5">Kdo je oddal naročilo</label>
+              <label className="block text-xs font-medium text-stone-600 mb-1.5">Kdo je oddal naročilo *</label>
               <div className="flex flex-wrap gap-2">
                 {ODDAL_NAROCILO.map((ime) => (
                   <button
@@ -3006,7 +3010,7 @@ export default function DelovniNalogi() {
               </div>
             )}
             <div className="bg-stone-100 border border-stone-300 rounded-lg px-4 py-3 mb-4">
-              <label className="block text-xs font-medium text-stone-600 mb-1.5">Kdo je oddal naročilo</label>
+              <label className="block text-xs font-medium text-stone-600 mb-1.5">Kdo je oddal naročilo *</label>
               <div className="flex flex-wrap gap-2">
                 {ODDAL_NAROCILO.map((ime) => (
                   <button
