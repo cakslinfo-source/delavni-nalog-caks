@@ -620,7 +620,7 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className={lbl}>Sprejel</label>
+            <label className={lbl}>Sprejel *</label>
             <select className={inp} value={nal.sprejel} onChange={(e) => setNal({ ...nal, sprejel: e.target.value })}>
               <option value="">— izberi —</option>
               {ZAPOSLENI_SPREJEM.map((z) => <option key={z}>{z}</option>)}
@@ -792,6 +792,7 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
           disabled={shranjujem}
           onClick={() => {
             if (!nal.stranka.ime.trim()) { alert("Vnesi ime stranke."); return; }
+            if (!nal.sprejel) { alert("Izberi, kdo je sprejel naročilo."); return; }
             shrani(nal);
           }}
           className="flex-1 bg-red-600 text-white rounded-xl py-3 font-semibold disabled:opacity-60"
