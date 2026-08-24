@@ -1287,7 +1287,13 @@ export default function DelovniNalogi() {
   }
 
   async function spremeniStatus(id, status) {
-    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, status } : n)));
+    await posodobiNaloge((os) =>
+      os.map((n) =>
+        n.id === id
+          ? { ...n, status, ...(status === "Prevzeto" ? { datumPrevzema: new Date().toISOString() } : {}) }
+          : n
+      )
+    );
   }
 
   async function spremeniPlacano(id, placano) {
@@ -3249,6 +3255,12 @@ export default function DelovniNalogi() {
                   </button>
                 ))}
               </div>
+              {aktivniNalog.status === "Prevzeto" && aktivniNalog.datumPrevzema && (
+                <p className="text-xs text-emerald-700 font-medium mt-2">
+                  ✓ Prevzeto: {new Date(aktivniNalog.datumPrevzema).toLocaleDateString("sl-SI")} ob{" "}
+                  {new Date(aktivniNalog.datumPrevzema).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              )}
             </div>
 
             <div className="mt-4 pt-4 border-t border-stone-100">
