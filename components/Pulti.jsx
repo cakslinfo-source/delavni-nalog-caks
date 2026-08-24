@@ -672,6 +672,7 @@ export default function Pulti() {
                 ...(nal.zgodovina || []),
                 { status: novStatus, datum: new Date().toISOString(), kdo: kdo || "" },
               ],
+              ...(novStatus === "prevzeto" ? { datumPrevzema: new Date().toISOString() } : {}),
             };
             shraniNaloge(nalogi.map((x) => (x.id === nal.id ? posodobljen : x)));
           }}
@@ -1608,6 +1609,12 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
             </button>
           ))}
         </div>
+        {nalog.status === "prevzeto" && nalog.datumPrevzema && (
+          <p className="text-xs text-emerald-700 font-medium">
+            ✓ Prevzeto: {new Date(nalog.datumPrevzema).toLocaleDateString("sl-SI")} ob{" "}
+            {new Date(nalog.datumPrevzema).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
+          </p>
+        )}
       </div>
       )}
 
