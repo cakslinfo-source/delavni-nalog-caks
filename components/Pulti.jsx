@@ -334,6 +334,44 @@ function zgradiHTMLDokumentPulti(selector, naslov) {
   );
 }
 
+function izvoziCSVKosovPulti(nalog) {
+  const kosi = (nalog.kosi || []).filter((k) => k.naziv || k.dolzina || k.sirina);
+  if (kosi.length === 0) {
+    alert("Ta nalog nima vnesenih kosov z merami.");
+    return;
+  }
+  const glave = ["Numero", "Larghezza", "Altezza", "Nome", "Spessore"];
+  const ubezi = (val) => {
+    const s = String(val ?? "");
+    if (s.includes(";") || s.includes('"') || s.includes("\n")) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  };
+  const mm = (v) => {
+    const n = parseFloat(String(v).replace(",", "."));
+    return isNaN(n) ? "" : n * 10;
+  };
+  const prveTriCrkeStranke = (nalog.stranka?.ime || "").trim().slice(0, 3).toUpperCase();
+  const vrstice = kosi.map((k, idx) => {
+    const imeKosa = k.naziv && k.naziv.trim() ? k.naziv.trim() : `Kos ${idx + 1}`;
+    const dolzinaMM = mm(k.dolzina);
+    const sirinaMM = mm(k.sirina);
+    return [1, dolzinaMM, sirinaMM, `${prveTriCrkeStranke} ${imeKosa} ${dolzinaMM}x${sirinaMM}`, mm(k.debelina || nalog.debelina)];
+  });
+  const csv = [glave, ...vrstice].map((r) => r.map(ubezi).join(";")).join("\r\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const strankaVarno = (nalog.stranka?.ime || "").replace(/[\\/:*?"<>|]/g, "").trim();
+  a.download = `csv donatoni ${nalog.stevilka || "nalog"}${strankaVarno ? " " + strankaVarno : ""}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function prenesiHTMLDokumentPulti(selector, naslov, imeDatoteke) {
   const html = zgradiHTMLDokumentPulti(selector, naslov);
   if (!html) {
@@ -1652,6 +1690,9 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
           Natisni delovni list
         </button>
       </div>
+      <button onClick={() => izvoziCSVKosovPulti(nalog)} className="w-full bg-red-600 text-white rounded-xl py-3 font-semibold">
+        ⬇ CSV Donatoni (kosi)
+      </button>
       <button onClick={() => odpriDobavnico(nalog)} className="w-full bg-emerald-700 text-white rounded-xl py-3 font-semibold">
         📄 Dobavnica {nalog.podpisPrevzemnika ? "✓ (podpisana)" : "+ e-podpis"}
       </button>
