@@ -433,7 +433,12 @@ export default function Spomeniki() {
             posodobiSpomenike((os) =>
               os.map((x) =>
                 x.id === nal.id
-                  ? { ...x, status: novStatus, zgodovina: [...(x.zgodovina || []), { status: novStatus, datum: new Date().toISOString(), kdo: kdo || "" }] }
+                  ? {
+                      ...x,
+                      status: novStatus,
+                      zgodovina: [...(x.zgodovina || []), { status: novStatus, datum: new Date().toISOString(), kdo: kdo || "" }],
+                      ...(novStatus === "prevzeto" ? { datumPrevzema: new Date().toISOString() } : {}),
+                    }
                   : x
               )
             );
@@ -1155,6 +1160,12 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
               </button>
             ))}
           </div>
+          {nalog.status === "prevzeto" && nalog.datumPrevzema && (
+            <p className="text-xs text-emerald-700 font-medium">
+              ✓ Prevzeto: {new Date(nalog.datumPrevzema).toLocaleDateString("sl-SI")} ob{" "}
+              {new Date(nalog.datumPrevzema).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
         </div>
       )}
 
