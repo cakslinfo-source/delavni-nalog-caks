@@ -996,7 +996,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className={lbl}>Sprejel</label>
+            <label className={lbl}>Sprejel *</label>
             <select
               className={inp}
               value={nal.sprejel}
@@ -1349,6 +1349,10 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
           onClick={() => {
             if (!nal.stranka.ime.trim()) {
               alert("Vnesi ime stranke.");
+              return;
+            }
+            if (!nal.sprejel) {
+              alert("Izberi, kdo je sprejel naročilo.");
               return;
             }
 
