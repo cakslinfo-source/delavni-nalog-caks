@@ -2141,6 +2141,9 @@ export default function DelovniNalogi() {
                           )}
                         </div>
                         <div className="font-semibold text-stone-800 truncate">{n.stranka}</div>
+                        {n.tipStranke === "pravna" && n.objekt && (
+                          <div className="text-xs text-stone-500 truncate">🏢 {n.objekt}</div>
+                        )}
                         <div className="text-sm text-stone-500 truncate">{n.opis}</div>
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
@@ -2434,6 +2437,9 @@ export default function DelovniNalogi() {
                           </span>
                         </div>
                         <div className="font-semibold text-stone-800 truncate">{n.stranka}</div>
+                        {n.tipStranke === "pravna" && n.objekt && (
+                          <div className="text-xs text-stone-500 truncate">🏢 {n.objekt}</div>
+                        )}
                         <div className="text-sm text-stone-500 truncate">{n.opis}</div>
                       </div>
                       {adminOdklenjen && (
