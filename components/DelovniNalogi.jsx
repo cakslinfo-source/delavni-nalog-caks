@@ -3547,6 +3547,14 @@ function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno }) {
   const skupajM2 = postavkeZaPrikaz.reduce((v, p) => v + m2Postavke(p), 0);
   const danes = new Date().toLocaleDateString("sl-SI");
 
+  useEffect(() => {
+    function poNatisu() {
+      if (oznaciNatisnjeno) oznaciNatisnjeno();
+    }
+    window.addEventListener("afterprint", poNatisu);
+    return () => window.removeEventListener("afterprint", poNatisu);
+  }, []);
+
   return (
     <div>
       <style>{`
