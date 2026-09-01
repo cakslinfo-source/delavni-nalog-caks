@@ -893,16 +893,19 @@ export default function DelovniNalogi() {
 
   const [pultiPodatki, setPultiPodatki] = useState([]);
   const [spomenikiPodatki, setSpomenikiPodatki] = useState([]);
+  const [sestankiPodatki, setSestankiPodatki] = useState([]);
 
   async function nalozizPultiInSpomenike() {
     try {
-      const [pRes, sRes] = await Promise.all([
+      const [pRes, sRes, sestRes] = await Promise.all([
         fetch("/api/pulti", { cache: "no-store" }),
         fetch("/api/spomeniki", { cache: "no-store" }),
+        fetch("/api/sestanki", { cache: "no-store" }),
       ]);
-      const [pulti, spomeniki] = await Promise.all([pRes.json(), sRes.json()]);
+      const [pulti, spomeniki, sestanki] = await Promise.all([pRes.json(), sRes.json(), sestRes.json()]);
       setPultiPodatki(Array.isArray(pulti) ? pulti : []);
       setSpomenikiPodatki(Array.isArray(spomeniki) ? spomeniki : []);
+      setSestankiPodatki(Array.isArray(sestanki) ? sestanki : []);
     } catch (e) {}
   }
 
@@ -1395,6 +1398,13 @@ export default function DelovniNalogi() {
     return seznam.sort((a, b) => (a.rok < b.rok ? -1 : 1));
   })();
 
+  const sestankiDanes = (() => {
+    const danesniDatum = new Date().toISOString().slice(0, 10);
+    return sestankiPodatki
+      .filter((s) => s.datum === danesniDatum && !s.opravljeno)
+      .sort((a, b) => (a.ura || "").localeCompare(b.ura || ""));
+  })();
+
   const edinstveneStranke = [
     ...new Set([
       ...nalogi.map((n) => n.stranka).filter(Boolean),
@@ -1602,6 +1612,21 @@ export default function DelovniNalogi() {
 
         {!naloziLoading && pogled === "seznam" && (
           <div>
+            {sestankiDanes.length > 0 && (
+              <div className="bg-sky-50 border border-sky-300 rounded-xl p-3 mb-4">
+                <p className="text-xs font-semibold text-sky-800 uppercase mb-2">📅 Sestanki danes ({sestankiDanes.length})</p>
+                <div className="space-y-1">
+                  {sestankiDanes.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between text-sm">
+                      <span className="text-sky-800">
+                        {s.stranka?.ime}{s.tipIzmere ? ` · ${s.tipIzmere}` : ""}
+                      </span>
+                      <span className="text-sky-700 font-semibold">{s.ura}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {opominjeniRoki.length > 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 mb-4">
                 <p className="text-xs font-semibold text-amber-800 uppercase mb-2">⏰ Bližajoči/zamujeni roki ({opominjeniRoki.length})</p>
@@ -2082,6 +2107,11 @@ export default function DelovniNalogi() {
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BARVE[n.status]}`}>
                             {n.status}
                           </span>
+                          {n.natisnjenDatum && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-stone-200 text-stone-700 font-medium flex items-center gap-1">
+                              🖨 Natisnjeno
+                            </span>
+                          )}
                           {steviloPostavk > 0 && (
                             <span className="text-xs text-stone-400">· {steviloPostavk} postavk</span>
                           )}
@@ -3261,6 +3291,12 @@ export default function DelovniNalogi() {
                   {new Date(aktivniNalog.datumPrevzema).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
                 </p>
               )}
+              {aktivniNalog.natisnjenDatum && (
+                <p className="text-xs text-stone-500 font-medium mt-2">
+                  🖨 Natisnjeno: {new Date(aktivniNalog.natisnjenDatum).toLocaleDateString("sl-SI")} ob{" "}
+                  {new Date(aktivniNalog.natisnjenDatum).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              )}
             </div>
 
             <div className="mt-4 pt-4 border-t border-stone-100">
@@ -3460,7 +3496,15 @@ export default function DelovniNalogi() {
         )}
 
         {pogled === "tisk" && aktivniNalog && (
-          <TiskNaloga nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
+          <TiskNaloga
+            nalog={aktivniNalog}
+            onZapri={() => setPogled("podrobnosti")}
+            oznaciNatisnjeno={() => {
+              posodobiNaloge((os) =>
+                os.map((n) => (n.id === aktivniNalog.id ? { ...n, natisnjenDatum: new Date().toISOString() } : n))
+              );
+            }}
+          />
         )}
 
         {pogled === "tiskPonudbe" && aktivniNalog && (
@@ -3496,7 +3540,7 @@ export default function DelovniNalogi() {
   );
 }
 
-function TiskNaloga({ nalog, onZapri }) {
+function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno }) {
   const postavkeZaPrikaz = (nalog.postavke || []).filter(
     (p) => p.naziv || p.material || p.dolzina
   );
@@ -3516,7 +3560,10 @@ function TiskNaloga({ nalog, onZapri }) {
 
       <div className="tisk-brez flex flex-wrap gap-2 mb-2">
         <button
-          onClick={() => prenesiHTMLDokument(".tisk-list", `Delovni nalog ${nalog.stevilka || ""}`, `delovni-nalog-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`)}
+          onClick={() => {
+            prenesiHTMLDokument(".tisk-list", `Delovni nalog ${nalog.stevilka || ""}`, `delovni-nalog-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`);
+            if (oznaciNatisnjeno) oznaciNatisnjeno();
+          }}
           className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
         >
           <FileText size={15} /> Prenesi datoteko
