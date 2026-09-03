@@ -852,6 +852,16 @@ function izvoziCSVVsiModuli(nalogi, pultiPodatki, spomenikiPodatki, od, doDatuma
   URL.revokeObjectURL(url);
 }
 
+function normalizirajObvestilo(obv) {
+  if (obv && (obv.trenutno !== undefined || obv.arhiv !== undefined)) {
+    return { trenutno: obv.trenutno || null, arhiv: Array.isArray(obv.arhiv) ? obv.arhiv : [] };
+  }
+  if (obv && obv.besedilo) {
+    return { trenutno: obv, arhiv: [] };
+  }
+  return { trenutno: null, arhiv: [] };
+}
+
 const ADMIN_PIN = "1991";
 
 export default function DelovniNalogi() {
@@ -897,10 +907,14 @@ export default function DelovniNalogi() {
   const [obvestilo, setObvestilo] = useState(null);
   const [obvestiloVerzija, setObvestiloVerzija] = useState(0);
   const [urejanjeObvestila, setUrejanjeObvestila] = useState(false);
+  const [novNaslovObvestila, setNovNaslovObvestila] = useState("");
   const [novoBesediloObvestila, setNovoBesediloObvestila] = useState("");
+  const [avtorNovegaObvestila, setAvtorNovegaObvestila] = useState("");
   const [novKomentar, setNovKomentar] = useState("");
   const [avtorKomentarja, setAvtorKomentarja] = useState("");
   const [shranjujeObvestilo, setShranjujeObvestilo] = useState(false);
+  const [iskanjeArhiva, setIskanjeArhiva] = useState("");
+  const [izbranoArhivObvestilo, setIzbranoArhivObvestilo] = useState(null);
 
   async function nalozizPultiInSpomenike() {
     try {
@@ -914,7 +928,8 @@ export default function DelovniNalogi() {
       setPultiPodatki(Array.isArray(pulti) ? pulti : []);
       setSpomenikiPodatki(Array.isArray(spomeniki) ? spomeniki : []);
       setSestankiPodatki(Array.isArray(sestanki) ? sestanki : []);
-      setObvestilo(obv || null);
+      // Stara oblika je imela samo {besedilo, datum, komentarji} neposredno — preslikamo v {trenutno, arhiv}.
+      setObvestilo(normalizirajObvestilo(obv));
       setObvestiloVerzija(Number(obvRes.headers.get("X-Verzija")) || 0);
     } catch (e) {}
   }
@@ -923,9 +938,9 @@ export default function DelovniNalogi() {
     setShranjujeObvestilo(true);
     try {
       const res = await fetch("/api/obvestilo", { cache: "no-store" });
-      const trenutno = await res.json();
+      const sveze = normalizirajObvestilo(await res.json());
       const verzija = Number(res.headers.get("X-Verzija")) || 0;
-      const novo = transformFn(trenutno);
+      const novo = transformFn(sveze);
       const shraniRes = await fetch("/api/obvestilo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -933,9 +948,9 @@ export default function DelovniNalogi() {
       });
       const odgovor = await shraniRes.json().catch(() => ({}));
       if (shraniRes.status === 409) {
-        alert("Nekdo drug je medtem dodal komentar. Stran se je osvežila, poskusi znova.");
+        alert("Nekdo drug je medtem nekaj spremenil. Stran se je osvežila, poskusi znova.");
         const svezRes = await fetch("/api/obvestilo", { cache: "no-store" });
-        setObvestilo(await svezRes.json());
+        setObvestilo(normalizirajObvestilo(await svezRes.json()));
         setObvestiloVerzija(Number(svezRes.headers.get("X-Verzija")) || 0);
         return false;
       }
@@ -1659,10 +1674,15 @@ export default function DelovniNalogi() {
 
         {!naloziLoading && pogled === "seznam" && (
           <div>
-            {(obvestilo?.besedilo || adminOdklenjen) && (
-              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 mb-4">
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 mb-4">
                 {urejanjeObvestila ? (
                   <div className="space-y-2">
+                    <input
+                      value={novNaslovObvestila}
+                      onChange={(e) => setNovNaslovObvestila(e.target.value)}
+                      placeholder="Naslov obvestila (npr. 'Dopust v avgustu')"
+                      className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                    />
                     <textarea
                       value={novoBesediloObvestila}
                       onChange={(e) => setNovoBesediloObvestila(e.target.value)}
@@ -1670,13 +1690,38 @@ export default function DelovniNalogi() {
                       placeholder="Napiši obvestilo za vse zaposlene…"
                       className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                     />
+                    {!obvestilo?.trenutno?.besedilo && (
+                      <select
+                        value={avtorNovegaObvestila}
+                        onChange={(e) => setAvtorNovegaObvestila(e.target.value)}
+                        className="text-sm px-2 py-1.5 rounded-lg border border-amber-300 bg-white"
+                      >
+                        <option value="">Kdo objavlja?</option>
+                        {[...new Set([...ODDAL_NAROCILO, ...DELAVCI])].map((z) => (
+                          <option key={z}>{z}</option>
+                        ))}
+                      </select>
+                    )}
                     <div className="flex gap-2">
                       <button
                         onClick={async () => {
-                          const uspeh = await posodobiObvestilo((trenutno) => ({
-                            besedilo: novoBesediloObvestila.trim(),
-                            datum: new Date().toISOString(),
-                            komentarji: trenutno?.komentarji || [],
+                          if (!novNaslovObvestila.trim()) {
+                            alert("Vnesi naslov obvestila.");
+                            return;
+                          }
+                          if (!obvestilo?.trenutno?.besedilo && !avtorNovegaObvestila) {
+                            alert("Izberi, kdo objavlja.");
+                            return;
+                          }
+                          const uspeh = await posodobiObvestilo((sveze) => ({
+                            ...sveze,
+                            trenutno: {
+                              naslov: novNaslovObvestila.trim(),
+                              besedilo: novoBesediloObvestila.trim(),
+                              avtor: sveze?.trenutno?.avtor || avtorNovegaObvestila,
+                              datum: sveze?.trenutno?.datum || new Date().toISOString(),
+                              komentarji: sveze?.trenutno?.komentarji || [],
+                            },
                           }));
                           if (uspeh) setUrejanjeObvestila(false);
                         }}
@@ -1697,31 +1742,61 @@ export default function DelovniNalogi() {
                   <>
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <p className="text-xs font-semibold text-amber-800 uppercase">📌 Obvestilo</p>
-                      {adminOdklenjen && (
-                        <button
-                          onClick={() => {
-                            setNovoBesediloObvestila(obvestilo?.besedilo || "");
-                            setUrejanjeObvestila(true);
-                          }}
-                          className="text-xs text-amber-700 underline shrink-0"
-                        >
-                          {obvestilo?.besedilo ? "Uredi" : "+ Napiši obvestilo"}
-                        </button>
-                      )}
-                    </div>
-                    {obvestilo?.besedilo && (
-                      <>
-                        <p className="text-sm text-amber-900 whitespace-pre-wrap mb-1">{obvestilo.besedilo}</p>
-                        {obvestilo.datum && (
-                          <p className="text-[11px] text-amber-600 mb-3">
-                            {new Date(obvestilo.datum).toLocaleDateString("sl-SI")} ob{" "}
-                            {new Date(obvestilo.datum).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
-                          </p>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {obvestilo?.arhiv?.length > 0 && (
+                          <button
+                            onClick={() => { setIzbranoArhivObvestilo(null); setPogled("obvestilaArhiv"); }}
+                            className="text-xs text-amber-700 underline"
+                          >
+                            🗂 Arhiv ({obvestilo.arhiv.length})
+                          </button>
                         )}
+                        {!obvestilo?.trenutno?.besedilo && (
+                          <button
+                            onClick={() => {
+                              setNovNaslovObvestila("");
+                              setNovoBesediloObvestila("");
+                              setAvtorNovegaObvestila("");
+                              setUrejanjeObvestila(true);
+                            }}
+                            className="text-xs text-amber-700 underline"
+                          >
+                            + Napiši obvestilo
+                          </button>
+                        )}
+                        {adminOdklenjen && obvestilo?.trenutno?.besedilo && (
+                          <button
+                            onClick={() => {
+                              setNovNaslovObvestila(obvestilo.trenutno.naslov || "");
+                              setNovoBesediloObvestila(obvestilo.trenutno.besedilo || "");
+                              setUrejanjeObvestila(true);
+                            }}
+                            className="text-xs text-amber-700 underline"
+                          >
+                            Uredi
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {obvestilo?.trenutno?.besedilo && (
+                      <>
+                        {obvestilo.trenutno.naslov && (
+                          <p className="text-sm font-bold text-amber-900">{obvestilo.trenutno.naslov}</p>
+                        )}
+                        <p className="text-sm text-amber-900 whitespace-pre-wrap mb-1">{obvestilo.trenutno.besedilo}</p>
+                        <p className="text-[11px] text-amber-600 mb-3">
+                          {obvestilo.trenutno.avtor ? `${obvestilo.trenutno.avtor} · ` : ""}
+                          {obvestilo.trenutno.datum && (
+                            <>
+                              {new Date(obvestilo.trenutno.datum).toLocaleDateString("sl-SI")} ob{" "}
+                              {new Date(obvestilo.trenutno.datum).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
+                            </>
+                          )}
+                        </p>
 
-                        {(obvestilo.komentarji || []).length > 0 && (
+                        {(obvestilo.trenutno.komentarji || []).length > 0 && (
                           <div className="space-y-1.5 mb-3 border-t border-amber-200 pt-2">
-                            {obvestilo.komentarji.map((k, i) => (
+                            {obvestilo.trenutno.komentarji.map((k, i) => (
                               <div key={i} className="text-sm bg-white/60 rounded-lg px-2.5 py-1.5">
                                 <span className="font-semibold text-amber-900">{k.avtor}: </span>
                                 <span className="text-amber-800">{k.besedilo}</span>
@@ -1758,12 +1833,15 @@ export default function DelovniNalogi() {
                                 return;
                               }
                               if (!novKomentar.trim()) return;
-                              const uspeh = await posodobiObvestilo((trenutno) => ({
-                                ...trenutno,
-                                komentarji: [
-                                  ...(trenutno?.komentarji || []),
-                                  { avtor: avtorKomentarja, besedilo: novKomentar.trim(), datum: new Date().toISOString() },
-                                ],
+                              const uspeh = await posodobiObvestilo((sveze) => ({
+                                ...sveze,
+                                trenutno: {
+                                  ...sveze.trenutno,
+                                  komentarji: [
+                                    ...(sveze?.trenutno?.komentarji || []),
+                                    { avtor: avtorKomentarja, besedilo: novKomentar.trim(), datum: new Date().toISOString() },
+                                  ],
+                                },
                               }));
                               if (uspeh) setNovKomentar("");
                             }}
@@ -1773,12 +1851,30 @@ export default function DelovniNalogi() {
                             Objavi
                           </button>
                         </div>
+
+                        {adminOdklenjen && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm("Zaključim ta pogovor? Premakne se v arhiv, obvestilo pa se počisti, da lahko napišeš novo.")) return;
+                              await posodobiObvestilo((sveze) => ({
+                                trenutno: null,
+                                arhiv: [
+                                  { ...sveze.trenutno, datumZakljucka: new Date().toISOString() },
+                                  ...(sveze?.arhiv || []),
+                                ],
+                              }));
+                            }}
+                            disabled={shranjujeObvestilo}
+                            className="text-xs text-stone-500 underline mt-3 block"
+                          >
+                            Zaključi pogovor (premakni v arhiv)
+                          </button>
+                        )}
                       </>
                     )}
                   </>
                 )}
               </div>
-            )}
 
             {sestankiDanes.length > 0 && (
               <div className="bg-sky-50 border border-sky-300 rounded-xl p-3 mb-4">
@@ -2512,6 +2608,88 @@ export default function DelovniNalogi() {
             </div>
           );
         })()}
+
+        {pogled === "obvestilaArhiv" && !izbranoArhivObvestilo && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="carved text-lg uppercase text-stone-700">Arhiv obvestil</h2>
+              <button onClick={() => setPogled("seznam")} className="text-sm text-stone-500 hover:text-stone-700">
+                ← Nazaj
+              </button>
+            </div>
+            <div className="relative mb-4">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+              <input
+                value={iskanjeArhiva}
+                onChange={(e) => setIskanjeArhiva(e.target.value)}
+                placeholder="Išči po naslovu obvestila…"
+                className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-stone-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500"
+              />
+            </div>
+            {(obvestilo?.arhiv || []).length === 0 ? (
+              <p className="text-sm text-stone-500">Arhiv je prazen.</p>
+            ) : (
+              <div className="space-y-2">
+                {(obvestilo.arhiv || [])
+                  .filter((o) => (o.naslov || "").toLowerCase().includes(iskanjeArhiva.toLowerCase()))
+                  .map((o, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setIzbranoArhivObvestilo(o)}
+                      className="w-full text-left bg-white border border-stone-200 rounded-xl px-4 py-3.5 hover:border-amber-400 hover:shadow-sm transition-all flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-semibold text-stone-800 truncate">{o.naslov || "(brez naslova)"}</div>
+                        <div className="text-xs text-stone-500">
+                          {o.avtor ? `${o.avtor} · ` : ""}
+                          zaključeno {o.datumZakljucka ? new Date(o.datumZakljucka).toLocaleDateString("sl-SI") : ""}
+                          {" · "}{(o.komentarji || []).length} odgovorov
+                        </div>
+                      </div>
+                      <ChevronRight size={18} className="text-stone-300 shrink-0" />
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {pogled === "obvestilaArhiv" && izbranoArhivObvestilo && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="carved text-lg uppercase text-stone-700 truncate">{izbranoArhivObvestilo.naslov || "(brez naslova)"}</h2>
+              <button onClick={() => setIzbranoArhivObvestilo(null)} className="text-sm text-stone-500 hover:text-stone-700 shrink-0 ml-2">
+                ← Nazaj na arhiv
+              </button>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-xl p-4">
+              <p className="text-sm text-stone-800 whitespace-pre-wrap mb-1">{izbranoArhivObvestilo.besedilo}</p>
+              <p className="text-xs text-stone-500 mb-3">
+                {izbranoArhivObvestilo.avtor ? `${izbranoArhivObvestilo.avtor} · ` : ""}
+                {izbranoArhivObvestilo.datum && (
+                  <>objavljeno {new Date(izbranoArhivObvestilo.datum).toLocaleDateString("sl-SI")} · </>
+                )}
+                {izbranoArhivObvestilo.datumZakljucka && (
+                  <>zaključeno {new Date(izbranoArhivObvestilo.datumZakljucka).toLocaleDateString("sl-SI")}</>
+                )}
+              </p>
+              {(izbranoArhivObvestilo.komentarji || []).length > 0 && (
+                <div className="space-y-1.5 border-t border-stone-100 pt-2">
+                  {izbranoArhivObvestilo.komentarji.map((k, i) => (
+                    <div key={i} className="text-sm bg-stone-50 rounded-lg px-2.5 py-1.5">
+                      <span className="font-semibold text-stone-800">{k.avtor}: </span>
+                      <span className="text-stone-700">{k.besedilo}</span>
+                      <span className="text-[10px] text-stone-400 ml-1.5">
+                        {new Date(k.datum).toLocaleDateString("sl-SI")}{" "}
+                        {new Date(k.datum).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {pogled === "meseci" && (() => {
           const skupinePoMesecu = {};
