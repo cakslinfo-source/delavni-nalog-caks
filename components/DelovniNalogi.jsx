@@ -104,8 +104,8 @@ function prazenObrazec() {
     zastopnik: "",
     objekt: "",
     naslovPodjetja: "",
-    slikaNarocila: null,
-    dxfDatoteka: null,
+    slike: [],
+    dxfDatoteke: [],
     postavke: [novaPostavka()],
   };
 }
@@ -1002,6 +1002,8 @@ export default function DelovniNalogi() {
           const popravljeni = podatki.map((n) => ({
             ...n,
             postavke: Array.isArray(n.postavke) && n.postavke.length ? n.postavke : [novaPostavka()],
+            slike: Array.isArray(n.slike) ? n.slike : n.slikaNarocila ? [n.slikaNarocila] : [],
+            dxfDatoteke: Array.isArray(n.dxfDatoteke) ? n.dxfDatoteke : n.dxfDatoteka ? [n.dxfDatoteka] : [],
           }));
           setNalogi(popravljeni);
 
@@ -1170,8 +1172,8 @@ export default function DelovniNalogi() {
       zastopnik: nalog.zastopnik || "",
       objekt: nalog.objekt || "",
       naslovPodjetja: nalog.naslovPodjetja || "",
-      slikaNarocila: nalog.slikaNarocila || null,
-      dxfDatoteka: nalog.dxfDatoteka || null,
+      slike: Array.isArray(nalog.slike) ? nalog.slike : [],
+      dxfDatoteke: Array.isArray(nalog.dxfDatoteke) ? nalog.dxfDatoteke : [],
       postavke: nalog.postavke.length ? nalog.postavke : [novaPostavka()],
     });
     setAktivniId(nalog.id);
@@ -2981,48 +2983,64 @@ export default function DelovniNalogi() {
 
             <div className="border-t border-stone-200 pt-4 mt-4 grid sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Slika naročila (npr. iz e-pošte stranke)</label>
-                {obrazec.slikaNarocila ? (
-                  <div className="bg-stone-50 border border-stone-200 rounded-lg p-2">
-                    <PrilogaPregled referenca={obrazec.slikaNarocila} slikaRazred="max-h-40 rounded-lg mx-auto" />
-                    <button
-                      type="button"
-                      onClick={() => setObrazec({ ...obrazec, slikaNarocila: null })}
-                      className="text-red-600 text-xs mt-2 block mx-auto"
-                    >
-                      Odstrani sliko
-                    </button>
-                  </div>
-                ) : (
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setObrazec({ ...obrazec, slikaNarocila: rez }), `nalog-${aktivniId || "nov"}-slika`)}
-                    className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
-                  />
-                )}
+                <label className="block text-xs font-medium text-stone-500 mb-1">Slike naročila (npr. iz e-pošte stranke)</label>
+                <div className="space-y-2 mb-2">
+                  {(obrazec.slike || []).map((slika, i) => (
+                    <div key={slika.kljuc || i} className="bg-stone-50 border border-stone-200 rounded-lg p-2">
+                      <PrilogaPregled referenca={slika} slikaRazred="max-h-40 rounded-lg mx-auto" />
+                      <button
+                        type="button"
+                        onClick={() => setObrazec({ ...obrazec, slike: obrazec.slike.filter((_, j) => j !== i) })}
+                        className="text-red-600 text-xs mt-2 block mx-auto"
+                      >
+                        Odstrani sliko
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) =>
+                    obravnavajNalozenoDatoteko(
+                      e,
+                      (rez) => setObrazec((trenutni) => ({ ...trenutni, slike: [...(trenutni.slike || []), rez] })),
+                      `nalog-${aktivniId || "nov"}-slika`
+                    )
+                  }
+                  className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
+                />
+                <p className="text-[11px] text-stone-400 mt-1">Dodaj lahko več slik — vsaka se doda posebej.</p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">DXF datoteka (za prenos na mašine)</label>
-                {obrazec.dxfDatoteka ? (
-                  <div className="flex items-center justify-between bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm">
-                    <span className="truncate text-stone-700">📎 {obrazec.dxfDatoteka.ime}</span>
-                    <button
-                      type="button"
-                      onClick={() => setObrazec({ ...obrazec, dxfDatoteka: null })}
-                      className="text-red-600 text-xs ml-2 shrink-0"
-                    >
-                      Odstrani
-                    </button>
-                  </div>
-                ) : (
-                  <input
-                    type="file"
-                    accept=".dxf,.dwg"
-                    onChange={(e) => obravnavajNalozenoDatoteko(e, (rez) => setObrazec({ ...obrazec, dxfDatoteka: rez }), `nalog-${aktivniId || "nov"}-dxf`)}
-                    className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
-                  />
-                )}
+                <label className="block text-xs font-medium text-stone-500 mb-1">DXF datoteke (za prenos na mašine)</label>
+                <div className="space-y-2 mb-2">
+                  {(obrazec.dxfDatoteke || []).map((dxf, i) => (
+                    <div key={dxf.kljuc || i} className="flex items-center justify-between bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm">
+                      <span className="truncate text-stone-700">📎 {dxf.ime}</span>
+                      <button
+                        type="button"
+                        onClick={() => setObrazec({ ...obrazec, dxfDatoteke: obrazec.dxfDatoteke.filter((_, j) => j !== i) })}
+                        className="text-red-600 text-xs ml-2 shrink-0"
+                      >
+                        Odstrani
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <input
+                  type="file"
+                  accept=".dxf,.dwg"
+                  onChange={(e) =>
+                    obravnavajNalozenoDatoteko(
+                      e,
+                      (rez) => setObrazec((trenutni) => ({ ...trenutni, dxfDatoteke: [...(trenutni.dxfDatoteke || []), rez] })),
+                      `nalog-${aktivniId || "nov"}-dxf`
+                    )
+                  }
+                  className="w-full text-sm text-stone-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-700 file:text-sm"
+                />
+                <p className="text-[11px] text-stone-400 mt-1">Dodaj lahko več DXF datotek — vsaka se doda posebej.</p>
               </div>
             </div>
 
@@ -3165,22 +3183,39 @@ export default function DelovniNalogi() {
               <Vrstica label="Prevzel" vrednost={aktivniNalog.prevzel} />
             </div>
 
-            {(aktivniNalog.slikaNarocila || aktivniNalog.dxfDatoteka) && (
-              <div className="mt-5 pt-4 border-t border-stone-100 grid sm:grid-cols-2 gap-4">
-                {aktivniNalog.slikaNarocila && (
-                  <div>
-                    <h3 className="carved text-sm uppercase text-stone-600 mb-2">Slika naročila</h3>
-                    <PrilogaPregled referenca={aktivniNalog.slikaNarocila} slikaRazred="max-h-64 rounded-lg border border-stone-200 mx-auto" />
-                  </div>
-                )}
-                {aktivniNalog.dxfDatoteka && (
-                  <div>
-                    <h3 className="carved text-sm uppercase text-stone-600 mb-2">DXF datoteka</h3>
-                    <PrilogaPregled referenca={aktivniNalog.dxfDatoteka} />
-                  </div>
-                )}
-              </div>
-            )}
+            {(() => {
+              const slike = Array.isArray(aktivniNalog.slike) ? aktivniNalog.slike : aktivniNalog.slikaNarocila ? [aktivniNalog.slikaNarocila] : [];
+              const dxfji = Array.isArray(aktivniNalog.dxfDatoteke) ? aktivniNalog.dxfDatoteke : aktivniNalog.dxfDatoteka ? [aktivniNalog.dxfDatoteka] : [];
+              if (slike.length === 0 && dxfji.length === 0) return null;
+              return (
+                <div className="mt-5 pt-4 border-t border-stone-100 grid sm:grid-cols-2 gap-4">
+                  {slike.length > 0 && (
+                    <div>
+                      <h3 className="carved text-sm uppercase text-stone-600 mb-2">
+                        {slike.length > 1 ? `Slike naročila (${slike.length})` : "Slika naročila"}
+                      </h3>
+                      <div className="space-y-2">
+                        {slike.map((slika, i) => (
+                          <PrilogaPregled key={slika.kljuc || i} referenca={slika} slikaRazred="max-h-64 rounded-lg border border-stone-200 mx-auto" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {dxfji.length > 0 && (
+                    <div>
+                      <h3 className="carved text-sm uppercase text-stone-600 mb-2">
+                        {dxfji.length > 1 ? `DXF datoteke (${dxfji.length})` : "DXF datoteka"}
+                      </h3>
+                      <div className="space-y-2">
+                        {dxfji.map((dxf, i) => (
+                          <PrilogaPregled key={dxf.kljuc || i} referenca={dxf} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {aktivniNalog.postavke && aktivniNalog.postavke.some(p => p.naziv || p.material || p.dolzina) && (
               <div className="mt-5 pt-4 border-t border-stone-100">
