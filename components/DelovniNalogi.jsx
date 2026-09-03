@@ -894,19 +894,64 @@ export default function DelovniNalogi() {
   const [pultiPodatki, setPultiPodatki] = useState([]);
   const [spomenikiPodatki, setSpomenikiPodatki] = useState([]);
   const [sestankiPodatki, setSestankiPodatki] = useState([]);
+  const [obvestilo, setObvestilo] = useState(null);
+  const [obvestiloVerzija, setObvestiloVerzija] = useState(0);
+  const [urejanjeObvestila, setUrejanjeObvestila] = useState(false);
+  const [novoBesediloObvestila, setNovoBesediloObvestila] = useState("");
+  const [novKomentar, setNovKomentar] = useState("");
+  const [avtorKomentarja, setAvtorKomentarja] = useState("");
+  const [shranjujeObvestilo, setShranjujeObvestilo] = useState(false);
 
   async function nalozizPultiInSpomenike() {
     try {
-      const [pRes, sRes, sestRes] = await Promise.all([
+      const [pRes, sRes, sestRes, obvRes] = await Promise.all([
         fetch("/api/pulti", { cache: "no-store" }),
         fetch("/api/spomeniki", { cache: "no-store" }),
         fetch("/api/sestanki", { cache: "no-store" }),
+        fetch("/api/obvestilo", { cache: "no-store" }),
       ]);
-      const [pulti, spomeniki, sestanki] = await Promise.all([pRes.json(), sRes.json(), sestRes.json()]);
+      const [pulti, spomeniki, sestanki, obv] = await Promise.all([pRes.json(), sRes.json(), sestRes.json(), obvRes.json()]);
       setPultiPodatki(Array.isArray(pulti) ? pulti : []);
       setSpomenikiPodatki(Array.isArray(spomeniki) ? spomeniki : []);
       setSestankiPodatki(Array.isArray(sestanki) ? sestanki : []);
+      setObvestilo(obv || null);
+      setObvestiloVerzija(Number(obvRes.headers.get("X-Verzija")) || 0);
     } catch (e) {}
+  }
+
+  async function posodobiObvestilo(transformFn) {
+    setShranjujeObvestilo(true);
+    try {
+      const res = await fetch("/api/obvestilo", { cache: "no-store" });
+      const trenutno = await res.json();
+      const verzija = Number(res.headers.get("X-Verzija")) || 0;
+      const novo = transformFn(trenutno);
+      const shraniRes = await fetch("/api/obvestilo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ podatki: novo, pricakovanaVerzija: verzija }),
+      });
+      const odgovor = await shraniRes.json().catch(() => ({}));
+      if (shraniRes.status === 409) {
+        alert("Nekdo drug je medtem dodal komentar. Stran se je osvežila, poskusi znova.");
+        const svezRes = await fetch("/api/obvestilo", { cache: "no-store" });
+        setObvestilo(await svezRes.json());
+        setObvestiloVerzija(Number(svezRes.headers.get("X-Verzija")) || 0);
+        return false;
+      }
+      if (!shraniRes.ok) {
+        alert("Shranjevanje ni uspelo. Preveri povezavo.");
+        return false;
+      }
+      setObvestilo(novo);
+      if (odgovor.verzija !== undefined) setObvestiloVerzija(odgovor.verzija);
+      return true;
+    } catch (e) {
+      alert("Napaka pri shranjevanju. Preveri povezavo.");
+      return false;
+    } finally {
+      setShranjujeObvestilo(false);
+    }
   }
 
   async function preklopiPlacanoPulti(id) {
@@ -1614,6 +1659,127 @@ export default function DelovniNalogi() {
 
         {!naloziLoading && pogled === "seznam" && (
           <div>
+            {(obvestilo?.besedilo || adminOdklenjen) && (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 mb-4">
+                {urejanjeObvestila ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={novoBesediloObvestila}
+                      onChange={(e) => setNovoBesediloObvestila(e.target.value)}
+                      rows={3}
+                      placeholder="Napiši obvestilo za vse zaposlene…"
+                      className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          const uspeh = await posodobiObvestilo((trenutno) => ({
+                            besedilo: novoBesediloObvestila.trim(),
+                            datum: new Date().toISOString(),
+                            komentarji: trenutno?.komentarji || [],
+                          }));
+                          if (uspeh) setUrejanjeObvestila(false);
+                        }}
+                        disabled={shranjujeObvestilo}
+                        className="text-sm px-3 py-1.5 rounded-lg bg-amber-600 text-white font-medium disabled:opacity-60"
+                      >
+                        {shranjujeObvestilo ? "Shranjujem …" : "Objavi obvestilo"}
+                      </button>
+                      <button
+                        onClick={() => setUrejanjeObvestila(false)}
+                        className="text-sm px-3 py-1.5 rounded-lg text-stone-500"
+                      >
+                        Prekliči
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-xs font-semibold text-amber-800 uppercase">📌 Obvestilo</p>
+                      {adminOdklenjen && (
+                        <button
+                          onClick={() => {
+                            setNovoBesediloObvestila(obvestilo?.besedilo || "");
+                            setUrejanjeObvestila(true);
+                          }}
+                          className="text-xs text-amber-700 underline shrink-0"
+                        >
+                          {obvestilo?.besedilo ? "Uredi" : "+ Napiši obvestilo"}
+                        </button>
+                      )}
+                    </div>
+                    {obvestilo?.besedilo && (
+                      <>
+                        <p className="text-sm text-amber-900 whitespace-pre-wrap mb-1">{obvestilo.besedilo}</p>
+                        {obvestilo.datum && (
+                          <p className="text-[11px] text-amber-600 mb-3">
+                            {new Date(obvestilo.datum).toLocaleDateString("sl-SI")} ob{" "}
+                            {new Date(obvestilo.datum).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        )}
+
+                        {(obvestilo.komentarji || []).length > 0 && (
+                          <div className="space-y-1.5 mb-3 border-t border-amber-200 pt-2">
+                            {obvestilo.komentarji.map((k, i) => (
+                              <div key={i} className="text-sm bg-white/60 rounded-lg px-2.5 py-1.5">
+                                <span className="font-semibold text-amber-900">{k.avtor}: </span>
+                                <span className="text-amber-800">{k.besedilo}</span>
+                                <span className="text-[10px] text-amber-500 ml-1.5">
+                                  {new Date(k.datum).toLocaleDateString("sl-SI")}{" "}
+                                  {new Date(k.datum).toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2 items-center border-t border-amber-200 pt-2">
+                          <select
+                            value={avtorKomentarja}
+                            onChange={(e) => setAvtorKomentarja(e.target.value)}
+                            className="text-sm px-2 py-1.5 rounded-lg border border-amber-300 bg-white"
+                          >
+                            <option value="">Kdo si?</option>
+                            {[...new Set([...ODDAL_NAROCILO, ...DELAVCI])].map((z) => (
+                              <option key={z}>{z}</option>
+                            ))}
+                          </select>
+                          <input
+                            value={novKomentar}
+                            onChange={(e) => setNovKomentar(e.target.value)}
+                            placeholder="Napiši odgovor…"
+                            className="flex-1 min-w-[140px] text-sm px-3 py-1.5 rounded-lg border border-amber-300"
+                          />
+                          <button
+                            onClick={async () => {
+                              if (!avtorKomentarja) {
+                                alert("Izberi, kdo si.");
+                                return;
+                              }
+                              if (!novKomentar.trim()) return;
+                              const uspeh = await posodobiObvestilo((trenutno) => ({
+                                ...trenutno,
+                                komentarji: [
+                                  ...(trenutno?.komentarji || []),
+                                  { avtor: avtorKomentarja, besedilo: novKomentar.trim(), datum: new Date().toISOString() },
+                                ],
+                              }));
+                              if (uspeh) setNovKomentar("");
+                            }}
+                            disabled={shranjujeObvestilo}
+                            className="text-sm px-3 py-1.5 rounded-lg bg-amber-600 text-white font-medium disabled:opacity-60"
+                          >
+                            Objavi
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {sestankiDanes.length > 0 && (
               <div className="bg-sky-50 border border-sky-300 rounded-xl p-3 mb-4">
                 <p className="text-xs font-semibold text-sky-800 uppercase mb-2">📅 Sestanki danes ({sestankiDanes.length})</p>
