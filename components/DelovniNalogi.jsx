@@ -2193,7 +2193,7 @@ export default function DelovniNalogi() {
                   const pultiStranke = pultiPodatki.filter((p) => p.stranka?.ime === stranka);
                   const spomenikiStranke = spomenikiPodatki.filter((s) => s.stranka?.ime === stranka);
                   const skupajNarocil = naroceilaStranke.length + pultiStranke.length + spomenikiStranke.length;
-                  const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da");
+                  const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
                   const odprtaVsota = odprta.reduce((v, n) => {
                     const c = parseFloat(String(n.cena).replace(",", "."));
                     return v + (isNaN(c) ? 0 : c);
