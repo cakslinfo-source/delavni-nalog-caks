@@ -2075,14 +2075,31 @@ export default function DelovniNalogi() {
                       ) : (
                         <div className="max-h-56 overflow-y-auto space-y-1">
                           {neplacana.map((n) => (
-                            <button
-                              key={n.id}
-                              onClick={() => odpriPodrobnosti(n.id)}
-                              className="w-full flex items-center justify-between text-sm py-1.5 border-b border-stone-800 hover:bg-stone-800 px-1 rounded transition-colors text-left"
-                            >
-                              <span className="text-stone-300 truncate">{n.stevilka} · {n.stranka}</span>
-                              <span className="font-semibold text-red-400 shrink-0 ml-2">{n.cena ? `${n.cena} €` : "brez cene"}</span>
-                            </button>
+                            <div key={n.id} className="flex items-center justify-between text-sm py-1.5 border-b border-stone-800 px-1">
+                              <button
+                                onClick={() => odpriPodrobnosti(n.id)}
+                                className="text-stone-300 truncate text-left hover:underline"
+                              >
+                                {n.stevilka} · {n.stranka}
+                              </button>
+                              <div className="flex items-center gap-2 shrink-0 ml-2">
+                                <span className="font-semibold text-red-400">{n.cena ? `${n.cena} €` : "brez cene"}</span>
+                                <button
+                                  onClick={() =>
+                                    posodobiNaloge((os) =>
+                                      os.map((x) =>
+                                        x.id === n.id
+                                          ? { ...x, placano: "Da", status: "Prevzeto", datumPrevzema: x.datumPrevzema || new Date().toISOString() }
+                                          : x
+                                      )
+                                    )
+                                  }
+                                  className="text-xs px-2 py-1 rounded bg-emerald-900 text-emerald-300 hover:bg-emerald-800"
+                                >
+                                  Označi plačano
+                                </button>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       )}
