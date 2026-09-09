@@ -1593,6 +1593,12 @@ export default function DelovniNalogi() {
               Spomeniki
             </a>
             <a
+              href="/skladisce"
+              className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
+            >
+              📦 Skladišče
+            </a>
+            <a
               href="/pregled"
               target="_blank"
               rel="noopener noreferrer"
