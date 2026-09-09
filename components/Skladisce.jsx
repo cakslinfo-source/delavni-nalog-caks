@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -95,6 +94,7 @@ export default function Skladisce() {
   const [izbranaKategorija, setIzbranaKategorija] = useState("vse");
   const [iskanje, setIskanje] = useState("");
   const [admin, setAdmin] = useState(false);
+  const [novaKategorijaVnos, setNovaKategorijaVnos] = useState(false);
 
   useEffect(() => {
     fetch("/api/skladisce", { cache: "no-store" })
@@ -278,7 +278,7 @@ export default function Skladisce() {
               return (
                 <div
                   key={a.id}
-                  onClick={() => { setObrazec({ ...a, _urejanje: true }); setPogled("obrazec"); }}
+                  onClick={() => { setNovaKategorijaVnos(false); setObrazec({ ...a, _urejanje: true }); setPogled("obrazec"); }}
                   className={`bg-white rounded-xl p-3 shadow-sm cursor-pointer border-2 ${nizka ? "border-red-400" : "border-transparent"}`}
                 >
                   <div className="flex justify-between items-start gap-2">
@@ -329,15 +329,42 @@ export default function Skladisce() {
           <div className="bg-white rounded-xl p-3 space-y-2">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Kategorija</label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-                value={obrazec.kategorija}
-                onChange={(e) => setObrazec({ ...obrazec, kategorija: e.target.value })}
-              >
-                {kategorije.map((k) => (
-                  <option key={k}>{k}</option>
-                ))}
-              </select>
+              {novaKategorijaVnos ? (
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    value={obrazec.kategorija}
+                    onChange={(e) => setObrazec({ ...obrazec, kategorija: e.target.value })}
+                    placeholder="Vpiši ime nove kategorije"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setNovaKategorijaVnos(false); setObrazec({ ...obrazec, kategorija: kategorije[0] }); }}
+                    className="text-xs text-gray-500 px-2"
+                  >
+                    Prekliči
+                  </button>
+                </div>
+              ) : (
+                <select
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  value={obrazec.kategorija}
+                  onChange={(e) => {
+                    if (e.target.value === "__nova__") {
+                      setObrazec({ ...obrazec, kategorija: "" });
+                      setNovaKategorijaVnos(true);
+                    } else {
+                      setObrazec({ ...obrazec, kategorija: e.target.value });
+                    }
+                  }}
+                >
+                  {kategorije.map((k) => (
+                    <option key={k}>{k}</option>
+                  ))}
+                  <option value="__nova__">+ Nova kategorija …</option>
+                </select>
+              )}
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Naziv artikla *</label>
@@ -467,7 +494,7 @@ export default function Skladisce() {
 
       {pogled === "seznam" && (
         <button
-          onClick={() => { setObrazec(prazenArtikel()); setPogled("obrazec"); }}
+          onClick={() => { setNovaKategorijaVnos(false); setObrazec(prazenArtikel()); setPogled("obrazec"); }}
           className="fixed bottom-6 right-6 bg-red-600 text-white rounded-full w-14 h-14 text-3xl shadow-lg flex items-center justify-center"
         >
           +
