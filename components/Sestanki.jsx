@@ -243,6 +243,9 @@ export default function Sestanki() {
           <a href="/spomeniki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">
             Spomeniki
           </a>
+          <a href="/skladisce" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">
+            📦 Skladišče
+          </a>
           <button
             onClick={() => {
               window.location.href = window.location.pathname + "?osvezeno=" + Date.now();
