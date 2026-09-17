@@ -224,6 +224,20 @@ function izracunajCenoPostavke(p) {
   return Math.round(cena * 100) / 100;
 }
 
+function materialiNaloga(nalog) {
+  const postavke = (nalog.postavke || []).filter((p) => p.material && p.material.trim());
+  if (postavke.length === 0) return [];
+  const videni = new Set();
+  const rezultat = [];
+  postavke.forEach((p) => {
+    const kljuc = `${p.material.trim()}__${p.debelina || ""}`;
+    if (videni.has(kljuc)) return;
+    videni.add(kljuc);
+    rezultat.push(p.debelina ? `${p.material.trim()} ${p.debelina}cm` : p.material.trim());
+  });
+  return rezultat;
+}
+
 function m2Postavke(p) {
   const d = parseFloat(String(p.dolzina).replace(",", "."));
   let s;
@@ -2432,6 +2446,9 @@ export default function DelovniNalogi() {
                           <div className="text-xs text-stone-500 truncate">🏢 {n.objekt}</div>
                         )}
                         <div className="text-sm text-stone-500 truncate">{n.opis}</div>
+                        {materialiNaloga(n).length > 0 && (
+                          <div className="text-xs text-sky-700 truncate">▪ {materialiNaloga(n).join(", ")}</div>
+                        )}
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
                         {(n.obvestiloEmailPoslano || n.obvestiloSmsPoslano) && (
@@ -2810,6 +2827,9 @@ export default function DelovniNalogi() {
                           <div className="text-xs text-stone-500 truncate">🏢 {n.objekt}</div>
                         )}
                         <div className="text-sm text-stone-500 truncate">{n.opis}</div>
+                        {materialiNaloga(n).length > 0 && (
+                          <div className="text-xs text-sky-700 truncate">▪ {materialiNaloga(n).join(", ")}</div>
+                        )}
                       </div>
                       {adminOdklenjen && (
                         <span className="font-semibold text-stone-700 shrink-0">{n.cena ? `${n.cena} €` : "brez cene"}</span>
