@@ -3137,6 +3137,36 @@ export default function DelovniNalogi() {
                 </select>
               </div>
 
+              <div className="bg-stone-50 border border-stone-200 rounded-lg p-2.5 mb-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-stone-500 shrink-0">Vse police ista debelina?</span>
+                <input
+                  className="postavka-input"
+                  style={{ width: "110px" }}
+                  placeholder="npr. 2"
+                  inputMode="decimal"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const v = e.target.value;
+                      if (!v) return;
+                      setObrazec({
+                        ...obrazec,
+                        postavke: obrazec.postavke.map((p) => ({ ...p, debelina: v })),
+                      });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    setObrazec({
+                      ...obrazec,
+                      postavke: obrazec.postavke.map((p) => ({ ...p, debelina: v })),
+                    });
+                  }}
+                />
+                <span className="text-[11px] text-stone-400">Vpiši in pritisni Enter ali klikni stran — po potrebi lahko debelino pri posameznem kosu spodaj še vedno spremeniš.</span>
+              </div>
+
               <div
                 className="hidden sm:grid gap-2 px-1 mb-1.5 text-xs font-medium text-stone-400 uppercase tracking-wide"
                 style={{ gridTemplateColumns: "2fr 1.6fr 1fr 1fr 1fr 0.8fr auto" }}
@@ -3150,7 +3180,20 @@ export default function DelovniNalogi() {
                 <span></span>
               </div>
 
-              <div className="space-y-2">
+              <div
+                className="space-y-2"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || !e.target.classList.contains("postavka-input")) return;
+                  e.preventDefault();
+                  const vsi = Array.from(e.currentTarget.querySelectorAll(".postavka-input"));
+                  const trenutni = vsi.indexOf(e.target);
+                  if (trenutni >= 0 && trenutni < vsi.length - 1) {
+                    const naslednji = vsi[trenutni + 1];
+                    naslednji.focus();
+                    if (naslednji.select) naslednji.select();
+                  }
+                }}
+              >
                 {obrazec.postavke.map((p, idx) => (
                   <div key={p.id} className="bg-stone-50 sm:bg-transparent rounded-lg p-2 sm:p-0">
                   <div
