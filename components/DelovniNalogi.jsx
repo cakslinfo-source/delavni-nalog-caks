@@ -2800,7 +2800,7 @@ export default function DelovniNalogi() {
           }, 0);
           const naziv = new Date(izbranMesec + "-01").toLocaleDateString("sl-SI", { month: "long", year: "numeric" });
 
-          // Police — tekoči metri po materialu (in debelini), sešteto čez vse postavke vseh naročil v mesecu.
+          // Police — tekoči metri IN kvadratura po materialu (in debelini), sešteto čez vse postavke vseh naročil v mesecu.
           const policePoMaterialu = {};
           naroceilaMeseca.forEach((n) => {
             (n.postavke || []).forEach((p) => {
@@ -2809,10 +2809,13 @@ export default function DelovniNalogi() {
               const kolicina = parseFloat(String(p.kolicina).replace(",", ".")) || 1;
               if (!d) return;
               const kljuc = p.debelina ? `${p.material.trim()} ${p.debelina}cm` : p.material.trim();
-              policePoMaterialu[kljuc] = (policePoMaterialu[kljuc] || 0) + (d / 100) * kolicina;
+              if (!policePoMaterialu[kljuc]) policePoMaterialu[kljuc] = { tm: 0, m2: 0 };
+              policePoMaterialu[kljuc].tm += (d / 100) * kolicina;
+              policePoMaterialu[kljuc].m2 += m2Postavke(p);
             });
           });
-          const policeSkupajTM = Object.values(policePoMaterialu).reduce((v, x) => v + x, 0);
+          const policeSkupajTM = Object.values(policePoMaterialu).reduce((v, x) => v + x.tm, 0);
+          const policeSkupajM2 = Object.values(policePoMaterialu).reduce((v, x) => v + x.m2, 0);
 
           // Pulti — kvadratura po materialu (ali kosi plošč), za naročila iz istega meseca.
           const pultiMeseca = pultiPodatki.filter((p) => p.datum && p.datum.slice(0, 7) === izbranMesec);
@@ -2871,21 +2874,28 @@ export default function DelovniNalogi() {
 
               {imaPorocilo && (
                 <div className="bg-white border border-stone-200 rounded-xl p-4 mb-4">
-                  <p className="carved text-sm uppercase text-stone-600 mb-3">📊 Poročilo proizvodnje — {naziv}</p>
+                  <p className="carved text-sm uppercase text-stone-600 mb-1">📊 Poročilo proizvodnje — {naziv}</p>
+                  {(policeSkupajM2 > 0 || pultiSkupajM2 > 0) && (
+                    <p className="text-xs text-stone-500 mb-3">
+                      Skupna kvadratura (Police + Pulti): <span className="font-bold text-stone-800">{(policeSkupajM2 + pultiSkupajM2).toFixed(2)} m²</span>
+                    </p>
+                  )}
 
                   {Object.keys(policePoMaterialu).length > 0 && (
                     <div className="mb-3 pb-3 border-b border-stone-100">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-semibold text-stone-500 uppercase">Police (📋)</span>
-                        <span className="text-sm font-bold text-stone-800">{policeSkupajTM.toFixed(2)} tm skupaj</span>
+                        <span className="text-sm font-bold text-stone-800">
+                          {policeSkupajM2.toFixed(2)} m² · {policeSkupajTM.toFixed(2)} tm skupaj
+                        </span>
                       </div>
                       <div className="space-y-0.5">
                         {Object.entries(policePoMaterialu)
-                          .sort((a, b) => b[1] - a[1])
-                          .map(([mat, tm]) => (
+                          .sort((a, b) => b[1].m2 - a[1].m2)
+                          .map(([mat, podatki]) => (
                             <div key={mat} className="flex items-center justify-between text-sm">
                               <span className="text-stone-600">{mat}</span>
-                              <span className="text-stone-800 font-medium">{tm.toFixed(2)} tm</span>
+                              <span className="text-stone-800 font-medium">{podatki.m2.toFixed(2)} m² · {podatki.tm.toFixed(2)} tm</span>
                             </div>
                           ))}
                       </div>
