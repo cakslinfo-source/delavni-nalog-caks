@@ -4336,6 +4336,20 @@ function IzracunPolic({ nalog, onZapri }) {
           </div>
         </div>
 
+        {(nalog.opis || nalog.cena || nalog.opombe) && (
+          <div className="mb-4 pb-3 border-b border-stone-200 space-y-1 text-sm">
+            {nalog.opis && (
+              <div><span className="text-xs text-stone-400 uppercase mr-1">Opis dela:</span><span className="text-stone-700">{nalog.opis}</span></div>
+            )}
+            {nalog.cena && (
+              <div><span className="text-xs text-stone-400 uppercase mr-1">Cena:</span><span className="font-semibold text-stone-800">{nalog.cena} €</span></div>
+            )}
+            {nalog.opombe && (
+              <div><span className="text-xs text-stone-400 uppercase mr-1">Opombe:</span><span className="text-stone-700">{nalog.opombe}</span></div>
+            )}
+          </div>
+        )}
+
       {razredi.length === 0 ? (
         <p className="text-sm text-stone-500">Ni postavk za izračun.</p>
       ) : (
