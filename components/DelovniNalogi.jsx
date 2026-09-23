@@ -925,6 +925,7 @@ export default function DelovniNalogi() {
   const [pultiPodatki, setPultiPodatki] = useState([]);
   const [spomenikiPodatki, setSpomenikiPodatki] = useState([]);
   const [sestankiPodatki, setSestankiPodatki] = useState([]);
+  const [pultiCenik, setPultiCenik] = useState(null);
   const [obvestilo, setObvestilo] = useState(null);
   const [obvestiloVerzija, setObvestiloVerzija] = useState(0);
   const [urejanjeObvestila, setUrejanjeObvestila] = useState(false);
@@ -939,16 +940,18 @@ export default function DelovniNalogi() {
 
   async function nalozizPultiInSpomenike() {
     try {
-      const [pRes, sRes, sestRes, obvRes] = await Promise.all([
+      const [pRes, sRes, sestRes, obvRes, cenikRes] = await Promise.all([
         fetch("/api/pulti", { cache: "no-store" }),
         fetch("/api/spomeniki", { cache: "no-store" }),
         fetch("/api/sestanki", { cache: "no-store" }),
         fetch("/api/obvestilo", { cache: "no-store" }),
+        fetch("/api/cenik-pulti", { cache: "no-store" }),
       ]);
-      const [pulti, spomeniki, sestanki, obv] = await Promise.all([pRes.json(), sRes.json(), sestRes.json(), obvRes.json()]);
+      const [pulti, spomeniki, sestanki, obv, pultiCenikPodatki] = await Promise.all([pRes.json(), sRes.json(), sestRes.json(), obvRes.json(), cenikRes.json()]);
       setPultiPodatki(Array.isArray(pulti) ? pulti : []);
       setSpomenikiPodatki(Array.isArray(spomeniki) ? spomeniki : []);
       setSestankiPodatki(Array.isArray(sestanki) ? sestanki : []);
+      setPultiCenik(pultiCenikPodatki && Array.isArray(pultiCenikPodatki.materiali) ? pultiCenikPodatki : null);
       // Stara oblika je imela samo {besedilo, datum, komentarji} neposredno — preslikamo v {trenutno, arhiv}.
       setObvestilo(normalizirajObvestilo(obv));
       setObvestiloVerzija(Number(obvRes.headers.get("X-Verzija")) || 0);
@@ -2796,6 +2799,60 @@ export default function DelovniNalogi() {
             return v + (isNaN(c) ? 0 : c);
           }, 0);
           const naziv = new Date(izbranMesec + "-01").toLocaleDateString("sl-SI", { month: "long", year: "numeric" });
+
+          // Police — tekoči metri po materialu (in debelini), sešteto čez vse postavke vseh naročil v mesecu.
+          const policePoMaterialu = {};
+          naroceilaMeseca.forEach((n) => {
+            (n.postavke || []).forEach((p) => {
+              if (!p.material || !p.material.trim()) return;
+              const d = parseFloat(String(p.dolzina).replace(",", ".")) || 0;
+              const kolicina = parseFloat(String(p.kolicina).replace(",", ".")) || 1;
+              if (!d) return;
+              const kljuc = p.debelina ? `${p.material.trim()} ${p.debelina}cm` : p.material.trim();
+              policePoMaterialu[kljuc] = (policePoMaterialu[kljuc] || 0) + (d / 100) * kolicina;
+            });
+          });
+          const policeSkupajTM = Object.values(policePoMaterialu).reduce((v, x) => v + x, 0);
+
+          // Pulti — kvadratura po materialu (ali kosi plošč), za naročila iz istega meseca.
+          const pultiMeseca = pultiPodatki.filter((p) => p.datum && p.datum.slice(0, 7) === izbranMesec);
+          const pultiPoMaterialu = {};
+          pultiMeseca.forEach((p) => {
+            const matPodatki = pultiCenik?.materiali?.find((m) => m.id === p.materialId);
+            const imeMat = matPodatki ? matPodatki.naziv : p.materialId || "Neznan material";
+            if (matPodatki && matPodatki.tip === "plosca") {
+              const kljuc = `${imeMat} (plošče)`;
+              if (!pultiPoMaterialu[kljuc]) pultiPoMaterialu[kljuc] = { enota: "kos", vsota: 0 };
+              pultiPoMaterialu[kljuc].vsota += parseFloat(String(p.steviloPlosc).replace(",", ".")) || 0;
+            } else {
+              (p.kosi || []).forEach((k) => {
+                const d = parseFloat(String(k.dolzina).replace(",", ".")) || 0;
+                const s = parseFloat(String(k.sirina).replace(",", ".")) || 0;
+                if (!d || !s) return;
+                const deb = k.debelina || p.debelina || "2";
+                const kljuc = `${imeMat} ${deb}cm`;
+                if (!pultiPoMaterialu[kljuc]) pultiPoMaterialu[kljuc] = { enota: "m²", vsota: 0 };
+                pultiPoMaterialu[kljuc].vsota += (d * s) / 10000;
+              });
+            }
+          });
+          const pultiSkupajM2 = Object.values(pultiPoMaterialu)
+            .filter((x) => x.enota === "m²")
+            .reduce((v, x) => v + x.vsota, 0);
+
+          // Spomeniki — samo štetje po materialu, za naročila iz istega meseca.
+          const spomenikiMeseca = spomenikiPodatki.filter((s) => s.datum && s.datum.slice(0, 7) === izbranMesec);
+          const spomenikiPoMaterialu = {};
+          spomenikiMeseca.forEach((s) => {
+            const mat = (s.material && s.material.trim()) || "Neznan material";
+            spomenikiPoMaterialu[mat] = (spomenikiPoMaterialu[mat] || 0) + 1;
+          });
+
+          const imaPorocilo =
+            Object.keys(policePoMaterialu).length > 0 ||
+            Object.keys(pultiPoMaterialu).length > 0 ||
+            Object.keys(spomenikiPoMaterialu).length > 0;
+
           return (
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -2809,6 +2866,69 @@ export default function DelovniNalogi() {
                 <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mb-4 flex items-center justify-between">
                   <span className="text-sm text-stone-300">Skupna vrednost ({naroceilaMeseca.length} naročil)</span>
                   <span className="text-xl font-bold text-white">{vsota.toFixed(2)} €</span>
+                </div>
+              )}
+
+              {imaPorocilo && (
+                <div className="bg-white border border-stone-200 rounded-xl p-4 mb-4">
+                  <p className="carved text-sm uppercase text-stone-600 mb-3">📊 Poročilo proizvodnje — {naziv}</p>
+
+                  {Object.keys(policePoMaterialu).length > 0 && (
+                    <div className="mb-3 pb-3 border-b border-stone-100">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-semibold text-stone-500 uppercase">Police (📋)</span>
+                        <span className="text-sm font-bold text-stone-800">{policeSkupajTM.toFixed(2)} tm skupaj</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {Object.entries(policePoMaterialu)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([mat, tm]) => (
+                            <div key={mat} className="flex items-center justify-between text-sm">
+                              <span className="text-stone-600">{mat}</span>
+                              <span className="text-stone-800 font-medium">{tm.toFixed(2)} tm</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {Object.keys(pultiPoMaterialu).length > 0 && (
+                    <div className="mb-3 pb-3 border-b border-stone-100">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-semibold text-stone-500 uppercase">Pulti (🪨)</span>
+                        <span className="text-sm font-bold text-stone-800">{pultiSkupajM2.toFixed(2)} m² skupaj</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {Object.entries(pultiPoMaterialu)
+                          .sort((a, b) => b[1].vsota - a[1].vsota)
+                          .map(([mat, podatki]) => (
+                            <div key={mat} className="flex items-center justify-between text-sm">
+                              <span className="text-stone-600">{mat}</span>
+                              <span className="text-stone-800 font-medium">{podatki.vsota.toFixed(2)} {podatki.enota}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {Object.keys(spomenikiPoMaterialu).length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-semibold text-stone-500 uppercase">Spomeniki (🪦)</span>
+                        <span className="text-sm font-bold text-stone-800">{spomenikiMeseca.length} skupaj</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {Object.entries(spomenikiPoMaterialu)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([mat, stevilo]) => (
+                            <div key={mat} className="flex items-center justify-between text-sm">
+                              <span className="text-stone-600">{mat}</span>
+                              <span className="text-stone-800 font-medium">{stevilo} kos{stevilo === 1 ? "" : "ov"}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
