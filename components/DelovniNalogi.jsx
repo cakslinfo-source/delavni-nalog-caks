@@ -4341,9 +4341,22 @@ function IzracunPolic({ nalog, onZapri }) {
             {nalog.opis && (
               <div><span className="text-xs text-stone-400 uppercase mr-1">Opis dela:</span><span className="text-stone-700">{nalog.opis}</span></div>
             )}
-            {nalog.cena && (
-              <div><span className="text-xs text-stone-400 uppercase mr-1">Cena:</span><span className="font-semibold text-stone-800">{nalog.cena} €</span></div>
-            )}
+            {nalog.cena && (() => {
+              const neto = parseFloat(String(nalog.cena).replace(",", ".")) || 0;
+              const popust = parseFloat(String(nalog.popustSkupaj).replace(",", ".")) || 0;
+              const netoPoPopustu = neto * (1 - popust / 100);
+              const bruto = netoPoPopustu * 1.22;
+              return (
+                <>
+                  <div><span className="text-xs text-stone-400 uppercase mr-1">Cena (neto):</span><span className="text-stone-700">{neto.toFixed(2)} €</span></div>
+                  {popust > 0 && (
+                    <div><span className="text-xs text-stone-400 uppercase mr-1">Popust:</span><span className="text-stone-700">{popust}%</span></div>
+                  )}
+                  <div><span className="text-xs text-stone-400 uppercase mr-1">Neto z popustom:</span><span className="font-semibold text-stone-800">{netoPoPopustu.toFixed(2)} €</span></div>
+                  <div><span className="text-xs text-stone-400 uppercase mr-1">Bruto z popustom (22% DDV):</span><span className="font-semibold text-stone-800">{bruto.toFixed(2)} €</span></div>
+                </>
+              );
+            })()}
             {nalog.opombe && (
               <div><span className="text-xs text-stone-400 uppercase mr-1">Opombe:</span><span className="text-stone-700">{nalog.opombe}</span></div>
             )}
