@@ -2873,72 +2873,150 @@ export default function DelovniNalogi() {
               )}
 
               {imaPorocilo && (
-                <div className="bg-white border border-stone-200 rounded-xl p-4 mb-4">
-                  <p className="carved text-sm uppercase text-stone-600 mb-1">📊 Poročilo proizvodnje — {naziv}</p>
-                  {(policeSkupajM2 > 0 || pultiSkupajM2 > 0) && (
-                    <p className="text-xs text-stone-500 mb-3">
-                      Skupna kvadratura (Police + Pulti): <span className="font-bold text-stone-800">{(policeSkupajM2 + pultiSkupajM2).toFixed(2)} m²</span>
-                    </p>
-                  )}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="carved text-sm uppercase text-stone-600">📊 Poročilo proizvodnje — {naziv}</p>
+                    {(policeSkupajM2 > 0 || pultiSkupajM2 > 0) && (
+                      <span className="text-xs text-stone-500">
+                        Skupna kvadratura: <span className="font-bold text-stone-800">{(policeSkupajM2 + pultiSkupajM2).toFixed(2)} m²</span>
+                      </span>
+                    )}
+                  </div>
 
-                  {Object.keys(policePoMaterialu).length > 0 && (
-                    <div className="mb-3 pb-3 border-b border-stone-100">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-semibold text-stone-500 uppercase">Police (📋)</span>
-                        <span className="text-sm font-bold text-stone-800">
-                          {policeSkupajM2.toFixed(2)} m² · {policeSkupajTM.toFixed(2)} tm skupaj
-                        </span>
-                      </div>
-                      <div className="space-y-0.5">
-                        {Object.entries(policePoMaterialu)
-                          .sort((a, b) => b[1].m2 - a[1].m2)
-                          .map(([mat, podatki]) => (
-                            <div key={mat} className="flex items-center justify-between text-sm">
-                              <span className="text-stone-600">{mat}</span>
-                              <span className="text-stone-800 font-medium">{podatki.m2.toFixed(2)} m² · {podatki.tm.toFixed(2)} tm</span>
-                            </div>
-                          ))}
-                      </div>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="rounded-xl p-3 text-center text-white" style={{ backgroundColor: "#dc2626" }}>
+                      <div className="text-2xl font-bold">{policeSkupajM2.toFixed(1)}</div>
+                      <div className="text-[11px] uppercase opacity-90">m² Police</div>
                     </div>
-                  )}
+                    <div className="rounded-xl p-3 text-center text-white" style={{ backgroundColor: "#a855f7" }}>
+                      <div className="text-2xl font-bold">{pultiSkupajM2.toFixed(1)}</div>
+                      <div className="text-[11px] uppercase opacity-90">m² Pulti</div>
+                    </div>
+                    <div className="rounded-xl p-3 text-center text-white" style={{ backgroundColor: "#eab308" }}>
+                      <div className="text-2xl font-bold">{spomenikiMeseca.length}</div>
+                      <div className="text-[11px] uppercase opacity-90">Spomeniki</div>
+                    </div>
+                  </div>
 
-                  {Object.keys(pultiPoMaterialu).length > 0 && (
-                    <div className="mb-3 pb-3 border-b border-stone-100">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-semibold text-stone-500 uppercase">Pulti (🪨)</span>
-                        <span className="text-sm font-bold text-stone-800">{pultiSkupajM2.toFixed(2)} m² skupaj</span>
+                  {Object.keys(policePoMaterialu).length > 0 && (() => {
+                    const podatkiGrafaPolice = Object.entries(policePoMaterialu)
+                      .sort((a, b) => b[1].m2 - a[1].m2)
+                      .map(([mat, podatki]) => ({ ime: mat, m2: podatki.m2, tm: podatki.tm }));
+                    const BARVE_MATERIALOV = ["#dc2626", "#f87171", "#fca5a5", "#7f1d1d", "#ef4444", "#fecaca"];
+                    return (
+                      <div className="rounded-xl border-2 mb-3 overflow-hidden" style={{ borderColor: "#dc262640" }}>
+                        <div className="px-4 py-2 flex items-center justify-between" style={{ backgroundColor: "#dc262615" }}>
+                          <span className="text-sm font-bold" style={{ color: "#dc2626" }}>📋 Police</span>
+                          <span className="text-sm font-semibold text-stone-700">{policeSkupajM2.toFixed(2)} m² · {policeSkupajTM.toFixed(2)} tm</span>
+                        </div>
+                        <div className="p-3 flex flex-col sm:flex-row gap-3 items-center">
+                          <div style={{ width: "100%", maxWidth: 160, height: 160 }} className="shrink-0">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie data={podatkiGrafaPolice} dataKey="m2" nameKey="ime" cx="50%" cy="50%" innerRadius={35} outerRadius={70}>
+                                  {podatkiGrafaPolice.map((entry, i) => (
+                                    <Cell key={entry.ime} fill={BARVE_MATERIALOV[i % BARVE_MATERIALOV.length]} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={(v) => [`${v.toFixed(2)} m²`, ""]} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="flex-1 w-full space-y-1">
+                            {podatkiGrafaPolice.map((r, i) => (
+                              <div key={r.ime} className="flex items-center justify-between text-sm">
+                                <span className="flex items-center gap-1.5 text-stone-600 truncate">
+                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: BARVE_MATERIALOV[i % BARVE_MATERIALOV.length] }} />
+                                  {r.ime}
+                                </span>
+                                <span className="text-stone-800 font-medium shrink-0">{r.m2.toFixed(2)} m² · {r.tm.toFixed(2)} tm</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                      <div className="space-y-0.5">
-                        {Object.entries(pultiPoMaterialu)
-                          .sort((a, b) => b[1].vsota - a[1].vsota)
-                          .map(([mat, podatki]) => (
-                            <div key={mat} className="flex items-center justify-between text-sm">
-                              <span className="text-stone-600">{mat}</span>
-                              <span className="text-stone-800 font-medium">{podatki.vsota.toFixed(2)} {podatki.enota}</span>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
-                  {Object.keys(spomenikiPoMaterialu).length > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-semibold text-stone-500 uppercase">Spomeniki (🪦)</span>
-                        <span className="text-sm font-bold text-stone-800">{spomenikiMeseca.length} skupaj</span>
+                  {Object.keys(pultiPoMaterialu).length > 0 && (() => {
+                    const podatkiGrafaPulti = Object.entries(pultiPoMaterialu)
+                      .sort((a, b) => b[1].vsota - a[1].vsota)
+                      .map(([mat, podatki]) => ({ ime: mat, vsota: podatki.vsota, enota: podatki.enota }));
+                    const BARVE_MATERIALOV = ["#a855f7", "#c084fc", "#d8b4fe", "#6b21a8", "#9333ea", "#e9d5ff"];
+                    return (
+                      <div className="rounded-xl border-2 mb-3 overflow-hidden" style={{ borderColor: "#a855f740" }}>
+                        <div className="px-4 py-2 flex items-center justify-between" style={{ backgroundColor: "#a855f715" }}>
+                          <span className="text-sm font-bold" style={{ color: "#a855f7" }}>🪨 Pulti</span>
+                          <span className="text-sm font-semibold text-stone-700">{pultiSkupajM2.toFixed(2)} m² skupaj</span>
+                        </div>
+                        <div className="p-3 flex flex-col sm:flex-row gap-3 items-center">
+                          <div style={{ width: "100%", maxWidth: 160, height: 160 }} className="shrink-0">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie data={podatkiGrafaPulti} dataKey="vsota" nameKey="ime" cx="50%" cy="50%" innerRadius={35} outerRadius={70}>
+                                  {podatkiGrafaPulti.map((entry, i) => (
+                                    <Cell key={entry.ime} fill={BARVE_MATERIALOV[i % BARVE_MATERIALOV.length]} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={(v, n, o) => [`${v.toFixed(2)} ${o.payload.enota}`, ""]} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="flex-1 w-full space-y-1">
+                            {podatkiGrafaPulti.map((r, i) => (
+                              <div key={r.ime} className="flex items-center justify-between text-sm">
+                                <span className="flex items-center gap-1.5 text-stone-600 truncate">
+                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: BARVE_MATERIALOV[i % BARVE_MATERIALOV.length] }} />
+                                  {r.ime}
+                                </span>
+                                <span className="text-stone-800 font-medium shrink-0">{r.vsota.toFixed(2)} {r.enota}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                      <div className="space-y-0.5">
-                        {Object.entries(spomenikiPoMaterialu)
-                          .sort((a, b) => b[1] - a[1])
-                          .map(([mat, stevilo]) => (
-                            <div key={mat} className="flex items-center justify-between text-sm">
-                              <span className="text-stone-600">{mat}</span>
-                              <span className="text-stone-800 font-medium">{stevilo} kos{stevilo === 1 ? "" : "ov"}</span>
-                            </div>
-                          ))}
+                    );
+                  })()}
+
+                  {Object.keys(spomenikiPoMaterialu).length > 0 && (() => {
+                    const podatkiGrafaSpomeniki = Object.entries(spomenikiPoMaterialu)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([mat, stevilo]) => ({ ime: mat, stevilo }));
+                    const BARVE_MATERIALOV = ["#eab308", "#facc15", "#fde047", "#a16207", "#ca8a04", "#fef08a"];
+                    return (
+                      <div className="rounded-xl border-2 overflow-hidden" style={{ borderColor: "#eab30840" }}>
+                        <div className="px-4 py-2 flex items-center justify-between" style={{ backgroundColor: "#eab30815" }}>
+                          <span className="text-sm font-bold" style={{ color: "#a16207" }}>🪦 Spomeniki</span>
+                          <span className="text-sm font-semibold text-stone-700">{spomenikiMeseca.length} skupaj</span>
+                        </div>
+                        <div className="p-3 flex flex-col sm:flex-row gap-3 items-center">
+                          <div style={{ width: "100%", maxWidth: 160, height: 160 }} className="shrink-0">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie data={podatkiGrafaSpomeniki} dataKey="stevilo" nameKey="ime" cx="50%" cy="50%" innerRadius={35} outerRadius={70}>
+                                  {podatkiGrafaSpomeniki.map((entry, i) => (
+                                    <Cell key={entry.ime} fill={BARVE_MATERIALOV[i % BARVE_MATERIALOV.length]} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={(v) => [`${v} kos${v === 1 ? "" : "ov"}`, ""]} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="flex-1 w-full space-y-1">
+                            {podatkiGrafaSpomeniki.map((r, i) => (
+                              <div key={r.ime} className="flex items-center justify-between text-sm">
+                                <span className="flex items-center gap-1.5 text-stone-600 truncate">
+                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: BARVE_MATERIALOV[i % BARVE_MATERIALOV.length] }} />
+                                  {r.ime}
+                                </span>
+                                <span className="text-stone-800 font-medium shrink-0">{r.stevilo} kos{r.stevilo === 1 ? "" : "ov"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
 
