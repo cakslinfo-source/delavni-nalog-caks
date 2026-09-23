@@ -35,6 +35,20 @@ function mapSpomenikStatus(status) {
   return "sprejeto";
 }
 
+function materialiPolice(nalog) {
+  const postavke = (nalog.postavke || []).filter((p) => p.material && p.material.trim());
+  if (postavke.length === 0) return "";
+  const videni = new Set();
+  const rezultat = [];
+  postavke.forEach((p) => {
+    const ime = p.material.trim();
+    if (videni.has(ime)) return;
+    videni.add(ime);
+    rezultat.push(ime);
+  });
+  return rezultat.join(", ");
+}
+
 export default function Pregled() {
   const [postavke, setPostavke] = useState([]);
   const [nalaganje, setNalaganje] = useState(true);
@@ -43,10 +57,11 @@ export default function Pregled() {
 
   async function nalozi() {
     try {
-      const [nalogiRes, pultiRes, spomenikiRes] = await Promise.all([
+      const [nalogiRes, pultiRes, spomenikiRes, pultiCenikRes] = await Promise.all([
         fetch("/api/nalogi", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
         fetch("/api/pulti", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
         fetch("/api/spomeniki", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
+        fetch("/api/cenik-pulti", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       ]);
 
       const vse = [
@@ -56,22 +71,31 @@ export default function Pregled() {
           stevilka: n.stevilka,
           stranka: n.stranka,
           rok: n.rok,
+          material: materialiPolice(n),
+          objekt: n.tipStranke === "pravna" ? n.objekt : "",
           stolpec: mapPoliceStatus(n.status),
         })),
-        ...(Array.isArray(pultiRes) ? pultiRes : []).map((p) => ({
-          modul: "Pulti",
-          id: p.id,
-          stevilka: p.stevilka,
-          stranka: p.stranka?.ime,
-          rok: p.datumMontaze,
-          stolpec: mapPultiStatus(p.status),
-        })),
+        ...(Array.isArray(pultiRes) ? pultiRes : []).map((p) => {
+          const matPodatki = pultiCenikRes?.materiali?.find((m) => m.id === p.materialId);
+          return {
+            modul: "Pulti",
+            id: p.id,
+            stevilka: p.stevilka,
+            stranka: p.stranka?.ime,
+            rok: p.datumMontaze,
+            material: matPodatki ? matPodatki.naziv : "",
+            objekt: "",
+            stolpec: mapPultiStatus(p.status),
+          };
+        }),
         ...(Array.isArray(spomenikiRes) ? spomenikiRes : []).map((s) => ({
           modul: "Spomenik",
           id: s.id,
           stevilka: s.stevilka,
           stranka: s.stranka?.ime,
           rok: s.montaza,
+          material: s.material || "",
+          objekt: "",
           stolpec: mapSpomenikStatus(s.status),
         })),
       ];
@@ -146,6 +170,13 @@ export default function Pregled() {
         )}
 
         <div className="text-right shrink-0">
+          <div className="flex gap-1.5 justify-end mb-1.5">
+            <a href="/" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Police</a>
+            <a href="/pulti" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Pulti</a>
+            <a href="/spomeniki" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Spomeniki</a>
+            <a href="/sestanki" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Sestanki</a>
+            <a href="/skladisce" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">📦 Skladišče</a>
+          </div>
           <div className="text-xl font-mono tabular-nums text-stone-200">
             {zdaj.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </div>
@@ -190,9 +221,11 @@ export default function Pregled() {
                           <div className="text-sm text-stone-100 truncate">
                             <span className="font-semibold" style={{ color: BARVA_MODULA[p.modul] }}>{KRATICA_MODULA[p.modul]} {p.stevilka}</span>
                             {" "}· {p.stranka || "—"}
+                            {p.material && <> · <span className="text-stone-300">{p.material}</span></>}
                           </div>
                           <div className={`text-xs truncate ${zamujen ? "text-red-400 font-semibold" : "text-stone-500"}`}>
                             {p.rok ? `Rok: ${new Date(p.rok).toLocaleDateString("sl-SI")}${zamujen ? " — ZAMUJA" : ""}` : "Brez roka"}
+                            {p.objekt && ` · Objekt: ${p.objekt}`}
                           </div>
                         </div>
                       );
