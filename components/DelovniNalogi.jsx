@@ -11,7 +11,6 @@ const STOLPCI = [
 
 const BARVA_MODULA = { Police: "#dc2626", Pulti: "#a855f7", Spomenik: "#eab308" };
 const KRATICA_MODULA = { Police: "Police", Pulti: "Pulti", Spomenik: "Spomenik" };
-const ZAPOSLENI_VSI = ["Luka", "Miha", "Jože", "Timea", "Žan", "Žiga", "Rok", "Mersad", "Patrik"];
 
 function mapPoliceStatus(status) {
   if (status === "Sprejeto") return "sprejeto";
@@ -23,6 +22,7 @@ function mapPoliceStatus(status) {
 
 function mapPultiStatus(status) {
   if (["sprejeto", "izdelavi", "pripravljeno", "prevzeto"].includes(status)) return status;
+  // stari statusi (pred poenotenjem s Policami)
   if (["ponudba", "izmera", "cad"].includes(status)) return "sprejeto";
   if (["razrez", "izrezi", "brusenje"].includes(status)) return "izdelavi";
   if (status === "montaza") return "pripravljeno";
@@ -35,35 +35,18 @@ function mapSpomenikStatus(status) {
   return "sprejeto";
 }
 
-function normalizirajObvestilo(obv) {
-  if (obv && (obv.trenutno !== undefined || obv.arhiv !== undefined)) {
-    return { trenutno: obv.trenutno || null, arhiv: Array.isArray(obv.arhiv) ? obv.arhiv : [] };
-  }
-  if (obv && obv.besedilo) {
-    return { trenutno: obv, arhiv: [] };
-  }
-  return { trenutno: null, arhiv: [] };
-}
-
 export default function Pregled() {
   const [postavke, setPostavke] = useState([]);
   const [nalaganje, setNalaganje] = useState(true);
   const [uraOsvezitve, setUraOsvezitve] = useState(null);
   const [zdaj, setZdaj] = useState(new Date());
-  const [sestankiDanes, setSestankiDanes] = useState([]);
-  const [obvestilo, setObvestilo] = useState(null);
-  const [avtorKomentarja, setAvtorKomentarja] = useState("");
-  const [novKomentar, setNovKomentar] = useState("");
-  const [posiljam, setPosiljam] = useState(false);
 
   async function nalozi() {
     try {
-      const [nalogiRes, pultiRes, spomenikiRes, sestankiRes, obvRes] = await Promise.all([
+      const [nalogiRes, pultiRes, spomenikiRes] = await Promise.all([
         fetch("/api/nalogi", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
         fetch("/api/pulti", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
         fetch("/api/spomeniki", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
-        fetch("/api/sestanki", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
-        fetch("/api/obvestilo", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       ]);
 
       const vse = [
@@ -94,58 +77,11 @@ export default function Pregled() {
       ];
 
       setPostavke(vse);
-
-      const danesniDatum = new Date().toISOString().slice(0, 10);
-      const sestanki = Array.isArray(sestankiRes) ? sestankiRes : [];
-      setSestankiDanes(
-        sestanki
-          .filter((s) => s.datum === danesniDatum && !s.opravljeno)
-          .sort((a, b) => (a.ura || "").localeCompare(b.ura || ""))
-      );
-
-      setObvestilo(normalizirajObvestilo(obvRes));
       setUraOsvezitve(new Date());
     } catch (e) {
       // tiho — ohrani prejšnje podatke na zaslonu
     } finally {
       setNalaganje(false);
-    }
-  }
-
-  async function objaviKomentar() {
-    if (!avtorKomentarja) {
-      alert("Izberi, kdo si.");
-      return;
-    }
-    if (!novKomentar.trim()) return;
-    setPosiljam(true);
-    try {
-      const res = await fetch("/api/obvestilo", { cache: "no-store" });
-      const sveze = normalizirajObvestilo(await res.json());
-      const verzija = Number(res.headers.get("X-Verzija")) || 0;
-      if (!sveze.trenutno) return;
-      const novo = {
-        ...sveze,
-        trenutno: {
-          ...sveze.trenutno,
-          komentarji: [
-            ...(sveze.trenutno.komentarji || []),
-            { avtor: avtorKomentarja, besedilo: novKomentar.trim(), datum: new Date().toISOString() },
-          ],
-        },
-      };
-      const shraniRes = await fetch("/api/obvestilo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ podatki: novo, pricakovanaVerzija: verzija }),
-      });
-      if (shraniRes.ok) {
-        setObvestilo(novo);
-        setNovKomentar("");
-      }
-    } catch (e) {
-    } finally {
-      setPosiljam(false);
     }
   }
 
@@ -218,62 +154,6 @@ export default function Pregled() {
           </div>
         </div>
       </div>
-
-      {(obvestilo?.trenutno?.besedilo || sestankiDanes.length > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 shrink-0">
-          {obvestilo?.trenutno?.besedilo && (
-            <div className="bg-amber-950/40 border border-amber-700/50 rounded-xl px-3 py-2">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-semibold text-amber-400 uppercase">📌 {obvestilo.trenutno.naslov || "Obvestilo"}</span>
-                {(obvestilo.trenutno.komentarji || []).length > 0 && (
-                  <span className="text-[10px] text-amber-500">{obvestilo.trenutno.komentarji.length} odgovorov</span>
-                )}
-              </div>
-              <p className="text-sm text-amber-100 line-clamp-2 mb-1.5">{obvestilo.trenutno.besedilo}</p>
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <select
-                  value={avtorKomentarja}
-                  onChange={(e) => setAvtorKomentarja(e.target.value)}
-                  className="text-xs px-1.5 py-1 rounded border border-amber-700 bg-stone-900 text-amber-100"
-                >
-                  <option value="">Kdo si?</option>
-                  {ZAPOSLENI_VSI.map((z) => (
-                    <option key={z}>{z}</option>
-                  ))}
-                </select>
-                <input
-                  value={novKomentar}
-                  onChange={(e) => setNovKomentar(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && objaviKomentar()}
-                  placeholder="Napiši odgovor…"
-                  className="flex-1 min-w-[100px] text-xs px-2 py-1 rounded border border-amber-700 bg-stone-900 text-amber-100"
-                />
-                <button
-                  onClick={objaviKomentar}
-                  disabled={posiljam}
-                  className="text-xs px-2.5 py-1 rounded bg-amber-600 text-white font-medium disabled:opacity-60"
-                >
-                  Objavi
-                </button>
-              </div>
-            </div>
-          )}
-
-          {sestankiDanes.length > 0 && (
-            <div className="bg-sky-950/40 border border-sky-700/50 rounded-xl px-3 py-2">
-              <span className="text-[10px] font-semibold text-sky-400 uppercase block mb-1">📅 Sestanki danes ({sestankiDanes.length})</span>
-              <div className="space-y-0.5 max-h-16 overflow-y-auto">
-                {sestankiDanes.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between text-sm">
-                    <span className="text-sky-100 truncate">{s.stranka?.ime}{s.tipIzmere ? ` · ${s.tipIzmere}` : ""}</span>
-                    <span className="text-sky-300 font-semibold shrink-0 ml-2">{s.ura}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {nalaganje ? (
         <div className="text-center text-stone-500 py-24 text-lg flex-1">Nalagam …</div>
