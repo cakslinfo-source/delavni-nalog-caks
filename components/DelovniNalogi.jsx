@@ -201,7 +201,7 @@ function izracunajCenoPostavke(p) {
   if (p.poseven) {
     const sd = parseFloat(String(p.sirinaDesno).replace(",", ".")) || 0;
     const sl = parseFloat(String(p.sirinaLevo).replace(",", ".")) || 0;
-    sirina = (sd + sl) / 2;
+    sirina = Math.max(sd, sl);
   } else {
     sirina = parseFloat(String(p.sirina).replace(",", "."));
   }
@@ -244,7 +244,7 @@ function m2Postavke(p) {
   if (p.poseven) {
     const sd = parseFloat(String(p.sirinaDesno).replace(",", ".")) || 0;
     const sl = parseFloat(String(p.sirinaLevo).replace(",", ".")) || 0;
-    s = (sd + sl) / 2;
+    s = Math.max(sd, sl);
   } else {
     s = parseFloat(String(p.sirina).replace(",", "."));
   }
@@ -425,7 +425,7 @@ function izracunajRazredePolic(nalog) {
     if (p.poseven) {
       const sd = parseFloat(String(p.sirinaDesno).replace(",", ".")) || 0;
       const sl = parseFloat(String(p.sirinaLevo).replace(",", ".")) || 0;
-      sirina = (sd + sl) / 2;
+      sirina = Math.max(sd, sl);
     } else {
       sirina = parseFloat(String(p.sirina).replace(",", "."));
     }
@@ -1280,7 +1280,7 @@ export default function DelovniNalogi() {
     const posodobljenePostavke = obrazec.postavke.map((p) => {
       if (p.id !== id) return p;
       const posodobljena = { ...p, [polje]: vrednost };
-      if (["material", "dolzina", "sirina", "debelina", "kolicina", "popust"].includes(polje)) {
+      if (["material", "dolzina", "sirina", "sirinaLevo", "sirinaDesno", "debelina", "kolicina", "popust"].includes(polje)) {
         const izracunana = izracunajCenoPostavke(posodobljena);
         if (izracunana !== null) posodobljena.cena = String(izracunana);
       }
@@ -3679,7 +3679,7 @@ export default function DelovniNalogi() {
                             <td className="py-1.5 px-2 text-stone-700">{p.naziv || "—"}</td>
                             <td className="py-1.5 px-2 text-stone-600">{p.material || "—"}</td>
                             <td className="py-1.5 px-2 text-stone-600">
-                              {p.dolzina || "–"} × {p.poseven ? `D:${p.sirinaDesno || "–"}/L:${p.sirinaLevo || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
+                              {p.dolzina || "–"} × {p.poseven ? `L:${p.sirinaLevo || "–"}/D:${p.sirinaDesno || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
                             </td>
                             <td className="py-1.5 px-2 text-stone-600">{p.kolicina || "1"}</td>
                             <td className="py-1.5 px-2 text-stone-600">{p.cena ? `${p.cena} €` : "—"}</td>
@@ -4125,7 +4125,7 @@ function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno }) {
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top overflow-hidden">
-                      {p.dolzina || "–"} × {p.poseven ? `D:${p.sirinaDesno || "–"}/L:${p.sirinaLevo || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
+                      {p.dolzina || "–"} × {p.poseven ? `L:${p.sirinaLevo || "–"}/D:${p.sirinaDesno || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
                       {p.vecKosov && (
                         <div className="text-[10px] text-amber-600 font-medium">iz {p.steviloKosov || 2} kosov</div>
                       )}
@@ -4254,7 +4254,7 @@ function TiskPonudbe({ nalog, onZapri }) {
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top whitespace-nowrap">
-                      {p.dolzina || "–"} × {p.poseven ? `D:${p.sirinaDesno || "–"}/L:${p.sirinaLevo || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
+                      {p.dolzina || "–"} × {p.poseven ? `L:${p.sirinaLevo || "–"}/D:${p.sirinaDesno || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
                       {p.vecKosov && (
                         <div className="text-[10px] text-amber-600 font-medium">iz {p.steviloKosov || 2} kosov</div>
                       )}
@@ -4493,7 +4493,7 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top overflow-hidden">
-                      {p.dolzina || "–"} × {p.poseven ? `D:${p.sirinaDesno || "–"}/L:${p.sirinaLevo || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
+                      {p.dolzina || "–"} × {p.poseven ? `L:${p.sirinaLevo || "–"}/D:${p.sirinaDesno || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
                       {p.vecKosov && (
                         <div className="text-[10px] text-amber-600 font-medium">iz {p.steviloKosov || 2} kosov</div>
                       )}
