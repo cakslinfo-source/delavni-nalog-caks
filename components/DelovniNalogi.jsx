@@ -170,6 +170,13 @@ export default function Pregled() {
         )}
 
         <div className="text-right shrink-0">
+          <div className="flex gap-1.5 justify-end mb-1.5">
+            <a href="/" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Police</a>
+            <a href="/pulti" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Pulti</a>
+            <a href="/spomeniki" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Spomeniki</a>
+            <a href="/sestanki" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Sestanki</a>
+            <a href="/skladisce" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">📦 Skladišče</a>
+          </div>
           <div className="text-xl font-mono tabular-nums text-stone-200">
             {zdaj.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </div>
