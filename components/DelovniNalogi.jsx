@@ -434,15 +434,17 @@ function izracunajRazredePolic(nalog) {
     const debelina = Math.round(parseFloat(String(p.debelina).replace(",", ".")));
     if (!sirina || sirina <= 0 || !dolzina || dolzina <= 0) return;
 
-    let oznakaRazreda, materialIme;
+    let oznakaRazreda, materialIme, razredMin;
     if (skupinaPodatki) {
       const sirinaZaokrozena = Math.ceil(sirina - 1e-9);
       const bracket = skupinaPodatki.brackets.find((b) => sirinaZaokrozena >= b.min && sirinaZaokrozena <= b.max);
       oznakaRazreda = bracket ? `${bracket.min}-${bracket.max} cm` : "izven cenika";
       materialIme = p.material;
+      razredMin = bracket ? bracket.min : Infinity;
     } else {
       oznakaRazreda = "ni v ceniku";
       materialIme = p.material || "—";
+      razredMin = Infinity;
     }
     const debelinaOznaka = debelina ? `${debelina} cm` : "—";
     const kljuc = `${materialIme}|${oznakaRazreda}|${debelinaOznaka}`;
@@ -451,6 +453,7 @@ function izracunajRazredePolic(nalog) {
       skupine[kljuc] = {
         material: materialIme,
         razred: oznakaRazreda,
+        razredMin,
         debelina: debelinaOznaka,
         tekociMetri: 0,
         stevilo: 0,
@@ -460,7 +463,11 @@ function izracunajRazredePolic(nalog) {
     skupine[kljuc].stevilo += kolicina;
   });
 
-  return Object.values(skupine).sort((a, b) => a.material.localeCompare(b.material, "sl"));
+  return Object.values(skupine).sort((a, b) => {
+    const primerjavaMateriala = a.material.localeCompare(b.material, "sl");
+    if (primerjavaMateriala !== 0) return primerjavaMateriala;
+    return a.razredMin - b.razredMin;
+  });
 }
 
 function generirajDXFPosevnihKosov(nalog) {
