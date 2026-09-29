@@ -3763,22 +3763,31 @@ export default function DelovniNalogi() {
                 </div>
               )}
               <Vrstica label="Opis dela" vrednost={aktivniNalog.opis} />
-              <Vrstica
-                label="Cena"
-                vrednost={
-                  aktivniNalog.cena
-                    ? (() => {
-                        const neto = parseFloat(String(aktivniNalog.cena).replace(",", "."));
-                        const popust = parseFloat(String(aktivniNalog.popustSkupaj).replace(",", ".")) || 0;
-                        const netoPoPopustu = neto * (1 - popust / 100);
-                        const bruto = netoPoPopustu * 1.22;
-                        return popust > 0
-                          ? `${neto.toFixed(2)} € neto · popust ${popust}% · ${netoPoPopustu.toFixed(2)} € po popustu · ${bruto.toFixed(2)} € bruto (22% DDV)`
-                          : `${neto.toFixed(2)} € neto · ${bruto.toFixed(2)} € bruto (22% DDV)`;
-                      })()
-                    : ""
-                }
-              />
+              {aktivniNalog.cena && (() => {
+                const neto = parseFloat(String(aktivniNalog.cena).replace(",", "."));
+                const popust = parseFloat(String(aktivniNalog.popustSkupaj).replace(",", ".")) || 0;
+                const netoPoPopustu = neto * (1 - popust / 100);
+                const brutoPolni = neto * 1.22;
+                const brutoPoPopustu = netoPoPopustu * 1.22;
+                return (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-stone-50 rounded-lg p-2.5">
+                      <p className="text-[11px] text-stone-400 uppercase mb-1">Neto</p>
+                      <p className="text-sm text-stone-600">Polna cena: <span className="font-semibold text-stone-800">{neto.toFixed(2)} €</span></p>
+                      {popust > 0 && (
+                        <p className="text-sm text-stone-600">Z {popust}% popustom: <span className="font-semibold text-stone-800">{netoPoPopustu.toFixed(2)} €</span></p>
+                      )}
+                    </div>
+                    <div className="bg-stone-50 rounded-lg p-2.5">
+                      <p className="text-[11px] text-stone-400 uppercase mb-1">Bruto (22% DDV)</p>
+                      <p className="text-sm text-stone-600">Polna cena: <span className="font-semibold text-stone-800">{brutoPolni.toFixed(2)} €</span></p>
+                      {popust > 0 && (
+                        <p className="text-sm text-stone-600">Z {popust}% popustom: <span className="font-semibold text-stone-800">{brutoPoPopustu.toFixed(2)} €</span></p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
               {aktivniNalog.rok && (
                 <Vrstica
                   label="Rok izvedbe"
@@ -4562,16 +4571,25 @@ function IzracunPolic({ nalog, onZapri }) {
               const neto = parseFloat(String(nalog.cena).replace(",", ".")) || 0;
               const popust = parseFloat(String(nalog.popustSkupaj).replace(",", ".")) || 0;
               const netoPoPopustu = neto * (1 - popust / 100);
-              const bruto = netoPoPopustu * 1.22;
+              const brutoPolni = neto * 1.22;
+              const brutoPoPopustu = netoPoPopustu * 1.22;
               return (
-                <>
-                  <div><span className="text-xs text-stone-400 uppercase mr-1">Cena (neto):</span><span className="text-stone-700">{neto.toFixed(2)} €</span></div>
-                  {popust > 0 && (
-                    <div><span className="text-xs text-stone-400 uppercase mr-1">Popust:</span><span className="text-stone-700">{popust}%</span></div>
-                  )}
-                  <div><span className="text-xs text-stone-400 uppercase mr-1">Neto z popustom:</span><span className="font-semibold text-stone-800">{netoPoPopustu.toFixed(2)} €</span></div>
-                  <div><span className="text-xs text-stone-400 uppercase mr-1">Bruto z popustom (22% DDV):</span><span className="font-semibold text-stone-800">{bruto.toFixed(2)} €</span></div>
-                </>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-stone-50 rounded-lg p-2">
+                    <p className="text-[11px] text-stone-400 uppercase mb-0.5">Neto</p>
+                    <p>Polna cena: <span className="font-semibold text-stone-800">{neto.toFixed(2)} €</span></p>
+                    {popust > 0 && (
+                      <p>Z {popust}% popustom: <span className="font-semibold text-stone-800">{netoPoPopustu.toFixed(2)} €</span></p>
+                    )}
+                  </div>
+                  <div className="bg-stone-50 rounded-lg p-2">
+                    <p className="text-[11px] text-stone-400 uppercase mb-0.5">Bruto (22% DDV)</p>
+                    <p>Polna cena: <span className="font-semibold text-stone-800">{brutoPolni.toFixed(2)} €</span></p>
+                    {popust > 0 && (
+                      <p>Z {popust}% popustom: <span className="font-semibold text-stone-800">{brutoPoPopustu.toFixed(2)} €</span></p>
+                    )}
+                  </div>
+                </div>
               );
             })()}
             {nalog.opombe && (
