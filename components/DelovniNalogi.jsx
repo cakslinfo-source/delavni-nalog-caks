@@ -127,6 +127,16 @@ const PRIVZETI_CENIK_POLICE = {
       { min: 36, max: 40, cena2: 32.80, cena3: 43.20 },
       { min: 41, max: 45, cena2: 36.90, cena3: 48.60 },
       { min: 46, max: 50, cena2: 41.00, cena3: 54.00 },
+      { min: 51, max: 55, cena2: 45.10, cena3: 59.40 },
+      { min: 56, max: 60, cena2: 49.20, cena3: 64.80 },
+      { min: 61, max: 65, cena2: 53.30, cena3: 70.20 },
+      { min: 66, max: 70, cena2: 57.40, cena3: 75.60 },
+      { min: 71, max: 75, cena2: 61.50, cena3: 81.00 },
+      { min: 76, max: 80, cena2: 65.60, cena3: 86.40 },
+      { min: 81, max: 85, cena2: 69.70, cena3: 91.80 },
+      { min: 86, max: 90, cena2: 73.80, cena3: 97.20 },
+      { min: 91, max: 95, cena2: 77.90, cena3: 102.60 },
+      { min: 96, max: 100, cena2: 82.00, cena3: 108.00 },
     ],
   },
   "Giandone, Bianco Sardo, Azul Tragal, Rosa Porino, Umetni marmor": {
@@ -140,6 +150,16 @@ const PRIVZETI_CENIK_POLICE = {
       { min: 36, max: 40, cena2: 42.80, cena3: 51.20 },
       { min: 41, max: 45, cena2: 48.15, cena3: 57.60 },
       { min: 46, max: 50, cena2: 53.50, cena3: 64.00 },
+      { min: 51, max: 55, cena2: 58.85, cena3: 70.40 },
+      { min: 56, max: 60, cena2: 64.20, cena3: 76.80 },
+      { min: 61, max: 65, cena2: 69.55, cena3: 83.20 },
+      { min: 66, max: 70, cena2: 74.90, cena3: 89.60 },
+      { min: 71, max: 75, cena2: 80.25, cena3: 96.00 },
+      { min: 76, max: 80, cena2: 85.60, cena3: 102.40 },
+      { min: 81, max: 85, cena2: 90.95, cena3: 108.80 },
+      { min: 86, max: 90, cena2: 96.30, cena3: 115.20 },
+      { min: 91, max: 95, cena2: 101.65, cena3: 121.60 },
+      { min: 96, max: 100, cena2: 107.00, cena3: 128.00 },
     ],
   },
   "Juparana Columbo, Multicolor, Nero Impala, Wiscont White, Tonalit, Steel Gray": {
@@ -153,6 +173,16 @@ const PRIVZETI_CENIK_POLICE = {
       { min: 36, max: 40, cena2: 59.60, cena3: 72.00 },
       { min: 41, max: 45, cena2: 67.05, cena3: 81.00 },
       { min: 46, max: 50, cena2: 74.50, cena3: 90.00 },
+      { min: 51, max: 55, cena2: 81.95, cena3: 99.00 },
+      { min: 56, max: 60, cena2: 89.40, cena3: 108.00 },
+      { min: 61, max: 65, cena2: 96.85, cena3: 117.00 },
+      { min: 66, max: 70, cena2: 104.30, cena3: 126.00 },
+      { min: 71, max: 75, cena2: 111.75, cena3: 135.00 },
+      { min: 76, max: 80, cena2: 119.20, cena3: 144.00 },
+      { min: 81, max: 85, cena2: 126.65, cena3: 153.00 },
+      { min: 86, max: 90, cena2: 134.10, cena3: 162.00 },
+      { min: 91, max: 95, cena2: 141.55, cena3: 171.00 },
+      { min: 96, max: 100, cena2: 149.00, cena3: 180.00 },
     ],
   },
   "Ivory Brown, Siwakashi, Paradiso": {
@@ -166,6 +196,16 @@ const PRIVZETI_CENIK_POLICE = {
       { min: 36, max: 40, cena2: 80.00, cena3: 90.00 },
       { min: 41, max: 45, cena2: 90.00, cena3: 101.25 },
       { min: 46, max: 50, cena2: 100.00, cena3: 112.50 },
+      { min: 51, max: 55, cena2: 110.00, cena3: 123.75 },
+      { min: 56, max: 60, cena2: 120.00, cena3: 135.00 },
+      { min: 61, max: 65, cena2: 130.00, cena3: 146.25 },
+      { min: 66, max: 70, cena2: 140.00, cena3: 157.50 },
+      { min: 71, max: 75, cena2: 150.00, cena3: 168.75 },
+      { min: 76, max: 80, cena2: 160.00, cena3: 180.00 },
+      { min: 81, max: 85, cena2: 170.00, cena3: 191.25 },
+      { min: 86, max: 90, cena2: 180.00, cena3: 202.50 },
+      { min: 91, max: 95, cena2: 190.00, cena3: 213.75 },
+      { min: 96, max: 100, cena2: 200.00, cena3: 225.00 },
     ],
   },
   "Black Galaxy, Nero Assoluto, Jet Black": {
@@ -179,6 +219,16 @@ const PRIVZETI_CENIK_POLICE = {
       { min: 36, max: 40, cena2: 88.00, cena3: 102.00 },
       { min: 41, max: 45, cena2: 99.00, cena3: 114.75 },
       { min: 46, max: 50, cena2: 110.00, cena3: 127.50 },
+      { min: 51, max: 55, cena2: 121.00, cena3: 140.25 },
+      { min: 56, max: 60, cena2: 132.00, cena3: 153.00 },
+      { min: 61, max: 65, cena2: 143.00, cena3: 165.75 },
+      { min: 66, max: 70, cena2: 154.00, cena3: 178.50 },
+      { min: 71, max: 75, cena2: 165.00, cena3: 191.25 },
+      { min: 76, max: 80, cena2: 176.00, cena3: 204.00 },
+      { min: 81, max: 85, cena2: 187.00, cena3: 216.75 },
+      { min: 86, max: 90, cena2: 198.00, cena3: 229.50 },
+      { min: 91, max: 95, cena2: 209.00, cena3: 242.25 },
+      { min: 96, max: 100, cena2: 220.00, cena3: 255.00 },
     ],
   },
 };
@@ -203,7 +253,7 @@ function izracunajCenoPostavke(p, cenik) {
   } else {
     sirina = parseFloat(String(p.sirina).replace(",", "."));
   }
-  if (!sirina || sirina <= 0 || sirina > 50) return null;
+  if (!sirina || sirina <= 0 || sirina > 100) return null;
   const sirinaZaokrozena = Math.ceil(sirina - 1e-9);
   const bracket = skupina.brackets.find((b) => sirinaZaokrozena >= b.min && sirinaZaokrozena <= b.max);
   if (!bracket) return null;
