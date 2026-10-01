@@ -115,7 +115,7 @@ function praznoStevilo(predpona = "DN") {
   return `${predpona}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}-`;
 }
 
-const CENIK = {
+const PRIVZETI_CENIK_POLICE = {
   "Rosa Beta": {
     materiali: ["Rosa Beta"],
     brackets: [
@@ -183,19 +183,17 @@ const CENIK = {
   },
 };
 
-const MATERIALI_SEZNAM = Object.values(CENIK).flatMap((s) => s.materiali);
-
-function najdiSkupinoMateriala(material) {
+function najdiSkupinoMateriala(material, cenik) {
   if (!material) return null;
   const m = material.trim().toLowerCase();
-  for (const podatki of Object.values(CENIK)) {
+  for (const podatki of Object.values(cenik || PRIVZETI_CENIK_POLICE)) {
     if (podatki.materiali.some((ime) => ime.toLowerCase() === m)) return podatki;
   }
   return null;
 }
 
-function izracunajCenoPostavke(p) {
-  const skupina = najdiSkupinoMateriala(p.material);
+function izracunajCenoPostavke(p, cenik) {
+  const skupina = najdiSkupinoMateriala(p.material, cenik);
   if (!skupina) return null;
   let sirina;
   if (p.poseven) {
@@ -415,12 +413,12 @@ function ponudbaSMS(nalog) {
   return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besediloPonudbe(nalog))}`;
 }
 
-function izracunajRazredePolic(nalog) {
+function izracunajRazredePolic(nalog, cenik) {
   const postavke = (nalog.postavke || []).filter((p) => p.naziv || p.material || p.dolzina);
   const skupine = {};
 
   postavke.forEach((p) => {
-    const skupinaPodatki = najdiSkupinoMateriala(p.material);
+    const skupinaPodatki = najdiSkupinoMateriala(p.material, cenik);
     let sirina;
     if (p.poseven) {
       const sd = parseFloat(String(p.sirinaDesno).replace(",", ".")) || 0;
@@ -604,6 +602,11 @@ function obnoviIzDatoteke(event, shraniNalogi) {
   };
   bralnik.readAsText(datoteka);
   event.target.value = "";
+}
+
+function eur(x) {
+  const n = parseFloat(String(x).replace(",", "."));
+  return (isNaN(n) ? 0 : n).toFixed(2) + " €";
 }
 
 function strankaZaIme(nalog) {
@@ -928,6 +931,8 @@ export default function DelovniNalogi() {
   const [spomenikiPodatki, setSpomenikiPodatki] = useState([]);
   const [sestankiPodatki, setSestankiPodatki] = useState([]);
   const [pultiCenik, setPultiCenik] = useState(null);
+  const [cenikPolice, setCenikPolice] = useState(PRIVZETI_CENIK_POLICE);
+  const materialiSeznamPolice = Object.values(cenikPolice).flatMap((s) => s.materiali);
   const [obvestilo, setObvestilo] = useState(null);
   const [obvestiloVerzija, setObvestiloVerzija] = useState(0);
   const [urejanjeObvestila, setUrejanjeObvestila] = useState(false);
@@ -942,22 +947,63 @@ export default function DelovniNalogi() {
 
   async function nalozizPultiInSpomenike() {
     try {
-      const [pRes, sRes, sestRes, obvRes, cenikRes] = await Promise.all([
+      const [pRes, sRes, sestRes, obvRes, cenikRes, cenikPoliceRes] = await Promise.all([
         fetch("/api/pulti", { cache: "no-store" }),
         fetch("/api/spomeniki", { cache: "no-store" }),
         fetch("/api/sestanki", { cache: "no-store" }),
         fetch("/api/obvestilo", { cache: "no-store" }),
         fetch("/api/cenik-pulti", { cache: "no-store" }),
+        fetch("/api/cenik-police", { cache: "no-store" }),
       ]);
-      const [pulti, spomeniki, sestanki, obv, pultiCenikPodatki] = await Promise.all([pRes.json(), sRes.json(), sestRes.json(), obvRes.json(), cenikRes.json()]);
+      const [pulti, spomeniki, sestanki, obv, pultiCenikPodatki, cenikPolicePodatki] = await Promise.all([
+        pRes.json(),
+        sRes.json(),
+        sestRes.json(),
+        obvRes.json(),
+        cenikRes.json(),
+        cenikPoliceRes.json(),
+      ]);
       setPultiPodatki(Array.isArray(pulti) ? pulti : []);
       setSpomenikiPodatki(Array.isArray(spomeniki) ? spomeniki : []);
       setSestankiPodatki(Array.isArray(sestanki) ? sestanki : []);
       setPultiCenik(pultiCenikPodatki && Array.isArray(pultiCenikPodatki.materiali) ? pultiCenikPodatki : null);
+      setCenikPolice(cenikPolicePodatki && Object.keys(cenikPolicePodatki).length > 0 ? cenikPolicePodatki : PRIVZETI_CENIK_POLICE);
       // Stara oblika je imela samo {besedilo, datum, komentarji} neposredno — preslikamo v {trenutno, arhiv}.
       setObvestilo(normalizirajObvestilo(obv));
       setObvestiloVerzija(Number(obvRes.headers.get("X-Verzija")) || 0);
     } catch (e) {}
+  }
+
+  async function shraniCenikPolice(novCenik) {
+    setCenikPolice(novCenik);
+    try {
+      const res = await fetch("/api/cenik-police", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(novCenik),
+      });
+      if (!res.ok) throw new Error();
+      return true;
+    } catch (e) {
+      alert("Napaka pri shranjevanju cenika. Preveri povezavo.");
+      return false;
+    }
+  }
+
+  async function shraniCenikPulti(novCenik) {
+    setPultiCenik(novCenik);
+    try {
+      const res = await fetch("/api/cenik-pulti", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(novCenik),
+      });
+      if (!res.ok) throw new Error();
+      return true;
+    } catch (e) {
+      alert("Napaka pri shranjevanju cenika. Preveri povezavo.");
+      return false;
+    }
   }
 
   async function posodobiObvestilo(transformFn) {
@@ -1293,7 +1339,7 @@ export default function DelovniNalogi() {
       if (p.id !== id) return p;
       const posodobljena = { ...p, [polje]: vrednost };
       if (["material", "dolzina", "sirina", "sirinaLevo", "sirinaDesno", "debelina", "kolicina", "popust"].includes(polje)) {
-        const izracunana = izracunajCenoPostavke(posodobljena);
+        const izracunana = izracunajCenoPostavke(posodobljena, cenikPolice);
         if (izracunana !== null) posodobljena.cena = String(izracunana);
       }
       return posodobljena;
@@ -2197,6 +2243,13 @@ export default function DelovniNalogi() {
                   Pregled po mesecih →
                 </button>
 
+                <button
+                  onClick={() => setPogled("ceniki")}
+                  className="mt-2 w-full text-sm text-center px-3 py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors"
+                >
+                  💰 Ceniki (Police + Pulti) →
+                </button>
+
                 <div className="border-t border-stone-700 pt-3 mt-3">
                   <p className="text-xs font-medium text-stone-400 uppercase mb-2">Izvoz v Excel (CSV) — za računovodstvo</p>
                   <div className="flex flex-wrap items-end gap-2 mb-2">
@@ -2741,6 +2794,21 @@ export default function DelovniNalogi() {
               )}
             </div>
           </div>
+        )}
+
+        {pogled === "ceniki" && (
+          <CenikiAdmin
+            cenikPolice={cenikPolice}
+            pultiCenik={pultiCenik}
+            shraniCenikPolice={shraniCenikPolice}
+            shraniCenikPulti={shraniCenikPulti}
+            nazaj={() => setPogled("seznam")}
+            natisni={() => setPogled("tiskCenikov")}
+          />
+        )}
+
+        {pogled === "tiskCenikov" && (
+          <TiskCenikov cenikPolice={cenikPolice} pultiCenik={pultiCenik} nazaj={() => setPogled("ceniki")} />
         )}
 
         {pogled === "meseci" && (() => {
@@ -3364,7 +3432,7 @@ export default function DelovniNalogi() {
                   }}
                 >
                   <option value="">Izberi material za vse kose spodaj…</option>
-                  {Object.entries(CENIK).map(([skupina, podatki]) => (
+                  {Object.entries(cenikPolice).map(([skupina, podatki]) => (
                     <optgroup key={skupina} label={skupina}>
                       {podatki.materiali.map((m) => (
                         <option key={m} value={m}>{m}</option>
@@ -3442,7 +3510,7 @@ export default function DelovniNalogi() {
                       onChange={(e) => posodobiPostavko(p.id, "naziv", e.target.value)}
                       placeholder={`Polica ${idx + 1}`}
                     />
-                    {rocniMaterial[p.id] || (p.material && !MATERIALI_SEZNAM.includes(p.material)) ? (
+                    {rocniMaterial[p.id] || (p.material && !materialiSeznamPolice.includes(p.material)) ? (
                       <div className="flex flex-col gap-0.5">
                         <input
                           className="postavka-input"
@@ -3472,7 +3540,7 @@ export default function DelovniNalogi() {
                         }}
                       >
                         <option value="">Izberi material…</option>
-                        {Object.entries(CENIK).map(([skupina, podatki]) => (
+                        {Object.entries(cenikPolice).map(([skupina, podatki]) => (
                           <optgroup key={skupina} label={skupina}>
                             {podatki.materiali.map((m) => (
                               <option key={m} value={m}>{m}</option>
@@ -4209,7 +4277,7 @@ export default function DelovniNalogi() {
         )}
 
         {pogled === "izracunPolic" && aktivniNalog && (
-          <IzracunPolic nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
+          <IzracunPolic nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} cenik={cenikPolice} />
         )}
       </main>
 
@@ -4532,8 +4600,306 @@ function TiskPonudbe({ nalog, onZapri }) {
   );
 }
 
-function IzracunPolic({ nalog, onZapri }) {
-  const razredi = izracunajRazredePolic(nalog);
+function CenikiAdmin({ cenikPolice, pultiCenik, shraniCenikPolice, shraniCenikPulti, nazaj, natisni }) {
+  const [cPolice, setCPolice] = useState(() => JSON.parse(JSON.stringify(cenikPolice)));
+  const [cPulti, setCPulti] = useState(() => (pultiCenik ? JSON.parse(JSON.stringify(pultiCenik)) : { materiali: [], storitve: [] }));
+  const [shranjujem, setShranjujem] = useState(false);
+  const [zavihek, setZavihek] = useState("police");
+
+  function posodobiSkupinoIme(staroIme, novoIme) {
+    if (!novoIme.trim() || novoIme === staroIme) return;
+    const kopija = {};
+    Object.entries(cPolice).forEach(([k, v]) => {
+      kopija[k === staroIme ? novoIme : k] = v;
+    });
+    setCPolice(kopija);
+  }
+
+  function posodobiMaterialeSkupine(ime, besedilo) {
+    setCPolice({ ...cPolice, [ime]: { ...cPolice[ime], materiali: besedilo.split(",").map((s) => s.trim()).filter(Boolean) } });
+  }
+
+  function posodobiBracket(ime, idx, polje, vrednost) {
+    const brackets = cPolice[ime].brackets.map((b, i) => (i === idx ? { ...b, [polje]: vrednost } : b));
+    setCPolice({ ...cPolice, [ime]: { ...cPolice[ime], brackets } });
+  }
+
+  function dodajBracket(ime) {
+    const brackets = [...cPolice[ime].brackets, { min: "", max: "", cena2: "", cena3: "" }];
+    setCPolice({ ...cPolice, [ime]: { ...cPolice[ime], brackets } });
+  }
+
+  function izbrisiBracket(ime, idx) {
+    const brackets = cPolice[ime].brackets.filter((_, i) => i !== idx);
+    setCPolice({ ...cPolice, [ime]: { ...cPolice[ime], brackets } });
+  }
+
+  function izbrisiSkupino(ime) {
+    if (!confirm(`Izbrišem celotno skupino "${ime}"?`)) return;
+    const kopija = { ...cPolice };
+    delete kopija[ime];
+    setCPolice(kopija);
+  }
+
+  function dodajSkupino() {
+    const novoIme = `Nova skupina ${Object.keys(cPolice).length + 1}`;
+    setCPolice({ ...cPolice, [novoIme]: { materiali: [], brackets: [{ min: 1, max: 15, cena2: "", cena3: "" }] } });
+  }
+
+  function posodobiMatPulti(i, polje, vrednost) {
+    const materiali = cPulti.materiali.map((m, j) => (j === i ? { ...m, [polje]: vrednost } : m));
+    setCPulti({ ...cPulti, materiali });
+  }
+
+  function posodobiStorPulti(i, polje, vrednost) {
+    const storitve = cPulti.storitve.map((s, j) => (j === i ? { ...s, [polje]: vrednost } : s));
+    setCPulti({ ...cPulti, storitve });
+  }
+
+  const inp = "border border-stone-300 rounded-lg px-2 py-1.5 text-sm";
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="carved text-lg uppercase text-stone-700">Ceniki</h2>
+        <button onClick={nazaj} className="text-sm text-stone-500 hover:text-stone-700">← Nazaj</button>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setZavihek("police")}
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold ${zavihek === "police" ? "bg-stone-800 text-white" : "bg-stone-100 text-stone-600"}`}
+        >
+          Police
+        </button>
+        <button
+          onClick={() => setZavihek("pulti")}
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold ${zavihek === "pulti" ? "bg-stone-800 text-white" : "bg-stone-100 text-stone-600"}`}
+        >
+          Pulti
+        </button>
+      </div>
+
+      <button
+        onClick={natisni}
+        className="w-full mb-4 bg-white border border-stone-300 text-stone-700 rounded-lg py-2.5 text-sm font-medium flex items-center justify-center gap-2"
+      >
+        <Printer size={15} /> Natisni oba cenika (PDF)
+      </button>
+
+      {zavihek === "police" && (
+        <div className="space-y-3">
+          {Object.entries(cPolice).map(([ime, podatki]) => (
+            <div key={ime} className="bg-white border border-stone-200 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  className={`${inp} flex-1 font-medium`}
+                  defaultValue={ime}
+                  onBlur={(e) => posodobiSkupinoIme(ime, e.target.value)}
+                />
+                <button onClick={() => izbrisiSkupino(ime)} className="text-red-600 text-lg px-1">×</button>
+              </div>
+              <label className="text-xs text-stone-500 block mb-1">Materiali v tej skupini (ločeni z vejico)</label>
+              <input
+                className={`${inp} w-full mb-2`}
+                defaultValue={podatki.materiali.join(", ")}
+                onBlur={(e) => posodobiMaterialeSkupine(ime, e.target.value)}
+              />
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-stone-400 text-left">
+                    <th className="pb-1">Od (cm)</th>
+                    <th className="pb-1">Do (cm)</th>
+                    <th className="pb-1">€/m 2cm</th>
+                    <th className="pb-1">€/m 3cm</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {podatki.brackets.map((b, i) => (
+                    <tr key={i}>
+                      <td className="pr-1 py-0.5"><input className={`${inp} w-16`} value={b.min} onChange={(e) => posodobiBracket(ime, i, "min", e.target.value)} /></td>
+                      <td className="pr-1 py-0.5"><input className={`${inp} w-16`} value={b.max} onChange={(e) => posodobiBracket(ime, i, "max", e.target.value)} /></td>
+                      <td className="pr-1 py-0.5"><input className={`${inp} w-20`} value={b.cena2} onChange={(e) => posodobiBracket(ime, i, "cena2", e.target.value)} /></td>
+                      <td className="pr-1 py-0.5"><input className={`${inp} w-20`} value={b.cena3} onChange={(e) => posodobiBracket(ime, i, "cena3", e.target.value)} /></td>
+                      <td><button onClick={() => izbrisiBracket(ime, i)} className="text-red-600 px-1">×</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button onClick={() => dodajBracket(ime)} className="text-xs text-red-600 mt-1">+ Dodaj širinski razred</button>
+            </div>
+          ))}
+          <button onClick={dodajSkupino} className="w-full border-2 border-dashed border-stone-300 rounded-xl py-2 text-sm text-stone-500">
+            + Dodaj skupino materialov
+          </button>
+          <button
+            onClick={async () => {
+              setShranjujem(true);
+              await shraniCenikPolice(cPolice);
+              setShranjujem(false);
+              alert("Cenik Police shranjen.");
+            }}
+            disabled={shranjujem}
+            className="w-full bg-red-600 text-white rounded-xl py-3 font-semibold disabled:opacity-60"
+          >
+            {shranjujem ? "Shranjujem …" : "Shrani cenik Police"}
+          </button>
+        </div>
+      )}
+
+      {zavihek === "pulti" && (
+        <div className="space-y-3">
+          <div className="bg-white border border-stone-200 rounded-xl p-3">
+            <div className="font-semibold text-sm mb-2">Materiali</div>
+            {cPulti.materiali.map((m, i) => (
+              <div key={m.id || i} className="flex gap-2 items-center flex-wrap mb-1.5">
+                <input className={`${inp} flex-1 min-w-[120px]`} value={m.naziv} onChange={(e) => posodobiMatPulti(i, "naziv", e.target.value)} />
+                {m.tip === "plosca" ? (
+                  <input className={`${inp} w-24`} placeholder="€/plošča" value={m.cenaPlosca} onChange={(e) => posodobiMatPulti(i, "cenaPlosca", e.target.value)} />
+                ) : (
+                  <>
+                    <input className={`${inp} w-20`} placeholder="€/m² 2cm" value={m.cena2cm} onChange={(e) => posodobiMatPulti(i, "cena2cm", e.target.value)} />
+                    <input className={`${inp} w-20`} placeholder="€/m² 3cm" value={m.cena3cm} onChange={(e) => posodobiMatPulti(i, "cena3cm", e.target.value)} />
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="bg-white border border-stone-200 rounded-xl p-3">
+            <div className="font-semibold text-sm mb-2">Storitve</div>
+            {cPulti.storitve.map((s, i) => (
+              <div key={s.id || i} className="flex gap-2 items-center mb-1.5">
+                <input className={`${inp} flex-1`} value={s.naziv} onChange={(e) => posodobiStorPulti(i, "naziv", e.target.value)} />
+                <span className="text-xs text-stone-400 w-10">{s.enota}</span>
+                <input className={`${inp} w-20`} value={s.cena} onChange={(e) => posodobiStorPulti(i, "cena", e.target.value)} />
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={async () => {
+              setShranjujem(true);
+              await shraniCenikPulti(cPulti);
+              setShranjujem(false);
+              alert("Cenik Pultov shranjen.");
+            }}
+            disabled={shranjujem}
+            className="w-full bg-red-600 text-white rounded-xl py-3 font-semibold disabled:opacity-60"
+          >
+            {shranjujem ? "Shranjujem …" : "Shrani cenik Pultov"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TiskCenikov({ cenikPolice, pultiCenik, nazaj }) {
+  const danes = new Date().toLocaleDateString("sl-SI");
+  return (
+    <div className="p-3 space-y-3">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .ceniki-tisk, .ceniki-tisk * { visibility: visible; }
+          .ceniki-tisk { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
+          .ceniki-tisk-brez { display: none !important; }
+        }
+      `}</style>
+      <div className="ceniki-tisk-brez flex flex-wrap gap-2">
+        <button
+          onClick={() => prenesiHTMLDokument(".ceniki-tisk", "Ceniki — Kamnoseštvo Čakš", `ceniki-caks-${new Date().toISOString().slice(0, 10)}.html`)}
+          className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2"
+        >
+          <FileText size={15} /> Prenesi datoteko
+        </button>
+        <button onClick={nazaj} className="px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 bg-stone-100">Nazaj</button>
+      </div>
+
+      <div className="ceniki-tisk bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
+        <div className="flex items-center justify-between border-b-2 border-stone-800 pb-2 mb-4">
+          <img src={CAKS_LOGO} alt="Čakš logo" className="h-8 w-auto object-contain" />
+          <div className="text-right">
+            <p className="carved text-sm uppercase text-stone-700">Ceniki</p>
+            <p className="text-xs text-stone-500">{danes}</p>
+          </div>
+        </div>
+
+        <h3 className="carved text-base uppercase text-stone-700 mb-2">Police — cena na tekoči meter (€/m)</h3>
+        {Object.entries(cenikPolice).map(([ime, podatki]) => (
+          <div key={ime} className="mb-4">
+            <p className="text-sm font-semibold text-stone-800">{podatki.materiali.join(", ")}</p>
+            <table className="w-full text-sm border-collapse mt-1">
+              <thead>
+                <tr className="text-left text-xs uppercase text-stone-400 border-b border-stone-200">
+                  <th className="py-1">Širina</th>
+                  <th className="py-1">2 cm</th>
+                  <th className="py-1">3 cm</th>
+                </tr>
+              </thead>
+              <tbody>
+                {podatki.brackets.map((b, i) => (
+                  <tr key={i} className="border-b border-stone-100">
+                    <td className="py-1">{b.min}–{b.max} cm</td>
+                    <td className="py-1">{eur(b.cena2)}</td>
+                    <td className="py-1">{eur(b.cena3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+        {pultiCenik && (
+          <>
+            <h3 className="carved text-base uppercase text-stone-700 mb-2 mt-6 pt-4 border-t border-stone-200">Pulti — materiali</h3>
+            <table className="w-full text-sm border-collapse mb-4">
+              <thead>
+                <tr className="text-left text-xs uppercase text-stone-400 border-b border-stone-200">
+                  <th className="py-1">Material</th>
+                  <th className="py-1">2 cm</th>
+                  <th className="py-1">3 cm</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pultiCenik.materiali.map((m) => (
+                  <tr key={m.id} className="border-b border-stone-100">
+                    <td className="py-1">{m.naziv}</td>
+                    <td className="py-1">{m.tip === "plosca" ? `${eur(m.cenaPlosca)}/plošča` : `${eur(m.cena2cm)}/m²`}</td>
+                    <td className="py-1">{m.tip === "plosca" ? "" : `${eur(m.cena3cm)}/m²`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h3 className="carved text-base uppercase text-stone-700 mb-2">Pulti — storitve</h3>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="text-left text-xs uppercase text-stone-400 border-b border-stone-200">
+                  <th className="py-1">Storitev</th>
+                  <th className="py-1">Cena</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pultiCenik.storitve.map((s) => (
+                  <tr key={s.id} className="border-b border-stone-100">
+                    <td className="py-1">{s.naziv}</td>
+                    <td className="py-1">{eur(s.cena)}/{s.enota}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        <p className="text-xs text-stone-500 mt-6 pt-2 border-t border-stone-200">Kamnoseštvo Čakš · 031 235 146</p>
+      </div>
+    </div>
+  );
+}
+
+function IzracunPolic({ nalog, onZapri, cenik }) {
+  const razredi = izracunajRazredePolic(nalog, cenik);
   const skupajTM = razredi.reduce((v, r) => v + r.tekociMetri, 0);
 
   return (
