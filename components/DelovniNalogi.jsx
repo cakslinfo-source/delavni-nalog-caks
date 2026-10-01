@@ -4784,6 +4784,15 @@ function CenikiAdmin({ cenikPolice, pultiCenik, shraniCenikPolice, shraniCenikPu
             + Dodaj skupino materialov
           </button>
           <button
+            onClick={() => {
+              if (!confirm("To prepiše TRENUTNI urejevalni cenik (spodaj) z najnovejšimi privzetimi cenami (do 100cm). Za trajno shranitev moraš nato še klikniti 'Shrani cenik Police'.")) return;
+              setCPolice(JSON.parse(JSON.stringify(PRIVZETI_CENIK_POLICE)));
+            }}
+            className="w-full border border-amber-400 bg-amber-50 text-amber-700 rounded-xl py-2.5 text-sm font-medium"
+          >
+            ↺ Ponastavi na najnovejše privzete cene (do 100cm)
+          </button>
+          <button
             onClick={async () => {
               setShranjujem(true);
               await shraniCenikPolice(cPolice);
