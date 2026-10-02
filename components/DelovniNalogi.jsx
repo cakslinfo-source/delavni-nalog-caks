@@ -2565,9 +2565,14 @@ export default function DelovniNalogi() {
                           <div className="text-xs text-sky-700 truncate">▪ {materialiNaloga(n).join(", ")}</div>
                         )}
                       </div>
-                      <div className="shrink-0 flex items-center gap-2">
+                      <div className="shrink-0 flex items-center gap-2 max-w-[40%]">
+                        {n.opombe && (
+                          <span className="text-xs text-stone-500 text-right leading-tight line-clamp-2">
+                            {n.opombe}
+                          </span>
+                        )}
                         {(n.obvestiloEmailPoslano || n.obvestiloSmsPoslano) && (
-                          <span className="text-[11px] text-emerald-700 font-medium text-right leading-tight">
+                          <span className="text-[11px] text-emerald-700 font-medium text-right leading-tight shrink-0">
                             ✓ Stranka<br />obveščena
                           </span>
                         )}
