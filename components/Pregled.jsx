@@ -12,28 +12,23 @@ const STOLPCI = [
 const BARVA_MODULA = { Police: "#dc2626", Pulti: "#a855f7", Spomenik: "#eab308" };
 const KRATICA_MODULA = { Police: "Police", Pulti: "Pulti", Spomenik: "Spomenik" };
 
-function mapPoliceStatus(status) {
-  if (status === "Sprejeto") return "sprejeto";
-  if (status === "V izdelavi") return "izdelavi";
-  if (status === "Pripravljeno") return "pripravljeno";
-  if (status === "Prevzeto") return "prevzeto";
+// Ena sama, zanesljiva preslikava statusa (enaka kot pri Policah, Pultih in Spomenikih).
+// Prepozna nove vrednosti (sprejeto, izdelavi ...), imena (V izdelavi ...) IN vse stare vrednosti
+// (ponudba, izmera, razrez, montaza, zakljuceno ...).
+function normalizirajStatusModula(status) {
+  const s = String(status || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/prevz|zakljuc|dostav|namesc/.test(s)) return "prevzeto";
+  if (/pripravl|montaz/.test(s)) return "pripravljeno";
+  if (/izdel|razrez|brus|izrez|obdel|polir|graviran/.test(s)) return "izdelavi";
   return "sprejeto";
 }
 
-function mapPultiStatus(status) {
-  if (["sprejeto", "izdelavi", "pripravljeno", "prevzeto"].includes(status)) return status;
-  // stari statusi (pred poenotenjem s Policami)
-  if (["ponudba", "izmera", "cad"].includes(status)) return "sprejeto";
-  if (["razrez", "izrezi", "brusenje"].includes(status)) return "izdelavi";
-  if (status === "montaza") return "pripravljeno";
-  if (status === "zakljuceno") return "prevzeto";
-  return "sprejeto";
-}
-
-function mapSpomenikStatus(status) {
-  if (["sprejeto", "izdelavi", "pripravljeno", "prevzeto"].includes(status)) return status;
-  return "sprejeto";
-}
+const mapPoliceStatus = normalizirajStatusModula;
+const mapPultiStatus = normalizirajStatusModula;
+const mapSpomenikStatus = normalizirajStatusModula;
 
 function materialiPolice(nalog) {
   const postavke = (nalog.postavke || []).filter((p) => p.material && p.material.trim());
