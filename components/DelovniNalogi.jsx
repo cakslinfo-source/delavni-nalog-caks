@@ -65,7 +65,7 @@ function sklPoisciKose(seznam, zahteva, nalogStevilka, vkljuciPlosce) {
   return (seznam || [])
     .filter((k) => {
       if (k.vrsta !== "kos" && !(vkljuciPlosce && k.vrsta === "plosca")) return false;
-      const prost = k.status === "zaloga" || (k.status === "rezervirano" && nalogStevilka && k.nalog === nalogStevilka);
+      const prost = k.status === "zaloga" || (k.status === "rezervirano" && nalogStevilka && sklNorm(k.nalog) === sklNorm(nalogStevilka));
       if (!prost) return false;
       if (mat && sklNorm(k.material) !== mat) return false;
       if (deb > 0 && Math.abs(sklStevilo(k.debelina) - deb) > 0.05) return false;
@@ -90,6 +90,15 @@ function ustrezniKosiZaPostavko(zaloga, p, idx, nalogStevilka) {
   const mera = { dolzina: prvi.dolzinaMM / 10, sirina: prvi.sirinaMM / 10 };
   const ujemanja = sklPoisciKose(zaloga, { material: p.material, debelina: p.debelina, ...mera }, nalogStevilka);
   return { potrebno, ujemanja, mera };
+}
+
+// Številke postavk (1, 2, ...) tega naloga, kamor rezerviran kos ustreza.
+function postavkeZaKos(zaloga, nalog, kos) {
+  const rezultat = [];
+  (nalog.postavke || []).forEach((p, i) => {
+    if (ustrezniKosiZaPostavko(zaloga, p, i, nalog.stevilka).ujemanja.some((u) => u.kos.id === kos.id)) rezultat.push(i + 1);
+  });
+  return rezultat;
 }
 
 function segmentiPostavke(p, idx) {
@@ -1069,6 +1078,17 @@ export default function DelovniNalogi() {
   const [pultiCenik, setPultiCenik] = useState(null);
   const [cenikPolice, setCenikPolice] = useState(PRIVZETI_CENIK_POLICE);
   const [materialZaloga, setMaterialZaloga] = useState([]);
+  const rezerviranoPoNalogu = new Map();
+  materialZaloga.forEach((k) => {
+    if (k.status === "rezervirano" && k.nalog) {
+      const kljuc = sklNorm(k.nalog);
+      if (!rezerviranoPoNalogu.has(kljuc)) rezerviranoPoNalogu.set(kljuc, []);
+      rezerviranoPoNalogu.get(kljuc).push(k);
+    }
+  });
+  function rezerviraniKosiNaloga(n) {
+    return n && n.stevilka ? rezerviranoPoNalogu.get(sklNorm(n.stevilka)) || [] : [];
+  }
   const materialiSeznamPolice = Object.values(cenikPolice).flatMap((s) => s.materiali);
   const [obvestilo, setObvestilo] = useState(null);
   const [obvestiloVerzija, setObvestiloVerzija] = useState(0);
@@ -2725,6 +2745,14 @@ export default function DelovniNalogi() {
                         {materialiNaloga(n).length > 0 && (
                           <div className="text-xs text-sky-700 truncate">▪ {materialiNaloga(n).join(", ")}</div>
                         )}
+                        {rezerviraniKosiNaloga(n).length > 0 && (
+                          <div className="text-xs text-emerald-700 font-medium truncate">
+                            🧩 Rezerviran kos:{" "}
+                            {rezerviraniKosiNaloga(n)
+                              .map((k) => `${k.koda}${k.lokacija ? ` (📍 ${k.lokacija})` : ""}`)
+                              .join(", ")}
+                          </div>
+                        )}
                       </div>
                       <div className="shrink-0 flex items-center gap-2 max-w-[40%]">
                         {n.opombe && (
@@ -3330,6 +3358,14 @@ export default function DelovniNalogi() {
                         <div className="text-sm text-stone-500 truncate">{n.opis}</div>
                         {materialiNaloga(n).length > 0 && (
                           <div className="text-xs text-sky-700 truncate">▪ {materialiNaloga(n).join(", ")}</div>
+                        )}
+                        {rezerviraniKosiNaloga(n).length > 0 && (
+                          <div className="text-xs text-emerald-700 font-medium truncate">
+                            🧩 Rezerviran kos:{" "}
+                            {rezerviraniKosiNaloga(n)
+                              .map((k) => `${k.koda}${k.lokacija ? ` (📍 ${k.lokacija})` : ""}`)
+                              .join(", ")}
+                          </div>
                         )}
                       </div>
                       {adminOdklenjen && (
@@ -4296,9 +4332,73 @@ export default function DelovniNalogi() {
               </div>
             )}
 
+            {(() => {
+              const rezervirani = rezerviraniKosiNaloga(aktivniNalog);
+              const porabljeni = materialZaloga.filter(
+                (k) => k.status === "porabljeno" && k.nalog && sklNorm(k.nalog) === sklNorm(aktivniNalog.stevilka)
+              );
+              if (rezervirani.length === 0 && porabljeni.length === 0) return null;
+              return (
+                <div className="mt-5 bg-amber-50 border border-amber-300 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-amber-900 uppercase mb-2">🧩 Kosi iz skladišča za ta nalog</p>
+                  {rezervirani.map((k) => {
+                    const postavke = postavkeZaKos(materialZaloga, aktivniNalog, k);
+                    return (
+                      <div
+                        key={k.id}
+                        className="flex flex-wrap items-center justify-between gap-2 py-1.5 border-b border-amber-200 last:border-0 text-sm text-amber-900"
+                      >
+                        <span>
+                          <a
+                            href={`/material?id=${encodeURIComponent(k.id)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-bold underline"
+                          >
+                            {k.koda}
+                          </a>{" "}
+                          · {k.material} · {k.dolzina} × {k.sirina} × {k.debelina} cm · 📍 {k.lokacija || "lokacija ni vpisana"}
+                          {postavke.length > 0 ? ` · za postavko ${postavke.join(", ")}` : ""}{" "}
+                          <span className="text-xs font-semibold text-amber-700">REZERVIRAN</span>
+                        </span>
+                        <span className="flex gap-1.5 text-xs">
+                          <button
+                            onClick={() => {
+                              if (confirm(`Označim kos ${k.koda} kot porabljen za ta nalog?`)) {
+                                nastaviStatusKosa(k.id, "porabljeno", aktivniNalog.stevilka);
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-md bg-emerald-600 text-white font-medium"
+                          >
+                            Porabi
+                          </button>
+                          <button
+                            onClick={() => nastaviStatusKosa(k.id, "zaloga", "")}
+                            className="px-2.5 py-1 rounded-md border border-amber-400 bg-white text-amber-900"
+                          >
+                            Sprosti
+                          </button>
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {porabljeni.map((k) => (
+                    <div key={k.id} className="text-xs text-stone-500 py-0.5">
+                      ✓ Porabljen: {k.koda} · {k.material} · {k.dolzina} × {k.sirina} × {k.debelina} cm
+                      {k.porabljenoDatum ? ` (${new Date(k.porabljenoDatum).toLocaleDateString("sl-SI")})` : ""}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
             {aktivniNalog.status !== "Prevzeto" && (() => {
               const vrstice = (aktivniNalog.postavke || [])
-                .map((p, i) => ({ p, i, ...ustrezniKosiZaPostavko(materialZaloga, p, i, aktivniNalog.stevilka) }))
+                .map((p, i) => {
+                  const r = ustrezniKosiZaPostavko(materialZaloga, p, i, aktivniNalog.stevilka);
+                  // že rezervirane kose prikazuje zgornji razdelek — tu so samo novi predlogi
+                  return { p, i, ...r, ujemanja: r.ujemanja.filter((u) => u.kos.status !== "rezervirano") };
+                })
                 .filter((x) => x.ujemanja.length > 0);
               if (vrstice.length === 0) return null;
               return (
@@ -4602,6 +4702,10 @@ export default function DelovniNalogi() {
 
         {pogled === "tisk" && aktivniNalog && (
           <TiskNaloga
+            rezerviraniKosi={rezerviraniKosiNaloga(aktivniNalog).map((k) => ({
+              kos: k,
+              postavke: postavkeZaKos(materialZaloga, aktivniNalog, k),
+            }))}
             nalog={aktivniNalog}
             onZapri={() => setPogled("podrobnosti")}
             oznaciNatisnjeno={() => {
@@ -4645,7 +4749,7 @@ export default function DelovniNalogi() {
   );
 }
 
-function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno }) {
+function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno, rezerviraniKosi }) {
   const postavkeZaPrikaz = (nalog.postavke || []).filter(
     (p) => p.naziv || p.material || p.dolzina
   );
@@ -4730,6 +4834,20 @@ function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno }) {
           <div className="mb-3 pb-2 border-b border-stone-200">
             <span className="text-xs text-stone-400 uppercase mr-1">Opis dela</span>
             <span className="text-sm text-stone-700">{nalog.opis}</span>
+          </div>
+        )}
+
+        {rezerviraniKosi && rezerviraniKosi.length > 0 && (
+          <div className="mb-3 pb-2 border-b border-stone-200">
+            <div className="text-xs text-stone-400 uppercase mb-1">Rezerviran kos iz skladišča — porabi ga namesto nove plošče</div>
+            {rezerviraniKosi.map(({ kos, postavke }) => (
+              <div key={kos.id} className="text-sm text-stone-800">
+                <span className="font-bold">{kos.koda}</span> · {kos.material} · {kos.dolzina} × {kos.sirina} × {kos.debelina} cm
+                {kos.obdelava ? ` · ${kos.obdelava}` : ""} · <span className="font-semibold">Lokacija: {kos.lokacija || "ni vpisana"}</span>
+                {postavke.length > 0 ? ` · za postavko ${postavke.join(", ")}` : ""}
+              </div>
+            ))}
+            <div className="text-[11px] text-stone-500 mt-0.5">Ko kos porabiš, poskeniraj QR kodo na njem in potrdi porabo.</div>
           </div>
         )}
 
