@@ -895,7 +895,7 @@ function izvoziCSVVsiModuli(nalogi, pultiPodatki, spomenikiPodatki, od, doDatuma
         (p.datum || "").slice(0, 10),
         p.stranka?.ime || "",
         "Pult",
-        p.status || "",
+        STATUS_ID_V_IME[normalizirajStatusModula(p.status)],
         p.ponudbenaCena || "",
         p.placano ? "Da" : "Ne",
       ]);
@@ -910,7 +910,7 @@ function izvoziCSVVsiModuli(nalogi, pultiPodatki, spomenikiPodatki, od, doDatuma
         (s.datum || "").slice(0, 10),
         s.stranka?.ime || "",
         s.material || "Spomenik",
-        s.status || "",
+        STATUS_ID_V_IME[normalizirajStatusModula(s.status)],
         s.cena || "",
         s.placano === "Da" ? "Da" : "Ne",
       ]);
@@ -926,6 +926,27 @@ function izvoziCSVVsiModuli(nalogi, pultiPodatki, spomenikiPodatki, od, doDatuma
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Ena sama, zanesljiva preslikava statusa iz Pultov/Spomenikov v skupne statuse Polic.
+// Prepozna nove vrednosti (sprejeto, izdelavi ...), imena (V izdelavi ...) IN vse stare vrednosti
+// (ponudba, izmera, razrez, montaza, zakljuceno ...) — enako kot v Pultih, Spomenikih in Pregledu.
+const STATUS_ID_V_IME = {
+  sprejeto: "Sprejeto",
+  izdelavi: "V izdelavi",
+  pripravljeno: "Pripravljeno",
+  prevzeto: "Prevzeto",
+};
+
+function normalizirajStatusModula(status) {
+  const s = String(status || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/prevz|zakljuc|dostav|namesc/.test(s)) return "prevzeto";
+  if (/pripravl|montaz/.test(s)) return "pripravljeno";
+  if (/izdel|razrez|brus|izrez|obdel|polir|graviran/.test(s)) return "izdelavi";
+  return "sprejeto";
 }
 
 function normalizirajObvestilo(obv) {
@@ -1524,15 +1545,7 @@ export default function DelovniNalogi() {
 
   // Graf statusov zajame vse tri module — statusi so poenoteni, stare Pulti statuse preslika.
   function mapModulStatusNaPolice(status) {
-    if (status === "sprejeto" || status === "Sprejeto") return "Sprejeto";
-    if (status === "izdelavi" || status === "V izdelavi") return "V izdelavi";
-    if (status === "pripravljeno" || status === "Pripravljeno") return "Pripravljeno";
-    if (status === "prevzeto" || status === "Prevzeto") return "Prevzeto";
-    if (["ponudba", "izmera", "cad"].includes(status)) return "Sprejeto";
-    if (["razrez", "izrezi", "brusenje"].includes(status)) return "V izdelavi";
-    if (status === "montaza") return "Pripravljeno";
-    if (status === "zakljuceno") return "Prevzeto";
-    return "Sprejeto";
+    return STATUS_ID_V_IME[normalizirajStatusModula(status)];
   }
   const podatkiGrafa = STATUSI.map((s) => ({
     name: s,
@@ -1587,12 +1600,12 @@ export default function DelovniNalogi() {
       if (rok <= cezTriDni) seznam.push({ vrsta: "Police", stevilka: n.stevilka, stranka: n.stranka, rok: n.rok, zamujen: rok < danes, id: n.id });
     });
     pultiPodatki.forEach((p) => {
-      if (!p.datumMontaze || p.status === "zakljuceno") return;
+      if (!p.datumMontaze || normalizirajStatusModula(p.status) === "prevzeto") return;
       const rok = new Date(p.datumMontaze);
       if (rok <= cezTriDni) seznam.push({ vrsta: "Pulti", stevilka: p.stevilka, stranka: p.stranka?.ime, rok: p.datumMontaze, zamujen: rok < danes, id: p.id });
     });
     spomenikiPodatki.forEach((s) => {
-      if (!s.montaza || s.status === "prevzeto") return;
+      if (!s.montaza || normalizirajStatusModula(s.status) === "prevzeto") return;
       const rok = new Date(s.montaza);
       if (rok <= cezTriDni) seznam.push({ vrsta: "Spomenik", stevilka: s.stevilka, stranka: s.stranka?.ime, rok: s.montaza, zamujen: rok < danes, id: s.id });
     });
@@ -1622,19 +1635,12 @@ export default function DelovniNalogi() {
   }
 
 
-  const STATUS_IZ_MODULA = {
-    sprejeto: "Sprejeto",
-    izdelavi: "V izdelavi",
-    pripravljeno: "Pripravljeno",
-    prevzeto: "Prevzeto",
-  };
-
   const pultiZaSeznam = pultiPodatki.map((p) => ({
     id: p.id,
     stevilka: p.stevilka,
     stranka: p.stranka?.ime || "",
     opis: "Pult",
-    status: STATUS_IZ_MODULA[p.status] || "Sprejeto",
+    status: mapModulStatusNaPolice(p.status),
     rok: p.datumMontaze,
     datumVnosa: p.datum ? `${p.datum}T00:00:00.000Z` : new Date(Number(p.id) || Date.now()).toISOString(),
     placano: p.placano ? "Da" : "Ne",
@@ -1646,7 +1652,7 @@ export default function DelovniNalogi() {
     stevilka: s.stevilka,
     stranka: s.stranka?.ime || "",
     opis: s.material || "Spomenik",
-    status: STATUS_IZ_MODULA[s.status] || "Sprejeto",
+    status: mapModulStatusNaPolice(s.status),
     rok: s.montaza,
     datumVnosa: s.datum ? `${s.datum}T00:00:00.000Z` : new Date(Number(s.id) || Date.now()).toISOString(),
     placano: s.placano === "Da" ? "Da" : "Ne",
