@@ -1258,7 +1258,24 @@ export default function DelovniNalogi() {
   // Varno spreminjanje: najprej osveži najnovejše stanje in verzijo iz baze (v primeru, da je
   // bilo med tem spremenjeno na drugi napravi), šele nato vanj vnese lokalno spremembo in
   // shrani z navedbo pričakovane verzije — če se medtem kdo drug shrani prvi, strežnik zavrne.
+  // Vrsta čakajočih shranjevanj: če uporabnik hitro klikne dve spremembi zapored (npr. "Prevzeto" in
+  // takoj "Plačano"), druga počaka, da se prva popolnoma konča — sicer bi druga prebrala staro stanje
+  // s strežnika in prepisala (ali izgubila) prvo spremembo.
+  const vrstaShranjevanjRef = useRef(Promise.resolve());
+
   async function posodobiNaloge(transformFn) {
+    const prejsnje = vrstaShranjevanjRef.current;
+    let sprosti;
+    vrstaShranjevanjRef.current = new Promise((r) => { sprosti = r; });
+    try {
+      await prejsnje;
+      return await posodobiNalogeBrezVrste(transformFn);
+    } finally {
+      sprosti();
+    }
+  }
+
+  async function posodobiNalogeBrezVrste(transformFn) {
     let osnova = nalogi;
     let verzija = zadnjaVerzija;
     try {
