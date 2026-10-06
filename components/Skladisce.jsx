@@ -192,6 +192,7 @@ export default function Skladisce() {
           <a href="/pulti" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Pulti</a>
           <a href="/spomeniki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Spomeniki</a>
           <a href="/sestanki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Sestanki</a>
+          <a href="/material" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">🪨 Material</a>
           <button
             onClick={() => { window.location.href = window.location.pathname + "?osvezeno=" + Date.now(); }}
             className="text-xs bg-gray-800 px-3 py-2 rounded-lg"
