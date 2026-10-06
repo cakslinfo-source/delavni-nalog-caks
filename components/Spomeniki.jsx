@@ -254,7 +254,23 @@ export default function Spomeniki() {
     return uspeh;
   }
 
+  // Vrsta čakajočih shranjevanj: hitri zaporedni kliki (npr. "Prevzeto" in takoj "Plačano") se izvedejo
+  // po vrsti, da druga sprememba ne prepiše ali izgubi prve.
+  const vrstaShranjevanjRef = useRef(Promise.resolve());
+
   async function posodobiSpomenike(transformFn) {
+    const prejsnje = vrstaShranjevanjRef.current;
+    let sprosti;
+    vrstaShranjevanjRef.current = new Promise((r) => { sprosti = r; });
+    try {
+      await prejsnje;
+      return await posodobiSpomenikeBrezVrste(transformFn);
+    } finally {
+      sprosti();
+    }
+  }
+
+  async function posodobiSpomenikeBrezVrste(transformFn) {
     let osnova = spomeniki;
     let verzija = zadnjaVerzija;
     try {
