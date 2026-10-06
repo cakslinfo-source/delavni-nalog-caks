@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -82,7 +81,7 @@ function sklPoisciKose(seznam, zahteva, nalogStevilka, vkljuciPlosce) {
   return (seznam || [])
     .filter((k) => {
       if (k.vrsta !== "kos" && !(vkljuciPlosce && k.vrsta === "plosca")) return false;
-      const prost = k.status === "zaloga" || (k.status === "rezervirano" && nalogStevilka && k.nalog === nalogStevilka);
+      const prost = k.status === "zaloga" || (k.status === "rezervirano" && nalogStevilka && sklNorm(k.nalog) === sklNorm(nalogStevilka));
       if (!prost) return false;
       if (mat && sklNorm(k.material) !== mat) return false;
       if (deb > 0 && Math.abs(sklStevilo(k.debelina) - deb) > 0.05) return false;
@@ -195,6 +194,41 @@ function urlArtikla(id) {
 
 function qrUrl(data, velikost) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${velikost}x${velikost}&margin=0&data=${encodeURIComponent(data)}`;
+}
+
+// ===================== NALOGI (za izbiro in prikaz številke naloga) =====================
+
+let predpomnilnikNalogov = null;
+
+// Prebere naloge iz vseh treh modulov, da lahko številko naloga izbereš s seznama (brez tipkarskih napak).
+async function naloziNaloge() {
+  if (predpomnilnikNalogov && Date.now() - predpomnilnikNalogov.cas < 60000) return predpomnilnikNalogov.seznam;
+  const preberi = (url) =>
+    fetch(url, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((p) => (Array.isArray(p) ? p : []))
+      .catch(() => []);
+  const [police, pulti, spomeniki] = await Promise.all([preberi("/api/nalogi"), preberi("/api/pulti"), preberi("/api/spomeniki")]);
+  const jeKoncan = (st) => /prevz|zakljuc/.test(sklNorm(st));
+  const seznam = [];
+  police.forEach((n) => {
+    if (n && n.stevilka) seznam.push({ modul: "Police", id: n.id, stevilka: n.stevilka, stranka: n.stranka || "", opis: n.opis || "", koncan: jeKoncan(n.status) });
+  });
+  pulti.forEach((n) => {
+    if (n && n.stevilka) seznam.push({ modul: "Pulti", id: n.id, stevilka: n.stevilka, stranka: (n.stranka && n.stranka.ime) || "", opis: "Pult", koncan: jeKoncan(n.status) });
+  });
+  spomeniki.forEach((n) => {
+    if (n && n.stevilka) seznam.push({ modul: "Spomeniki", id: n.id, stevilka: n.stevilka, stranka: (n.stranka && n.stranka.ime) || "", opis: n.material || "Spomenik", koncan: jeKoncan(n.status) });
+  });
+  // odprti nalogi najprej, nato najnovejši
+  seznam.sort((a, b) => (a.koncan === b.koncan ? String(b.stevilka).localeCompare(String(a.stevilka)) : a.koncan ? 1 : -1));
+  predpomnilnikNalogov = { cas: Date.now(), seznam };
+  return seznam;
+}
+
+function povezavaNaloga(n) {
+  const pot = n.modul === "Pulti" ? "/pulti" : n.modul === "Spomeniki" ? "/spomeniki" : "/";
+  return `${pot}?nalog=${encodeURIComponent(n.id)}`;
 }
 
 function prazenArtikel(vrsta) {
@@ -338,6 +372,8 @@ export default function Material() {
   const [predlogiMaterialov, setPredlogiMaterialov] = useState(PRIVZETI_MATERIALI);
   const [odpriIskalnik, setOdpriIskalnik] = useState(false);
   const [mera, setMera] = useState({ material: "", debelina: "", dolzina: "", sirina: "", vkljuciPlosce: false });
+  const [dialogStatus, setDialogStatus] = useState(null); // { a, status } — okno za izbiro naloga
+  const [qrVprasanje, setQrVprasanje] = useState(false); // vprašanje "si ga porabil?" po skeniranju QR kode
 
   const artikliRef = useRef([]);
   const verzijaRef = useRef(0);
@@ -366,6 +402,8 @@ export default function Material() {
               setZavihek(najden.vrsta === "kos" ? "kos" : "plosca");
               setIzbranId(najden.id);
               setPogled("podrobnosti");
+              // Skeniran kos je rezerviran za nalog -> vprašamo, ali je bil porabljen za ta nalog.
+              if (najden.status === "rezervirano") setQrVprasanje(true);
             } else {
               setNapaka("Artikla s to kodo ni več v skladišču (morda je bil izbrisan).");
             }
@@ -589,20 +627,19 @@ export default function Material() {
     }
   }
 
+  // Rezervacija in poraba zahtevata številko naloga -> odpre se okno, kjer nalog izbereš s seznama.
   function nastaviStatus(a, status) {
     if (a.status === status) return;
-    let nalog = "";
-    if (status === "rezervirano") {
-      const v = prompt("Za kateri delovni nalog je rezerviran? (npr. DN-202610-123)", a.nalog || "");
-      if (v === null) return;
-      nalog = v.trim();
-    } else if (status === "porabljeno") {
-      const v = prompt("Za kateri delovni nalog je bil porabljen? (neobvezno)", a.nalog || "");
-      if (v === null) return;
-      nalog = v.trim();
+    if (status === "rezervirano" || status === "porabljeno") {
+      setDialogStatus({ a, status });
+      return;
     }
+    izvediStatus(a, status, "");
+  }
+
+  function izvediStatus(a, status, nalog) {
     const zdaj = new Date().toISOString();
-    posodobiArtikle((os) =>
+    return posodobiArtikle((os) =>
       os.map((x) =>
         x.id === a.id
           ? {
@@ -803,6 +840,41 @@ export default function Material() {
         <div className="bg-red-600 text-white text-sm px-4 py-2 cursor-pointer material-glava" onClick={() => setNapaka("")}>
           {napaka} (tapni za zapiranje)
         </div>
+      )}
+
+      {dialogStatus && (
+        <NalogDialog
+          naslov={dialogStatus.status === "rezervirano" ? `Rezerviraj ${dialogStatus.a.koda}` : `${dialogStatus.a.koda} je porabljen`}
+          podnaslov={
+            dialogStatus.status === "rezervirano"
+              ? "Izberi delovni nalog, za katerega ta kos rezerviraš."
+              : "Izberi delovni nalog, za katerega si ga porabil (neobvezno)."
+          }
+          privzeto={dialogStatus.a.nalog || ""}
+          obvezno={dialogStatus.status === "rezervirano"}
+          potrdiBesedilo={dialogStatus.status === "rezervirano" ? "Rezerviraj" : "Označi kot porabljen"}
+          onPreklici={() => setDialogStatus(null)}
+          onPotrdi={(nalog) => {
+            const d = dialogStatus;
+            setDialogStatus(null);
+            izvediStatus(d.a, d.status, nalog);
+          }}
+        />
+      )}
+
+      {pogled === "podrobnosti" && izbran && qrVprasanje && izbran.status === "rezervirano" && (
+        <RezervacijaVprasanje
+          a={izbran}
+          onPorabljeno={() => {
+            setQrVprasanje(false);
+            izvediStatus(izbran, "porabljeno", izbran.nalog || "");
+          }}
+          onSprosti={() => {
+            setQrVprasanje(false);
+            izvediStatus(izbran, "zaloga", "");
+          }}
+          onZapri={() => setQrVprasanje(false)}
+        />
       )}
 
       {pogled === "seznam" && (
@@ -1064,6 +1136,8 @@ export default function Material() {
           onNazaj={() => setPogled("seznam")}
           onUredi={() => odpriUrejanje(izbran)}
           onStatus={(s) => nastaviStatus(izbran, s)}
+          onPorabljeno={() => izvediStatus(izbran, "porabljeno", izbran.nalog || "")}
+          onSprosti={() => izvediStatus(izbran, "zaloga", "")}
           onLokacija={(l) => spremeniLokacijo(izbran, l)}
           onNalepka={() => setPogled("nalepka")}
           onOstanek={() => odpriOstanek(izbran)}
@@ -1322,7 +1396,7 @@ function ObrazecArtikla({ zacetni, predlogiMaterialov, predlogiLokacij, shranjuj
 
 // ===================== PODROBNOSTI =====================
 
-function PodrobnostiArtikla({ a, admin, onNazaj, onUredi, onStatus, onLokacija, onNalepka, onOstanek, onIzbrisi, predlogiLokacij }) {
+function PodrobnostiArtikla({ a, admin, onNazaj, onUredi, onStatus, onPorabljeno, onSprosti, onLokacija, onNalepka, onOstanek, onIzbrisi, predlogiLokacij }) {
   const [lokacija, setLokacija] = useState(a.lokacija || "");
   useEffect(() => {
     setLokacija(a.lokacija || "");
@@ -1341,6 +1415,8 @@ function PodrobnostiArtikla({ a, admin, onNazaj, onUredi, onStatus, onLokacija, 
   return (
     <div className="p-3 space-y-3">
       <button onClick={onNazaj} className="text-sm text-gray-500">← Nazaj na seznam</button>
+
+      {a.status === "rezervirano" && <RezervacijaTrak a={a} onPorabljeno={onPorabljeno} onSprosti={onSprosti} />}
 
       <div className="bg-white rounded-xl p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
@@ -1375,6 +1451,7 @@ function PodrobnostiArtikla({ a, admin, onNazaj, onUredi, onStatus, onLokacija, 
           {a.datumVnosa ? vrstica("Vneseno", new Date(a.datumVnosa).toLocaleDateString("sl-SI")) : null}
           {a.porabljenoDatum ? vrstica("Porabljeno", new Date(a.porabljenoDatum).toLocaleDateString("sl-SI")) : null}
         </div>
+        {a.nalog ? <NalogPovezava stevilka={a.nalog} /> : null}
       </div>
 
       <div className="bg-white rounded-xl p-3 space-y-2">
@@ -1579,5 +1656,161 @@ function NalepkaArtikla({ a, onNazaj }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ===================== IZBIRA NALOGA, VPRAŠANJE PO SKENIRANJU =====================
+
+function NalogDialog({ naslov, podnaslov, privzeto, obvezno, potrdiBesedilo, onPotrdi, onPreklici }) {
+  const [vrednost, setVrednost] = useState(privzeto || "");
+  const [nalogi, setNalogi] = useState([]);
+
+  useEffect(() => {
+    let preklicano = false;
+    naloziNaloge().then((s) => {
+      if (!preklicano) setNalogi(s);
+    });
+    return () => {
+      preklicano = true;
+    };
+  }, []);
+
+  const najden = nalogi.find((n) => sklNorm(n.stevilka) === sklNorm(vrednost)) || null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-3">
+      <div className="bg-white rounded-2xl w-full max-w-md p-4 space-y-3">
+        <div className="font-bold text-lg">{naslov}</div>
+        {podnaslov && <div className="text-sm text-gray-600">{podnaslov}</div>}
+        <input
+          list="seznam-nalogov"
+          value={vrednost}
+          onChange={(e) => setVrednost(e.target.value)}
+          placeholder="Številka naloga (npr. DN-202610-123)"
+          autoFocus
+          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white"
+        />
+        <datalist id="seznam-nalogov">
+          {nalogi.slice(0, 300).map((n) => (
+            <option key={`${n.modul}-${n.id}`} value={n.stevilka} label={`${n.stranka}${n.opis ? " — " + n.opis : ""}${n.koncan ? " (prevzeto)" : ""}`} />
+          ))}
+        </datalist>
+        {najden ? (
+          <div className="text-xs text-emerald-700">
+            ✓ {najden.modul}: {najden.stranka}
+            {najden.opis ? ` — ${najden.opis}` : ""}
+            {najden.koncan ? " (nalog je že prevzet)" : ""}
+          </div>
+        ) : String(vrednost).trim() ? (
+          <div className="text-xs text-amber-700">Te številke ni med nalogi. Preveri jo, preden potrdiš.</div>
+        ) : (
+          <div className="text-xs text-gray-400">Začni tipkati ali izberi s seznama.</div>
+        )}
+        <div className="flex gap-2">
+          <button onClick={onPreklici} className="flex-1 bg-gray-200 rounded-xl py-3 font-semibold">
+            Prekliči
+          </button>
+          <button
+            onClick={() => {
+              if (obvezno && !String(vrednost).trim()) {
+                alert("Vpiši ali izberi številko naloga.");
+                return;
+              }
+              // če nalog obstaja, shranimo njegovo točno številko (popravi male/velike črke in presledke)
+              onPotrdi(najden ? najden.stevilka : String(vrednost).trim());
+            }}
+            className="flex-1 bg-red-600 text-white rounded-xl py-3 font-semibold"
+          >
+            {potrdiBesedilo}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Po skeniranju QR kode rezerviranega kosa: "Si ga porabil za ta nalog?"
+function RezervacijaVprasanje({ a, onPorabljeno, onSprosti, onZapri }) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    let preklicano = false;
+    naloziNaloge().then((s) => {
+      if (!preklicano) setInfo(s.find((n) => sklNorm(n.stevilka) === sklNorm(a.nalog)) || null);
+    });
+    return () => {
+      preklicano = true;
+    };
+  }, [a.nalog]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3">
+      <div className="bg-white rounded-2xl w-full max-w-md p-4 space-y-3 border-2 border-amber-400">
+        <div className="text-xs font-semibold text-amber-700 uppercase">
+          🧩 {a.koda} · {a.material} · {a.dolzina} × {a.sirina} × {a.debelina} cm
+        </div>
+        <div>
+          <div className="text-sm text-gray-500">Ta kos je rezerviran za nalog</div>
+          <div className="text-2xl font-bold">{a.nalog || "(številka ni vpisana)"}</div>
+          {info && (
+            <div className="text-sm text-gray-700">
+              {info.stranka}
+              {info.opis ? ` — ${info.opis}` : ""} <span className="text-gray-400">({info.modul})</span>
+              {info.koncan ? <span className="text-amber-700"> · nalog je že prevzet</span> : null}
+            </div>
+          )}
+        </div>
+        <div className="text-lg font-semibold">Si ga porabil za ta nalog?</div>
+        <div className="space-y-2">
+          <button onClick={onPorabljeno} className="w-full bg-emerald-600 text-white rounded-xl py-3.5 font-semibold text-base">
+            ✅ Da, porabljen za ta nalog
+          </button>
+          <button onClick={onZapri} className="w-full bg-gray-200 rounded-xl py-3 font-semibold">
+            Ne, še ni porabljen
+          </button>
+          <button onClick={onSprosti} className="w-full bg-white border border-gray-300 rounded-xl py-2.5 text-sm font-medium">
+            ↩ Sprosti rezervacijo (vrni na zalogo)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Kompaktna vrstica v podrobnostih rezerviranega kosa.
+function RezervacijaTrak({ a, onPorabljeno, onSprosti }) {
+  return (
+    <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 space-y-2">
+      <div className="text-sm text-amber-900">
+        🧩 Rezerviran za nalog <b>{a.nalog || "(številka ni vpisana)"}</b>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onPorabljeno} className="flex-1 bg-emerald-600 text-white rounded-lg py-2 text-sm font-semibold">
+          ✅ Porabljen za ta nalog
+        </button>
+        <button onClick={onSprosti} className="flex-1 bg-white border border-gray-300 rounded-lg py-2 text-sm font-medium">
+          ↩ Sprosti
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Povezava do naloga, s katerim je kos povezan (rezervacija ali poraba).
+function NalogPovezava({ stevilka }) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    let preklicano = false;
+    naloziNaloge().then((s) => {
+      if (!preklicano) setInfo(s.find((n) => sklNorm(n.stevilka) === sklNorm(stevilka)) || null);
+    });
+    return () => {
+      preklicano = true;
+    };
+  }, [stevilka]);
+  if (!info) return null;
+  return (
+    <a href={povezavaNaloga(info)} className="block text-sm text-blue-700 underline">
+      Odpri nalog {info.stevilka} ({info.stranka}) →
+    </a>
   );
 }
