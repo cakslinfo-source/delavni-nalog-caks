@@ -27,6 +27,71 @@ const STATUS_HEX = {
   "Prevzeto": "#1e40af",
 };
 
+// ===== Iskanje ustreznih kosov iz skladišča materiala (/material) =====
+// Funkcije so IDENTIČNE tistim v components/Material.jsx (tam preizkušene).
+function sklStevilo(v) {
+  const n = parseFloat(String(v ?? "").replace(",", "."));
+  return isNaN(n) ? 0 : n;
+}
+
+function sklNorm(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Ali kos (kos.dolzina × kos.sirina) vsebuje zahtevani kos d × s? Dovoli tudi zasukano prileganje.
+function sklPrileganje(kos, d, s) {
+  const kd = sklStevilo(kos.dolzina);
+  const ks = sklStevilo(kos.sirina);
+  const e = 0.001;
+  if (kd + e >= d && ks + e >= s) return { ok: true, obrnjeno: false };
+  if (kd + e >= s && ks + e >= d) return { ok: true, obrnjeno: true };
+  return { ok: false, obrnjeno: false };
+}
+
+// Poišče kose iz skladišča, ki ustrezajo zahtevi { material, debelina, dolzina, sirina } (v cm).
+// Najprej tisti z najmanj odpadka (najmanjši še zadosten kos).
+// nalogStevilka: kosi, rezervirani za ta nalog, se še vedno štejejo kot ustrezni.
+function sklPoisciKose(seznam, zahteva, nalogStevilka, vkljuciPlosce) {
+  const mat = sklNorm(zahteva.material);
+  const d = sklStevilo(zahteva.dolzina);
+  const s = sklStevilo(zahteva.sirina);
+  const deb = sklStevilo(zahteva.debelina);
+  if (d <= 0 || s <= 0) return [];
+  return (seznam || [])
+    .filter((k) => {
+      if (k.vrsta !== "kos" && !(vkljuciPlosce && k.vrsta === "plosca")) return false;
+      const prost = k.status === "zaloga" || (k.status === "rezervirano" && nalogStevilka && k.nalog === nalogStevilka);
+      if (!prost) return false;
+      if (mat && sklNorm(k.material) !== mat) return false;
+      if (deb > 0 && Math.abs(sklStevilo(k.debelina) - deb) > 0.05) return false;
+      return sklPrileganje(k, d, s).ok;
+    })
+    .map((k) => ({
+      kos: k,
+      obrnjeno: sklPrileganje(k, d, s).obrnjeno,
+      odpadek: sklStevilo(k.dolzina) * sklStevilo(k.sirina) - d * s,
+    }))
+    .sort((a, b) => a.odpadek - b.odpadek);
+}
+
+// Za posamezno postavko delovnega naloga poišče ustrezne kose v skladišču.
+// Upošteva "iz več kosov" (segmenti) in poševne kose (širša mera) — enako kot izvoz za rezalni stroj.
+function ustrezniKosiZaPostavko(zaloga, p, idx, nalogStevilka) {
+  if (!p || !String(p.material || "").trim()) return { potrebno: 0, ujemanja: [] };
+  const segmenti = segmentiPostavke(p, idx).filter((x) => x.dolzinaMM > 0 && x.sirinaMM > 0);
+  if (segmenti.length === 0) return { potrebno: 0, ujemanja: [] };
+  const potrebno = segmenti.reduce((v, x) => v + (x.kolicina || 1), 0);
+  const prvi = segmenti[0];
+  const mera = { dolzina: prvi.dolzinaMM / 10, sirina: prvi.sirinaMM / 10 };
+  const ujemanja = sklPoisciKose(zaloga, { material: p.material, debelina: p.debelina, ...mera }, nalogStevilka);
+  return { potrebno, ujemanja, mera };
+}
+
 function segmentiPostavke(p, idx) {
   const kolicina = parseInt(p.kolicina) || 1;
   const steviloKosov = p.vecKosov ? Math.max(2, parseInt(p.steviloKosov) || 2) : 1;
@@ -1003,6 +1068,7 @@ export default function DelovniNalogi() {
   const [sestankiPodatki, setSestankiPodatki] = useState([]);
   const [pultiCenik, setPultiCenik] = useState(null);
   const [cenikPolice, setCenikPolice] = useState(PRIVZETI_CENIK_POLICE);
+  const [materialZaloga, setMaterialZaloga] = useState([]);
   const materialiSeznamPolice = Object.values(cenikPolice).flatMap((s) => s.materiali);
   const [obvestilo, setObvestilo] = useState(null);
   const [obvestiloVerzija, setObvestiloVerzija] = useState(0);
@@ -1017,6 +1083,12 @@ export default function DelovniNalogi() {
   const [izbranoArhivObvestilo, setIzbranoArhivObvestilo] = useState(null);
 
   async function nalozizPultiInSpomenike() {
+    // Skladišče materiala (plošče in kosi) nalagamo neodvisno — morebitna napaka ne sme ovirati ostalih podatkov.
+    fetch("/api/material", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((m) => setMaterialZaloga(Array.isArray(m) ? m : []))
+      .catch(() => {});
+
     try {
       const [pRes, sRes, sestRes, obvRes, cenikRes, cenikPoliceRes] = await Promise.all([
         fetch("/api/pulti", { cache: "no-store" }),
@@ -1043,6 +1115,66 @@ export default function DelovniNalogi() {
       setObvestilo(normalizirajObvestilo(obv));
       setObvestiloVerzija(Number(obvRes.headers.get("X-Verzija")) || 0);
     } catch (e) {}
+  }
+
+  // Rezervacija / poraba kosa iz skladišča materiala neposredno iz delovnega naloga.
+  const vrstaMaterialRef = useRef(Promise.resolve());
+
+  async function posodobiMaterial(transformFn) {
+    const prejsnje = vrstaMaterialRef.current;
+    let sprosti;
+    vrstaMaterialRef.current = new Promise((r) => {
+      sprosti = r;
+    });
+    try {
+      await prejsnje;
+      const res = await fetch("/api/material", { cache: "no-store" });
+      const sveze = await res.json();
+      const verzija = Number(res.headers.get("X-Verzija")) || 0;
+      const osnova = Array.isArray(sveze) ? sveze : [];
+      const novi = transformFn(osnova);
+      if (!novi) return false;
+      const r = await fetch("/api/material", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seznam: novi, pricakovanaVerzija: verzija }),
+      });
+      if (r.status === 409) {
+        alert("Nekdo drug je medtem spremenil zalogo materiala. Poskusi znova.");
+        setMaterialZaloga(osnova);
+        return false;
+      }
+      if (!r.ok) {
+        alert("Shranjevanje zaloge materiala ni uspelo. Preveri povezavo.");
+        return false;
+      }
+      setMaterialZaloga(novi);
+      return true;
+    } catch (e) {
+      alert("Napaka pri shranjevanju zaloge materiala. Preveri povezavo.");
+      return false;
+    } finally {
+      sprosti();
+    }
+  }
+
+  function nastaviStatusKosa(kosId, status, nalogStevilka) {
+    const zdaj = new Date().toISOString();
+    const nalog = status === "zaloga" ? "" : nalogStevilka || "";
+    return posodobiMaterial((os) => {
+      if (!os.some((x) => x.id === kosId)) return null;
+      return os.map((x) =>
+        x.id === kosId
+          ? {
+              ...x,
+              status,
+              nalog,
+              porabljenoDatum: status === "porabljeno" ? zdaj : "",
+              zgodovina: [...(x.zgodovina || []), { status, datum: zdaj, nalog }],
+            }
+          : x
+      );
+    });
   }
 
   async function shraniCenikPolice(novCenik) {
@@ -1736,6 +1868,12 @@ export default function DelovniNalogi() {
               className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
             >
               Spomeniki
+            </a>
+            <a
+              href="/material"
+              className="text-stone-400 hover:text-white text-xs border border-stone-700 rounded px-2.5 py-1.5 hover:bg-stone-800 transition-colors"
+            >
+              🪨 Material
             </a>
             <a
               href="/skladisce"
@@ -3495,6 +3633,20 @@ export default function DelovniNalogi() {
                 </span>
               </div>
 
+              {(() => {
+                const st = obrazec.postavke.filter(
+                  (p, i) =>
+                    ustrezniKosiZaPostavko(materialZaloga, p, i, aktivniNalog ? aktivniNalog.stevilka : "").ujemanja.length > 0
+                ).length;
+                if (st === 0) return null;
+                return (
+                  <div className="mb-3 bg-emerald-100 border border-emerald-300 rounded-lg px-3 py-2 text-sm text-emerald-900 font-medium">
+                    💡 Za {st} {st === 1 ? "postavko" : st === 2 ? "postavki" : st <= 4 ? "postavke" : "postavk"} imaš ustrezen kos
+                    v skladišču — glej zeleno obvestilo pod postavko.
+                  </div>
+                );
+              })()}
+
               <div className="bg-stone-50 border border-stone-200 rounded-lg p-2.5 mb-3 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-stone-500 shrink-0">Vse police isti material?</span>
                 <select
@@ -3639,14 +3791,14 @@ export default function DelovniNalogi() {
                       <div className="flex gap-1">
                         <input
                           className="postavka-input"
-                          value={p.sirinaLevo}
+                          value={p.sirinaLevo ?? ""}
                           onChange={(e) => posodobiPostavko(p.id, "sirinaLevo", e.target.value)}
                           placeholder="šir. levo"
                           inputMode="decimal"
                         />
                         <input
                           className="postavka-input"
-                          value={p.sirinaDesno}
+                          value={p.sirinaDesno ?? ""}
                           onChange={(e) => posodobiPostavko(p.id, "sirinaDesno", e.target.value)}
                           placeholder="šir. desno"
                           inputMode="decimal"
@@ -3719,7 +3871,7 @@ export default function DelovniNalogi() {
                         <input
                           className="postavka-input"
                           style={{ width: "55px" }}
-                          value={p.steviloKosov}
+                          value={p.steviloKosov ?? ""}
                           onChange={(e) => posodobiPostavko(p.id, "steviloKosov", e.target.value.replace(/[^0-9]/g, ""))}
                           placeholder="2"
                           inputMode="numeric"
@@ -3736,6 +3888,39 @@ export default function DelovniNalogi() {
                       Poševno (druga širina levo/desno)
                     </label>
                   </div>
+                  {(() => {
+                    const { potrebno, ujemanja } = ustrezniKosiZaPostavko(
+                      materialZaloga,
+                      p,
+                      idx,
+                      aktivniNalog ? aktivniNalog.stevilka : ""
+                    );
+                    if (ujemanja.length === 0) return null;
+                    return (
+                      <div className="mt-1.5 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-2 text-xs text-emerald-900">
+                        <div className="font-semibold">
+                          💡 Ustrezen kos iz skladišča ({ujemanja.length}) — porabi ga namesto nove plošče
+                          {potrebno > 1 ? ` · potrebno število: ${potrebno}` : ""}:
+                        </div>
+                        {ujemanja.slice(0, 3).map((u) => (
+                          <div key={u.kos.id} className="mt-0.5">
+                            <a
+                              href={`/material?id=${encodeURIComponent(u.kos.id)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-bold underline"
+                            >
+                              {u.kos.koda}
+                            </a>{" "}
+                            · {u.kos.dolzina} × {u.kos.sirina} × {u.kos.debelina} cm{u.obrnjeno ? " (zasukano)" : ""}
+                            {u.kos.obdelava ? ` · ${u.kos.obdelava}` : ""} · 📍 {u.kos.lokacija || "lokacija ni vpisana"}
+                            {u.kos.status === "rezervirano" ? " · ✓ rezerviran za ta nalog" : ""}
+                          </div>
+                        ))}
+                        {ujemanja.length > 3 && <div className="mt-0.5 text-emerald-700">… in še {ujemanja.length - 3}</div>}
+                      </div>
+                    );
+                  })()}
                   </div>
                 ))}
               </div>
@@ -4110,6 +4295,83 @@ export default function DelovniNalogi() {
                 Naročilo je pripravljeno. Za pošiljanje obvestila dodaj e-mail ali telefon stranke (uredi nalog).
               </div>
             )}
+
+            {aktivniNalog.status !== "Prevzeto" && (() => {
+              const vrstice = (aktivniNalog.postavke || [])
+                .map((p, i) => ({ p, i, ...ustrezniKosiZaPostavko(materialZaloga, p, i, aktivniNalog.stevilka) }))
+                .filter((x) => x.ujemanja.length > 0);
+              if (vrstice.length === 0) return null;
+              return (
+                <div className="mt-5 bg-emerald-50 border border-emerald-300 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-emerald-900 uppercase mb-2">
+                    💡 Kosi iz skladišča, ki ustrezajo postavkam tega naloga
+                  </p>
+                  <div className="space-y-3">
+                    {vrstice.map(({ p, i, potrebno, ujemanja, mera }) => (
+                      <div key={p.id}>
+                        <p className="text-sm font-medium text-emerald-900">
+                          Postavka {i + 1}
+                          {p.naziv ? ` (${p.naziv})` : ""}: {p.material} {mera.dolzina} × {mera.sirina}
+                          {p.debelina ? ` × ${p.debelina}` : ""} cm
+                          {potrebno > 1 ? ` — potrebno število: ${potrebno}` : ""}
+                        </p>
+                        {ujemanja.slice(0, 4).map((u) => {
+                          const rezervirano = u.kos.status === "rezervirano";
+                          return (
+                            <div
+                              key={u.kos.id}
+                              className="flex flex-wrap items-center justify-between gap-2 py-1.5 border-b border-emerald-200 last:border-0 text-xs text-emerald-900"
+                            >
+                              <span>
+                                <a
+                                  href={`/material?id=${encodeURIComponent(u.kos.id)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-bold underline"
+                                >
+                                  {u.kos.koda}
+                                </a>{" "}
+                                · {u.kos.dolzina} × {u.kos.sirina} × {u.kos.debelina} cm{u.obrnjeno ? " (zasukano)" : ""}
+                                {u.kos.obdelava ? ` · ${u.kos.obdelava}` : ""} · 📍 {u.kos.lokacija || "lokacija ni vpisana"}
+                                {rezervirano ? " · ✓ rezerviran za ta nalog" : ""}
+                              </span>
+                              <span className="flex gap-1.5">
+                                {rezervirano ? (
+                                  <button
+                                    onClick={() => nastaviStatusKosa(u.kos.id, "zaloga", "")}
+                                    className="px-2.5 py-1 rounded-md border border-emerald-400 bg-white text-emerald-800"
+                                  >
+                                    Sprosti
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => nastaviStatusKosa(u.kos.id, "rezervirano", aktivniNalog.stevilka)}
+                                    className="px-2.5 py-1 rounded-md bg-emerald-600 text-white font-medium"
+                                  >
+                                    Rezerviraj za ta nalog
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Označim kos ${u.kos.koda} kot porabljen za ta nalog?`)) {
+                                      nastaviStatusKosa(u.kos.id, "porabljeno", aktivniNalog.stevilka);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 rounded-md border border-emerald-400 bg-white text-emerald-800"
+                                >
+                                  Porabi
+                                </button>
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {ujemanja.length > 4 && <div className="text-xs text-emerald-700 mt-1">… in še {ujemanja.length - 4}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="mt-5 pt-4 border-t border-stone-100">
               <label className="block text-xs font-medium text-stone-500 mb-1.5">Spremeni status</label>
