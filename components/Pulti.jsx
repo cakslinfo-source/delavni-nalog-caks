@@ -16,13 +16,31 @@ const STATUSI = [
   { id: "prevzeto", naziv: "Prevzeto", barva: "bg-blue-800" },
 ];
 
-// Preslikava starih statusov (pred poenotenjem s Policami) v nove.
+// Barve statusov — IDENTIČNE kot pri Policah (oznaka statusa, obarvana kartica).
+const STATUS_BARVE = {
+  sprejeto: "bg-stone-200 text-stone-700 border-stone-300",
+  izdelavi: "bg-orange-100 text-orange-800 border-orange-300",
+  pripravljeno: "bg-sky-100 text-sky-800 border-sky-300",
+  prevzeto: "bg-blue-200 text-blue-900 border-blue-500",
+};
+const KARTICA_BARVE = {
+  sprejeto: "bg-stone-100 border-2 border-stone-300 hover:border-stone-400",
+  izdelavi: "bg-orange-50 border-2 border-orange-400 hover:border-orange-500",
+  pripravljeno: "bg-sky-50 border-2 border-sky-300 hover:border-sky-400",
+  prevzeto: "bg-blue-100 border-2 border-blue-600 hover:border-blue-700",
+};
+
+// Ena sama, zanesljiva preslikava statusa v enega od štirih skupnih statusov
+// (sprejeto / izdelavi / pripravljeno / prevzeto) — enaka pri Policah, Pultih, Spomenikih in Pregledu.
+// Prepozna tudi vse stare vrednosti (ponudba, izmera, razrez, montaza, zakljuceno ...).
 function normalizirajStatusPulti(status) {
-  if (["sprejeto", "izdelavi", "pripravljeno", "prevzeto"].includes(status)) return status;
-  if (["ponudba", "izmera", "cad"].includes(status)) return "sprejeto";
-  if (["razrez", "izrezi", "brusenje"].includes(status)) return "izdelavi";
-  if (status === "montaza") return "pripravljeno";
-  if (status === "zakljuceno") return "prevzeto";
+  const s = String(status || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/prevz|zakljuc|dostav|namesc/.test(s)) return "prevzeto";
+  if (/pripravl|montaz/.test(s)) return "pripravljeno";
+  if (/izdel|razrez|brus|izrez|obdel|polir|graviran/.test(s)) return "izdelavi";
   return "sprejeto";
 }
 
@@ -459,7 +477,7 @@ export default function Pulti() {
   const [napaka, setNapaka] = useState("");
   const [pogled, setPogled] = useState("seznam");
   const [strankeBaza, setStrankeBaza] = useState([]);
-  const [filter, setFilter] = useState("vsi");
+  const [filter, setFilter] = useState([]);
   const [obrazec, setObrazec] = useState(null);
   const [izbran, setIzbran] = useState(null);
   const [admin, setAdmin] = useState(false);
@@ -807,36 +825,41 @@ export default function Pulti() {
 
 function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
   const filtrirani =
-    filter === "vsi" ? nalogi : nalogi.filter((x) => x.status === filter);
+    filter.length === 0 ? nalogi : nalogi.filter((x) => filter.includes(x.status));
 
   return (
     <div className="p-3">
-      <div className="grid grid-cols-4 gap-2 mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        <button
+          onClick={() => setFilter([])}
+          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+            filter.length === 0
+              ? "bg-stone-700 text-white border-stone-700 font-medium"
+              : "bg-white text-stone-500 border-stone-300 hover:border-stone-500"
+          }`}
+        >
+          Vsi
+        </button>
         {STATUSI.map((s) => {
           const st = nalogi.filter((x) => x.status === s.id).length;
+          const aktiven = filter.includes(s.id);
           return (
             <button
               key={s.id}
-              onClick={() => setFilter(filter === s.id ? "vsi" : s.id)}
-              className={`rounded-lg p-2 text-center text-white ${s.barva} ${
-                filter === s.id ? "ring-2 ring-black" : ""
+              onClick={() =>
+                setFilter(aktiven ? filter.filter((x) => x !== s.id) : [...filter, s.id])
+              }
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                aktiven
+                  ? STATUS_BARVE[s.id] + " font-medium ring-1 ring-inset ring-current"
+                  : "bg-white text-stone-500 border-stone-300 hover:border-stone-500"
               }`}
             >
-              <div className="text-lg font-bold leading-none">{st}</div>
-              <div className="text-[10px] leading-tight mt-1">{s.naziv}</div>
+              {s.naziv} <span className="opacity-60">({st})</span>
             </button>
           );
         })}
       </div>
-
-      {filter !== "vsi" && (
-        <button
-          onClick={() => setFilter("vsi")}
-          className="text-xs text-red-600 mb-2 underline"
-        >
-          Prikaži vse
-        </button>
-      )}
 
       {filtrirani.length === 0 && (
         <div className="text-center text-gray-400 py-12">
@@ -852,14 +875,24 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
             <div
               key={nal.id}
               onClick={() => odpri(nal)}
-              className="bg-white rounded-xl p-3 shadow-sm cursor-pointer"
+              className={`rounded-xl p-3 shadow-sm cursor-pointer transition-all ${
+                nal.vrsta === "ponudba"
+                  ? "bg-white border-2 border-blue-300 hover:border-blue-400"
+                  : KARTICA_BARVE[nal.status] || "bg-white border border-stone-200"
+              }`}
             >
               <div className="flex justify-between items-start">
                 <div>
                   <div className="font-bold">{nal.stevilka}</div>
                   <div className="text-sm text-gray-600">{nal.stranka?.ime}</div>
                 </div>
-                <span className={`text-white text-xs px-2 py-1 rounded-full ${nal.vrsta === "ponudba" ? "bg-blue-600" : s.barva}`}>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full border ${
+                    nal.vrsta === "ponudba"
+                      ? "bg-blue-100 text-blue-800 border-blue-300 font-medium"
+                      : STATUS_BARVE[nal.status] || STATUS_BARVE.sprejeto
+                  }`}
+                >
                   {nal.vrsta === "ponudba" ? "Ponudba" : s.naziv}
                 </span>
               </div>
@@ -1615,8 +1648,8 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
               }}
               className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                 nalog.status === st.id
-                  ? `${st.barva} text-white border-transparent font-medium`
-                  : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+                  ? STATUS_BARVE[st.id]
+                  : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
               }`}
             >
               {st.naziv}
