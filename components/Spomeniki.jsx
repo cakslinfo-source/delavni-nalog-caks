@@ -14,6 +14,34 @@ const STATUSI = [
   { id: "prevzeto", naziv: "Prevzeto", barva: "bg-blue-800" },
 ];
 
+// Barve statusov — IDENTIČNE kot pri Policah (oznaka statusa, obarvana kartica).
+const STATUS_BARVE = {
+  sprejeto: "bg-stone-200 text-stone-700 border-stone-300",
+  izdelavi: "bg-orange-100 text-orange-800 border-orange-300",
+  pripravljeno: "bg-sky-100 text-sky-800 border-sky-300",
+  prevzeto: "bg-blue-200 text-blue-900 border-blue-500",
+};
+const KARTICA_BARVE = {
+  sprejeto: "bg-stone-100 border-2 border-stone-300 hover:border-stone-400",
+  izdelavi: "bg-orange-50 border-2 border-orange-400 hover:border-orange-500",
+  pripravljeno: "bg-sky-50 border-2 border-sky-300 hover:border-sky-400",
+  prevzeto: "bg-blue-100 border-2 border-blue-600 hover:border-blue-700",
+};
+
+// Ena sama, zanesljiva preslikava statusa v enega od štirih skupnih statusov
+// (sprejeto / izdelavi / pripravljeno / prevzeto) — enaka pri Policah, Pultih, Spomenikih in Pregledu.
+// Prepozna tudi vse stare vrednosti (npr. narocilo, izmera, izdelava, montaza, zakljuceno ...).
+function normalizirajStatusSpomenik(status) {
+  const s = String(status || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/prevz|zakljuc|dostav|namesc/.test(s)) return "prevzeto";
+  if (/pripravl|montaz/.test(s)) return "pripravljeno";
+  if (/izdel|razrez|brus|izrez|obdel|polir|graviran/.test(s)) return "izdelavi";
+  return "sprejeto";
+}
+
 const TIPI_KOMPONENT = ["Temelji", "Robniki", "Pokrivalne", "Podstavek", "Deska PP", "Napisne", "Slepe", "Deske", "Ostalo"];
 const POLIRANJE_MOZNOSTI = ["Levo", "Spredaj", "Zadaj", "Desno"];
 
@@ -169,7 +197,7 @@ export default function Spomeniki() {
   const [nalaganje, setNalaganje] = useState(true);
   const [napaka, setNapaka] = useState("");
   const [pogled, setPogled] = useState("seznam");
-  const [filter, setFilter] = useState("vsi");
+  const [filter, setFilter] = useState([]);
   const [obrazec, setObrazec] = useState(null);
   const [izbran, setIzbran] = useState(null);
   const [admin, setAdmin] = useState(false);
@@ -185,7 +213,7 @@ export default function Spomeniki() {
         return r.json();
       })
       .then((p) => {
-        const seznam = Array.isArray(p) ? p : [];
+        const seznam = (Array.isArray(p) ? p : []).map((x) => ({ ...x, status: normalizirajStatusSpomenik(x.status) }));
         setSpomeniki(seznam);
 
         // Če je v povezavi (npr. iz seznama na Policah) naveden ?nalog=ID,
@@ -277,7 +305,7 @@ export default function Spomeniki() {
       const res = await fetch("/api/spomeniki", { cache: "no-store" });
       const sveze = await res.json();
       verzija = Number(res.headers.get("X-Verzija")) || 0;
-      if (Array.isArray(sveze)) osnova = sveze;
+      if (Array.isArray(sveze)) osnova = sveze.map((x) => ({ ...x, status: normalizirajStatusSpomenik(x.status) }));
     } catch (e) {}
     const novi = transformFn(osnova);
     return await shraniSeznam(novi, verzija);
@@ -295,7 +323,7 @@ export default function Spomeniki() {
   }
 
   const filtrirani = spomeniki.filter((n) => {
-    const ujemaFilter = filter === "vsi" || n.status === filter;
+    const ujemaFilter = filter.length === 0 || filter.includes(n.status);
     const iskalniNiz = `${n.stranka?.ime || ""} ${n.lokacija || ""} ${n.stevilka || ""}`.toLowerCase();
     return ujemaFilter && iskalniNiz.includes(iskanje.toLowerCase());
   });
@@ -344,26 +372,35 @@ export default function Spomeniki() {
 
       {pogled === "seznam" && (
         <div className="p-3">
-          <div className="grid grid-cols-4 gap-1.5 mb-3">
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            <button
+              onClick={() => setFilter([])}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                filter.length === 0
+                  ? "bg-stone-700 text-white border-stone-700 font-medium"
+                  : "bg-white text-stone-500 border-stone-300 hover:border-stone-500"
+              }`}
+            >
+              Vsi
+            </button>
             {STATUSI.map((s) => {
               const st = spomeniki.filter((x) => x.status === s.id).length;
+              const aktiven = filter.includes(s.id);
               return (
                 <button
                   key={s.id}
-                  onClick={() => setFilter(filter === s.id ? "vsi" : s.id)}
-                  className={`rounded-lg p-2 text-center text-white ${s.barva} ${filter === s.id ? "ring-2 ring-black" : ""}`}
+                  onClick={() => setFilter(aktiven ? filter.filter((x) => x !== s.id) : [...filter, s.id])}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    aktiven
+                      ? STATUS_BARVE[s.id] + " font-medium ring-1 ring-inset ring-current"
+                      : "bg-white text-stone-500 border-stone-300 hover:border-stone-500"
+                  }`}
                 >
-                  <div className="text-lg font-bold leading-none">{st}</div>
-                  <div className="text-[9px] leading-tight mt-1">{s.naziv}</div>
+                  {s.naziv} <span className="opacity-60">({st})</span>
                 </button>
               );
             })}
           </div>
-          {filter !== "vsi" && (
-            <button onClick={() => setFilter("vsi")} className="text-xs text-red-600 mb-2 underline">
-              Prikaži vse
-            </button>
-          )}
           <input
             value={iskanje}
             onChange={(e) => setIskanje(e.target.value)}
@@ -380,7 +417,11 @@ export default function Spomeniki() {
                   <div
                     key={n.id}
                     onClick={() => { setIzbran(n.id); setPogled("podrobnosti"); }}
-                    className="bg-white rounded-xl p-3 shadow-sm cursor-pointer"
+                    className={`rounded-xl p-3 shadow-sm cursor-pointer transition-all ${
+                      n.vrsta === "ponudba"
+                        ? "bg-white border-2 border-blue-300 hover:border-blue-400"
+                        : KARTICA_BARVE[n.status] || "bg-white border border-stone-200"
+                    }`}
                   >
                     <div className="flex justify-between items-start">
                       <div>
@@ -388,7 +429,13 @@ export default function Spomeniki() {
                         <div className="text-sm text-gray-600">{n.stranka?.ime}</div>
                         {n.lokacija && <div className="text-xs text-gray-400">{n.lokacija}</div>}
                       </div>
-                      <span className={`text-white text-xs px-2 py-1 rounded-full ${n.vrsta === "ponudba" ? "bg-blue-600" : s.barva}`}>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full border ${
+                          n.vrsta === "ponudba"
+                            ? "bg-blue-100 text-blue-800 border-blue-300 font-medium"
+                            : STATUS_BARVE[n.status] || STATUS_BARVE.sprejeto
+                        }`}
+                      >
                         {n.vrsta === "ponudba" ? "Ponudba" : s.naziv}
                       </span>
                     </div>
@@ -1169,8 +1216,8 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
                 onClick={() => { spremeniStatus(nalog, st.id, kdoOpravil); setKdoOpravil(""); }}
                 className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                   nalog.status === st.id
-                    ? `${st.barva} text-white border-transparent font-medium`
-                    : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+                    ? STATUS_BARVE[st.id]
+                    : "bg-white text-stone-500 border-stone-200 hover:border-stone-400"
                 }`}
               >
                 {st.naziv}
