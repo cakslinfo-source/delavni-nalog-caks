@@ -505,17 +505,30 @@ export default function Pulti() {
       .catch(() => {});
   }, []);
 
+  // Shranjevanja gredo po vrsti in vsako pošlje NAJNOVEJŠI seznam — tako hitri zaporedni kliki
+  // (npr. "Prevzeto" in takoj "Plačano") ne morejo prispeti na strežnik v napačnem vrstnem redu
+  // in prepisati novejše spremembe s starejšo.
+  const vrstaShranjevanjRef = useRef(Promise.resolve());
+  const zadnjiSeznamRef = useRef(null);
+
   async function shraniNaloge(novi) {
     setNalogi(novi);
+    zadnjiSeznamRef.current = novi;
+    const prejsnje = vrstaShranjevanjRef.current;
+    let sprosti;
+    vrstaShranjevanjRef.current = new Promise((r) => { sprosti = r; });
     try {
+      await prejsnje;
       const r = await fetch("/api/pulti", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(novi),
+        body: JSON.stringify(zadnjiSeznamRef.current),
       });
       if (!r.ok) throw new Error();
     } catch {
       setNapaka("Napaka pri shranjevanju! Preveri povezavo.");
+    } finally {
+      sprosti();
     }
   }
 
