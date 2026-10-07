@@ -407,7 +407,7 @@ const STATUS_HEX = {
 // ===== Varovalka pred sesutjem strani =====
 // Če se pri risanju enega dela strani zgodi napaka, odpove samo ta del (prikaže se obvestilo z vzrokom),
 // ne pa cela aplikacija ("Application error: a client-side exception has occurred").
-const VERZIJA_APLIKACIJE = "2026-10-07-f · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-10-07-g · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -5772,16 +5772,16 @@ const NALEPKE_NAJVEC_NA_POLICO = 200;
 
 // Brother QL-600: neprekinjen trak (DK-22205) širine 62 mm, dolžina poljubna. Tiskalnik natisne največ ~58 mm širine,
 // zato ima nalepka 3,5 mm notranjega roba. Stran mora biti pokončna (višina ≥ širina), da je tiskalnik ne zavrti.
-const TRAK_NAJKRAJSA_MM = 63;
+const TRAK_NAJKRAJSA_MM = 40;
 const TRAK_NAJDALJSA_MM = 300;
-const TRAK_PRIVZETA_MM = 70;
+const TRAK_PRIVZETA_MM = 50;
 const NALEPKE_PRIVZETA_VELIKOST = "brother-62";
-const NALEPKE_SHRAMBA = "nalepke-polic-nastavitve";
+const NALEPKE_SHRAMBA = "nalepke-polic-nastavitve-2";
 
 // w × h = velikost ene nalepke (mm); stolpci × vrstice = nalepk na list; papir "A4" ali null (list = ena nalepka);
 // k = merilo pisave; pad = notranji rob nalepke (mm); trak = neprekinjen trak (dolžino izbere uporabnik).
 const VELIKOSTI_NALEPK = {
-  "brother-62": { naziv: "Brother QL-600 · trak 62 mm (dolžina poljubna)", w: 62, h: TRAK_PRIVZETA_MM, stolpci: 1, vrstice: 1, papir: null, k: 0.93, pad: 3.5, trak: true },
+  "brother-62": { naziv: "Brother QL-600 · trak 62 mm (dolžina poljubna)", w: 62, h: TRAK_PRIVZETA_MM, stolpci: 1, vrstice: 1, papir: null, k: 0.82, pad: 3.5, trak: true },
   "a4-8": { naziv: "A4 · 8 nalepk na list (105 × 74 mm)", w: 105, h: 74, stolpci: 2, vrstice: 4, papir: "A4", k: 1, pad: 4 },
   "a4-4": { naziv: "A4 · 4 nalepke na list (105 × 148 mm)", w: 105, h: 148, stolpci: 2, vrstice: 2, papir: "A4", k: 1.3, pad: 6 },
   "a4-24": { naziv: "A4 · 24 nalepk na list (70 × 37 mm)", w: 70, h: 37, stolpci: 3, vrstice: 8, papir: "A4", k: 0.66, pad: 2.2 },
@@ -5802,7 +5802,7 @@ function velikostNalepk(id, dolzinaVnos) {
   const v = Object.prototype.hasOwnProperty.call(VELIKOSTI_NALEPK, id) ? VELIKOSTI_NALEPK[id] : VELIKOSTI_NALEPK[NALEPKE_PRIVZETA_VELIKOST];
   if (!v.trak) return v;
   const h = dolzinaTraku(dolzinaVnos);
-  return { ...v, h, k: Math.round(Math.min(1.25, Math.max(0.8, h / 75)) * 100) / 100 };
+  return { ...v, h, k: Math.round(0.88 * Math.min(1.25, Math.max(0.8, h / 75)) * 100) / 100 };
 }
 
 function mnozinaNalepk(n) {
@@ -6074,6 +6074,8 @@ function postavitevNalepke(n, nalog, v) {
   const MM = NAL_MM_NA_PT;
   const stranka = nizZaPrikaz(nalog && nalog.stranka).trim() || "—";
   const stevilkaNaloga = nizZaPrikaz(nalog && nalog.stevilka).trim() || "—";
+  const objektBesedilo = nizZaPrikaz(nalog && nalog.objekt).trim();
+  const objekt = objektBesedilo ? `Objekt: ${objektBesedilo}` : "";
   const sir = v.w - 2 * v.pad - 0.4;
   const razpolozljivo = v.h - 2 * v.pad - 0.4 - 0.5;
   const oznaka = String(n.oznaka || "").toUpperCase();
@@ -6113,18 +6115,20 @@ function postavitevNalepke(n, nalog, v) {
     const minZnacke = sirNaslovcka("POLICA", capPolica, 0.1) + 1.4 * kk + 1;
     const minDebeline = sirNaslovcka("DEBELINA", capDeb, 0.08) + 1 * kk + 1;
     // pri ozkih nalepkah (trak 62 mm) okvirčka ne smeta pojesti preveč širine
-    const sirZnacke = Math.min(Math.max(21 * kk, minZnacke), Math.max(minZnacke, 0.38 * sir));
+    const sirZnacke = Math.min(Math.max(19 * kk, minZnacke), Math.max(minZnacke, 0.38 * sir));
     const sirDebeline = Math.min(Math.max(18 * kk, minDebeline), Math.max(minDebeline, 0.34 * sir));
     const sirLevo = sir - sirDebeline - 3 * kk;
     const sirIme = sir - sirZnacke - 3 * kk;
     const imeR = zDodatnimi(n.ime, sirIme, 20 * kk, 6, vrsticIme);
     const strR = zDodatnimi(stranka, sir, 15 * kk, 6, 2);
     const matR = zDodatnimi(n.material, sirLevo, 13 * kk, 6, vrsticMaterial);
+    const objR = objekt ? zDodatnimi(objekt, sir, 10.5 * kk, 5.5, v.h >= 75 ? 2 : 1) : { pt: 0, vrstic: 0 };
     const ime = imeR.pt;
     const pt = {
       nalog: prilagodi(stevilkaNaloga, sir - 14 * kk, 14 * kk, 6, 1),
       stranka: strR.pt,
-      stPolice: prilagodi(String(n.stevilka), sirZnacke - 4 * kk, 34 * kk, 8, 1),
+      objekt: objR.pt,
+      stPolice: prilagodi(String(n.stevilka), sirZnacke - 4 * kk, 30 * kk, 8, 1),
       ime,
       // material ni večji od imena police (razen če bi ga moralo to skrčiti pod 80 % osnovne velikosti)
       material: Math.min(matR.pt, Math.max(ime, Math.round(13 * kk * 0.8 * 10) / 10)),
@@ -6138,7 +6142,7 @@ function postavitevNalepke(n, nalog, v) {
       capDeb,
     };
     const hVrh = pt.nalog * MM * 1.15 + 0.8 * kk + 0.35;
-    const hStranka = 1.2 * kk + vrstic(stranka, sir, pt.stranka, strR.vrstic) * pt.stranka * MM * 1.1;
+    const hStranka = 1.2 * kk + vrstic(stranka, sir, pt.stranka, strR.vrstic) * pt.stranka * MM * 1.1 + (objekt ? 0.5 * kk + vrstic(objekt, sir, pt.objekt, objR.vrstic) * pt.objekt * MM * 1.1 : 0);
     const hIme = vrstic(n.ime, sirIme, pt.ime, imeR.vrstic) * pt.ime * MM * 1.1 + (oznaka ? kk + vrstic(oznaka, sirIme, pt.oznaka, 2) * pt.oznaka * MM * 1.15 : 0);
     const hZnacka = 1.4 * kk + 1.6 * kk + pt.capPolica * MM * 1.15 + pt.stPolice * MM * 1.1;
     const hSredina = 2.4 * kk + Math.max(hIme, hZnacka);
@@ -6148,7 +6152,7 @@ function postavitevNalepke(n, nalog, v) {
       (n.meraCela ? 0.3 * kk + vrstic(n.meraCela, sirLevo, pt.cela, 2) * pt.cela * MM * 1.15 : 0);
     const hDesno = 1 * kk + 1.2 * kk + pt.capDeb * MM * 1.15 + pt.debelina * MM * 1.1;
     const hSpodaj = 0.35 + 1.2 * kk + Math.max(hLevo, hDesno);
-    L = { s, kk, pt, stranka, stevilkaNaloga, sirZnacke, sirDebeline, vrsticIme: imeR.vrstic, vrsticMaterial: matR.vrstic, vrsticStranka: strR.vrstic, visina: hVrh + hStranka + hSredina + hSpodaj, razpolozljivo };
+    L = { s, kk, pt, stranka, stevilkaNaloga, sirZnacke, sirDebeline, vrsticIme: imeR.vrstic, vrsticMaterial: matR.vrstic, vrsticStranka: strR.vrstic, objekt, vrsticObjekt: objR.vrstic, visina: hVrh + hStranka + hSredina + hSpodaj, razpolozljivo };
     if (L.visina <= razpolozljivo) break;
   }
   return L;
@@ -6198,6 +6202,15 @@ function Nalepka({ n, nalog, v, obroba }) {
       >
         {L.stranka}
       </div>
+
+      {L.objekt ? (
+        <div
+          className="nal-objekt"
+          style={{ fontSize: `${pt.objekt}pt`, fontWeight: 700, lineHeight: 1.1, marginTop: M(0.5), overflowWrap: "anywhere", flexShrink: 0, maxHeight: `${(L.vrsticObjekt * 1.1 + 0.04).toFixed(2)}em`, overflow: "hidden" }}
+        >
+          {L.objekt}
+        </div>
+      ) : null}
 
       <div className="nal-sredina" style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", gap: M(3), padding: `${M(1.2)} 0` }}>
         <div
