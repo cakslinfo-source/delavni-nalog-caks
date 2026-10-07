@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, Fragment, Component } from "react";
+import { createPortal } from "react-dom";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw, Save } from "lucide-react";
+import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw, Save, Tag } from "lucide-react";
 
 // ===== Rezanje (nesting) — vgrajeno v to datoteko, da ni odvisno od druge datoteke na GitHubu =====
 const NESTING = (function () {
@@ -406,7 +407,7 @@ const STATUS_HEX = {
 // ===== Varovalka pred sesutjem strani =====
 // Če se pri risanju enega dela strani zgodi napaka, odpove samo ta del (prikaže se obvestilo z vzrokom),
 // ne pa cela aplikacija ("Application error: a client-side exception has occurred").
-const VERZIJA_APLIKACIJE = "2026-10-07-d · rezanje vgrajeno v to datoteko · Inventura";
+const VERZIJA_APLIKACIJE = "2026-10-07-e · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic";
 
 function opisNapake(napaka) {
   try {
@@ -5660,6 +5661,12 @@ function DelovniNalogiGlavna() {
                     <Printer size={15} /> Natisni delovni nalog
                   </button>
                   <button
+                    onClick={() => setPogled("nalepke")}
+                    className="bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-500 transition-colors flex items-center gap-2"
+                  >
+                    <Tag size={15} /> Nalepke polic
+                  </button>
+                  <button
                     onClick={() => setPogled("dobavnica")}
                     className="bg-emerald-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-500 transition-colors flex items-center gap-2"
                   >
@@ -5727,6 +5734,10 @@ function DelovniNalogiGlavna() {
         {pogled === "izracunPolic" && aktivniNalog && (
           <IzracunPolic nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} cenik={cenikPolice} />
         )}
+
+        {pogled === "nalepke" && aktivniNalog && (
+          <NalepkePolic nalog={aktivniNalog} onZapri={() => setPogled("podrobnosti")} />
+        )}
       </main>
 
       {pogled === "seznam" && !naloziLoading && (
@@ -5747,6 +5758,659 @@ function DelovniNalogiGlavna() {
             <Plus size={22} />
             <span className="text-sm font-medium whitespace-nowrap">Izdelaj delovni list</span>
           </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ===================== NALEPKE ZA POLICE =====================
+// Za vsak fizični kos police ena nalepka: nalog, stranka, material, debelina, številka in ime police, mere.
+// Število nalepk za polico = "Kos." (količina) × "iz več kosov" — enako kot pri izvozu CSV za Donatoni.
+
+const NALEPKE_NAJVEC_NA_POLICO = 200;
+
+// w × h = velikost ene nalepke (mm); stolpci × vrstice = nalepk na list; papir "A4" ali null (list = ena nalepka);
+// k = merilo pisave; pad = notranji rob nalepke (mm).
+const VELIKOSTI_NALEPK = {
+  "a4-8": { naziv: "A4 · 8 nalepk na list (105 × 74 mm)", w: 105, h: 74, stolpci: 2, vrstice: 4, papir: "A4", k: 1, pad: 4 },
+  "a4-4": { naziv: "A4 · 4 nalepke na list (105 × 148 mm)", w: 105, h: 148, stolpci: 2, vrstice: 2, papir: "A4", k: 1.3, pad: 6 },
+  "a4-24": { naziv: "A4 · 24 nalepk na list (70 × 37 mm)", w: 70, h: 37, stolpci: 3, vrstice: 8, papir: "A4", k: 0.66, pad: 2.2 },
+  "100x60": { naziv: "100 × 60 mm (ena nalepka na list)", w: 100, h: 60, stolpci: 1, vrstice: 1, papir: null, k: 0.92, pad: 3.5 },
+  "100x100": { naziv: "100 × 100 mm (ena nalepka na list)", w: 100, h: 100, stolpci: 1, vrstice: 1, papir: null, k: 1.1, pad: 5 },
+  A6: { naziv: "A6 (105 × 148 mm, ena nalepka na list)", w: 105, h: 148, stolpci: 1, vrstice: 1, papir: null, k: 1.3, pad: 6 },
+};
+
+function mnozinaNalepk(n) {
+  const m = n % 100;
+  if (m === 1) return "nalepka";
+  if (m === 2) return "nalepki";
+  if (m === 3 || m === 4) return "nalepke";
+  return "nalepk";
+}
+
+function mnozinaListov(n) {
+  const m = n % 100;
+  if (m === 1) return "list";
+  if (m === 2) return "lista";
+  if (m === 3 || m === 4) return "listi";
+  return "listov";
+}
+
+function htmlEsc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// Seznam nalepk za nalog. Postavke se filtrirajo in številčijo enako kot v natisnjenem delovnem nalogu
+// (stolpec "#"), da se številka na nalepki ujema s številko v nalogu.
+function nalepkeZaNalog(nalog) {
+  const vsePostavke = nalog && Array.isArray(nalog.postavke) ? nalog.postavke : [];
+  const postavke = vsePostavke.filter((p) => p && typeof p === "object" && !Array.isArray(p) && (p.naziv || p.material || p.dolzina));
+  const nalepke = [];
+  const police = [];
+  const opozorila = [];
+  const cm = (mm) => fmtMera(mm / 10).replace(".", ",");
+  const bes = (vn) => (typeof vn === "number" && !Number.isFinite(vn) ? "" : nizZaPrikaz(vn).trim());
+
+  postavke.forEach((p, idx) => {
+    const stevilka = idx + 1;
+    const ime = bes(p.naziv);
+    const material = bes(p.material) || "—";
+    const debelinaVnos = bes(p.debelina);
+    const debelina = debelinaVnos ? (/^[\d.,\s]+$/.test(debelinaVnos) ? `${debelinaVnos} cm` : debelinaVnos) : "–";
+    const dolzinaVnos = bes(p.dolzina) || "–";
+    const sirinaVnos = p.poseven
+      ? `L:${bes(p.sirinaLevo) || "–"} / D:${bes(p.sirinaDesno) || "–"}`
+      : bes(p.sirina) || "–";
+    const deli = p.vecKosov ? Math.max(2, parseInt(p.steviloKosov) || 2) : 1;
+    const kol = Math.max(1, parseInt(p.kolicina) || 1);
+    const omejeno = kol * deli > NALEPKE_NAJVEC_NA_POLICO;
+
+    // Vrstice se ustvarjajo z zanko do omejitve (ne z velikimi seznami), da napačen vnos (npr. 1000000 kosov) ne zruši strani.
+    const mm = (vn) => {
+      const x = parseFloat(String(vn).replace(",", "."));
+      return isNaN(x) ? 0 : x * 10;
+    };
+    const celaMM = mm(p.dolzina);
+    const kosMM = Math.round(celaMM / deli);
+    const skupaj = Math.min(kol * deli, NALEPKE_NAJVEC_NA_POLICO);
+    const vrstice = [];
+    for (let j = 0; j < skupaj; j++) {
+      if (deli <= 1) {
+        vrstice.push({ oznaka: kol > 1 ? `Kos ${j + 1}/${kol}` : "", mere: `${dolzinaVnos} × ${sirinaVnos} cm`, meraCela: "" });
+      } else {
+        const enota = Math.floor(j / deli) + 1;
+        const delIdx = j % deli;
+        const delNaziv = deli === 2 ? (delIdx === 0 ? "Desna" : "Leva") : `Del ${delIdx + 1}/${deli}`;
+        vrstice.push({
+          oznaka: kol > 1 ? `Kos ${enota}/${kol} · ${delNaziv}` : delNaziv,
+          mere: `${kosMM > 0 ? cm(kosMM) : "–"} × ${sirinaVnos} cm`,
+          meraCela: celaMM > 0 ? `polica skupaj ${cm(celaMM)} cm` : "",
+        });
+      }
+    }
+    if (omejeno) {
+      opozorila.push(`Pri polici ${stevilka} je število kosov preveliko — pripravljenih je samo prvih ${vrstice.length} nalepk.`);
+    }
+
+    const imePrikaz = ime || `Polica ${stevilka}`;
+    vrstice.forEach((vr, j) => {
+      nalepke.push({
+        kljuc: `${idx}-${j}`,
+        policaIdx: idx,
+        stevilka,
+        ime: imePrikaz,
+        material,
+        debelina,
+        mere: vr.mere,
+        meraCela: vr.meraCela,
+        oznaka: vr.oznaka,
+      });
+    });
+    police.push({
+      idx,
+      stevilka,
+      ime: imePrikaz,
+      material,
+      debelina,
+      mere: `${dolzinaVnos} × ${sirinaVnos} cm`,
+      stNalepk: vrstice.length,
+    });
+  });
+
+  return { nalepke, police, opozorila };
+}
+
+function razdeliNaListe(nalepke, v) {
+  const naList = Math.max(1, v.stolpci * v.vrstice);
+  const listi = [];
+  for (let i = 0; i < nalepke.length; i += naList) listi.push(nalepke.slice(i, i + naList));
+  return listi;
+}
+
+// Širine znakov krepkega Arial/Helvetica (v tisočinkah em) — za ocenitev, koliko vrstic zasede besedilo.
+const NAL_SIR_MALE = "556 611 556 611 556 333 611 611 278 278 556 278 889 611 611 611 611 389 556 333 611 556 778 556 556 500".split(" ").map(Number);
+const NAL_SIR_VELIKE = "722 722 722 722 667 611 778 722 278 556 722 611 833 722 778 667 778 722 667 611 722 667 944 667 667 611".split(" ").map(Number);
+
+function sirinaZnakaNalepke(c) {
+  const k = c.charCodeAt(0);
+  if (k >= 97 && k <= 122) return NAL_SIR_MALE[k - 97] / 1000;
+  if (k >= 65 && k <= 90) return NAL_SIR_VELIKE[k - 65] / 1000;
+  if (k >= 48 && k <= 57) return 0.556;
+  if (c === "č" || c === "ć" || c === "š") return 0.556;
+  if (c === "ž") return 0.5;
+  if (c === "đ") return 0.611;
+  if (c === "Č" || c === "Ć" || c === "Đ") return 0.722;
+  if (c === "Š") return 0.667;
+  if (c === "Ž") return 0.611;
+  if (c === " " || c === "." || c === "," || c === "/" || c === "|" || c === "·") return 0.278;
+  if (c === "×") return 0.584;
+  return 0.65;
+}
+
+function steviloVrsticNalepke(besedilo, sirinaEm) {
+  const besede = String(besedilo ?? "").slice(0, 300).split(/\s+/).filter(Boolean);
+  if (besede.length === 0) return 1;
+  let vrstice = 1;
+  let trenutna = 0;
+  for (const b of besede) {
+    let w = 0;
+    for (const c of b) w += sirinaZnakaNalepke(c);
+    const presledek = trenutna > 0 ? 0.278 : 0;
+    if (trenutna + presledek + w <= sirinaEm) {
+      trenutna += presledek + w;
+      continue;
+    }
+    if (trenutna > 0) {
+      vrstice++;
+      trenutna = 0;
+    }
+    if (w <= sirinaEm) {
+      trenutna = w;
+      continue;
+    }
+    let ostanek = w;
+    while (ostanek > sirinaEm) {
+      vrstice++;
+      ostanek -= sirinaEm;
+    }
+    trenutna = ostanek;
+  }
+  return vrstice;
+}
+
+// Največja pisava (pt), pri kateri se besedilo še prilega v podano širino (mm) in največ število vrstic.
+function pisavaZaNalepko(besedilo, sirinaMM, osnovaPt, najmanjPt, najvecVrstic) {
+  const okvir = Math.max(sirinaMM, 1);
+  for (let pt = osnovaPt; pt > najmanjPt; pt -= 0.5) {
+    const sirinaEm = okvir / (pt * 0.3528) / 1.04;
+    if (steviloVrsticNalepke(besedilo, sirinaEm) <= najvecVrstic) return Math.round(pt * 10) / 10;
+  }
+  return Math.round(najmanjPt * 10) / 10;
+}
+
+function cssZaTiskNalepk(v) {
+  const velikostStrani = v.papir === "A4" ? "A4" : `${v.w}mm ${v.h}mm`;
+  return `
+    @page { size: ${velikostStrani}; margin: 0; }
+    .nal-tisk-koren { display: none; }
+    @media print {
+      html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
+      body > *:not(.nal-tisk-koren) { display: none !important; }
+      .nal-tisk-koren { display: block !important; }
+      .nal-list { break-after: page; page-break-after: always; margin: 0 !important; }
+      .nal-list:last-child { break-after: auto; page-break-after: auto; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  `;
+}
+
+function zgradiDokumentNalepk(listiHTML, naslov, v) {
+  const velikostStrani = v.papir === "A4" ? "A4" : `${v.w}mm ${v.h}mm`;
+  return (
+    "<!DOCTYPE html><html lang=\"sl\"><head><meta charset=\"utf-8\">" +
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+    "<title>" + htmlEsc(naslov) + "</title>" +
+    "<style>" +
+    "body{margin:0;padding:16px;background:#e7e5e4;font-family:Arial,Helvetica,sans-serif;}" +
+    ".navodilo{max-width:210mm;margin:0 auto 16px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:12px 16px;font-size:14px;}" +
+    ".navodilo button{margin-left:8px;padding:6px 12px;border-radius:6px;border:0;background:#1c1917;color:#fff;font-size:14px;cursor:pointer;}" +
+    ".nal-list{margin:0 auto 16px;box-shadow:0 0 6px rgba(0,0,0,.35);}" +
+    "@page{size:" + velikostStrani + ";margin:0}" +
+    "@media print{" +
+    "body{background:#fff!important;padding:0!important}" +
+    ".navodilo{display:none!important}" +
+    ".nal-list{margin:0!important;box-shadow:none!important;break-after:page;page-break-after:always}" +
+    ".nal-list:last-child{break-after:auto;page-break-after:auto}" +
+    "*{-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+    "}" +
+    "</style></head><body>" +
+    "<div class=\"navodilo\">To so nalepke za tiskanje. Pritisni Ctrl+P (Cmd+P na Mac) ali " +
+    "<button onclick=\"window.print()\">Natisni nalepke</button> — v oknu izberi tiskalnik ali »Shrani kot PDF«.</div>" +
+    listiHTML +
+    "</body></html>"
+  );
+}
+
+function prenesiNalepke(koren, nalog, v) {
+  if (!koren) {
+    alert("Ni bilo mogoče najti nalepk za prenos.");
+    return false;
+  }
+  const naslov = `Nalepke polic ${nalog.stevilka || ""}${nalog.stranka ? " — " + nalog.stranka : ""}`.trim();
+  const html = zgradiDokumentNalepk(koren.innerHTML, naslov, v);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `nalepke-polic ${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return true;
+}
+
+// Postavitev ene nalepke: izbere merilo (1 → 0,5), pri katerem se vse besedilo prilega v višino nalepke.
+// Višine se ocenijo iz števila vrstic (glej steviloVrsticNalepke) in so enake pravilom v komponenti Nalepka.
+const NAL_MM_NA_PT = 0.3528;
+
+function postavitevNalepke(n, nalog, v) {
+  const MM = NAL_MM_NA_PT;
+  const stranka = nizZaPrikaz(nalog && nalog.stranka).trim() || "—";
+  const stevilkaNaloga = nizZaPrikaz(nalog && nalog.stevilka).trim() || "—";
+  const sir = v.w - 2 * v.pad - 0.4;
+  const razpolozljivo = v.h - 2 * v.pad - 0.4 - 0.5;
+  const oznaka = String(n.oznaka || "").toUpperCase();
+  let L = null;
+  for (let s = 1; s >= 0.499; s -= 0.05) {
+    const kk = v.k * s;
+    const P = (pt, najmanj = 5) => Math.max(najmanj, Math.round(pt * kk * 10) / 10);
+    const prilagodi = (besedilo, sirinaMM, osnova, najmanj, vrstic) => pisavaZaNalepko(besedilo, sirinaMM, osnova, Math.min(najmanj, osnova), vrstic);
+    const vrstic = (besedilo, sirinaMM, pt, najvec) => Math.min(najvec, steviloVrsticNalepke(besedilo, sirinaMM / (pt * MM) / 1.04));
+    // Naslovčka »POLICA« in »DEBELINA« imata najmanjšo pisavo (5 pt), zato okvirčka ne smeta postati ožja od napisa.
+    const capNalog = P(6.5);
+    const capPolica = P(6.5);
+    const capDeb = P(5.5);
+    const sirNaslovcka = (besedilo, ptVelikost, razmikEm) => {
+      let em = 0;
+      for (const c of besedilo) em += sirinaZnakaNalepke(c) + razmikEm;
+      return em * ptVelikost * MM;
+    };
+    const sirZnacke = Math.max(21 * kk, sirNaslovcka("POLICA", capPolica, 0.1) + 1.4 * kk + 1);
+    const sirDebeline = Math.max(18 * kk, sirNaslovcka("DEBELINA", capDeb, 0.08) + 1 * kk + 1);
+    const sirLevo = sir - sirDebeline - 3 * kk;
+    const sirIme = sir - sirZnacke - 3 * kk;
+    const cela = n.meraCela ? prilagodi(n.meraCela, sirLevo, P(7.5), 4.5, 2) : P(7.5);
+    const pt = {
+      nalog: prilagodi(stevilkaNaloga, sir - 14 * kk, 14 * kk, 6, 1),
+      stranka: prilagodi(stranka, sir, 15 * kk, 6, 2),
+      stPolice: prilagodi(String(n.stevilka), sirZnacke - 4 * kk, 34 * kk, 8, 1),
+      ime: prilagodi(n.ime, sirIme, 20 * kk, 6, 3),
+      material: prilagodi(n.material, sirLevo, 13 * kk, 6, 2),
+      debelina: prilagodi(n.debelina, sirDebeline - 3 * kk, 17 * kk, 6, 1),
+      mere: prilagodi(n.mere, sirLevo, 12 * kk, 6, 2),
+      oznaka: oznaka ? prilagodi(oznaka, sirIme, 10 * kk, 6, 2) : 0,
+      cela,
+      capNalog,
+      capPolica,
+      capDeb,
+    };
+    const hVrh = pt.nalog * MM * 1.15 + 0.8 * kk + 0.35;
+    const hStranka = 1.2 * kk + vrstic(stranka, sir, pt.stranka, 2) * pt.stranka * MM * 1.1;
+    const hIme = vrstic(n.ime, sirIme, pt.ime, 3) * pt.ime * MM * 1.1 + (oznaka ? kk + vrstic(oznaka, sirIme, pt.oznaka, 2) * pt.oznaka * MM * 1.15 : 0);
+    const hZnacka = 1.4 * kk + 1.6 * kk + pt.capPolica * MM * 1.15 + pt.stPolice * MM * 1.1;
+    const hSredina = 2.4 * kk + Math.max(hIme, hZnacka);
+    const hLevo =
+      vrstic(n.material, sirLevo, pt.material, 2) * pt.material * MM * 1.1 +
+      0.8 * kk + vrstic(n.mere, sirLevo, pt.mere, 2) * pt.mere * MM * 1.15 +
+      (n.meraCela ? 0.3 * kk + vrstic(n.meraCela, sirLevo, pt.cela, 2) * pt.cela * MM * 1.15 : 0);
+    const hDesno = 1 * kk + 1.2 * kk + pt.capDeb * MM * 1.15 + pt.debelina * MM * 1.1;
+    const hSpodaj = 0.35 + 1.2 * kk + Math.max(hLevo, hDesno);
+    L = { s, kk, pt, stranka, stevilkaNaloga, sirZnacke, sirDebeline, visina: hVrh + hStranka + hSredina + hSpodaj, razpolozljivo };
+    if (L.visina <= razpolozljivo) break;
+  }
+  return L;
+}
+
+// Ena nalepka. Vse oblikovanje je neposredno v slogih (mm in pt), da je enako na zaslonu, pri tisku in v preneseni datoteki.
+function Nalepka({ n, nalog, v, obroba }) {
+  const L = postavitevNalepke(n, nalog, v);
+  const kk = L.kk;
+  const pt = L.pt;
+  const M = (mm) => `${Math.round(mm * kk * 100) / 100}mm`;
+
+  return (
+    <div
+      className="nal-nalepka"
+      style={{
+        width: `${v.w}mm`,
+        height: `${v.h}mm`,
+        boxSizing: "border-box",
+        padding: `${v.pad}mm`,
+        border: obroba ? "0.2mm dashed #777" : "0.2mm solid transparent",
+        background: "#fff",
+        color: "#000",
+        display: "flex",
+        flexDirection: "column",
+        fontFamily: "Arial, Helvetica, sans-serif",
+        lineHeight: 1.15,
+        textAlign: "left",
+        overflow: "hidden",
+        breakInside: "avoid",
+        pageBreakInside: "avoid",
+      }}
+    >
+      <div
+        className="nal-vrh"
+        style={{ display: "flex", alignItems: "baseline", gap: M(2), borderBottom: "0.35mm solid #000", paddingBottom: M(0.8), flexShrink: 0 }}
+      >
+        <span style={{ fontSize: `${pt.capNalog}pt`, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700 }}>Nalog</span>
+        <span className="nal-stevilka-naloga" style={{ fontSize: `${pt.nalog}pt`, fontWeight: 900, minWidth: 0, overflowWrap: "anywhere" }}>
+          {L.stevilkaNaloga}
+        </span>
+      </div>
+
+      <div
+        className="nal-stranka"
+        style={{ fontSize: `${pt.stranka}pt`, fontWeight: 800, lineHeight: 1.1, marginTop: M(1.2), overflowWrap: "anywhere", flexShrink: 0, maxHeight: "2.3em", overflow: "hidden" }}
+      >
+        {L.stranka}
+      </div>
+
+      <div className="nal-sredina" style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", gap: M(3), padding: `${M(1.2)} 0` }}>
+        <div
+          className="nal-znacka"
+          style={{
+            width: `${Math.round(L.sirZnacke * 100) / 100}mm`,
+            flexShrink: 0,
+            boxSizing: "border-box",
+            border: `${M(0.7)} solid #000`,
+            borderRadius: M(1.2),
+            textAlign: "center",
+            padding: `${M(0.8)} 0`,
+          }}
+        >
+          <div style={{ fontSize: `${pt.capPolica}pt`, letterSpacing: "0.1em", fontWeight: 700 }}>POLICA</div>
+          <div className="nal-stevilka-police" style={{ fontSize: `${pt.stPolice}pt`, fontWeight: 900, lineHeight: 1.1, whiteSpace: "nowrap" }}>
+            {n.stevilka}
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="nal-ime" style={{ fontSize: `${pt.ime}pt`, fontWeight: 800, lineHeight: 1.1, overflowWrap: "anywhere", maxHeight: "3.4em", overflow: "hidden" }}>
+            {n.ime}
+          </div>
+          {n.oznaka ? (
+            <div className="nal-oznaka" style={{ fontSize: `${pt.oznaka}pt`, fontWeight: 700, marginTop: M(1), textTransform: "uppercase", overflowWrap: "anywhere" }}>
+              {n.oznaka}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div
+        className="nal-spodaj"
+        style={{ borderTop: "0.35mm solid #000", paddingTop: M(1.2), display: "flex", alignItems: "stretch", gap: M(3), flexShrink: 0 }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="nal-material" style={{ fontSize: `${pt.material}pt`, fontWeight: 800, lineHeight: 1.1, overflowWrap: "anywhere", maxHeight: "2.3em", overflow: "hidden" }}>
+            {n.material}
+          </div>
+          <div className="nal-mere" style={{ fontSize: `${pt.mere}pt`, fontWeight: 700, marginTop: M(0.8), overflowWrap: "anywhere" }}>
+            {n.mere}
+          </div>
+          {n.meraCela ? <div className="nal-mera-cela" style={{ fontSize: `${pt.cela}pt`, marginTop: M(0.3), overflowWrap: "anywhere" }}>{n.meraCela}</div> : null}
+        </div>
+        <div
+          className="nal-debelina"
+          style={{
+            width: `${Math.round(L.sirDebeline * 100) / 100}mm`,
+            flexShrink: 0,
+            boxSizing: "border-box",
+            border: `${M(0.5)} solid #000`,
+            borderRadius: M(1),
+            textAlign: "center",
+            padding: `${M(0.6)} 0`,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ fontSize: `${pt.capDeb}pt`, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" }}>Debelina</div>
+          <div className="nal-debelina-vrednost" style={{ fontSize: `${pt.debelina}pt`, fontWeight: 900, lineHeight: 1.1, whiteSpace: "nowrap" }}>
+            {n.debelina}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListNalepk({ list, nalog, v, obroba }) {
+  return (
+    <div
+      className="nal-list"
+      style={{
+        width: `${v.stolpci * v.w}mm`,
+        height: `${v.vrstice * v.h}mm`,
+        display: "grid",
+        gridTemplateColumns: `repeat(${v.stolpci}, ${v.w}mm)`,
+        gridTemplateRows: `repeat(${v.vrstice}, ${v.h}mm)`,
+        background: "#fff",
+        overflow: "hidden",
+      }}
+    >
+      {list.map((n) => (
+        <Nalepka key={n.kljuc} n={n} nalog={nalog} v={v} obroba={obroba} />
+      ))}
+    </div>
+  );
+}
+
+function NalepkePolic({ nalog, onZapri }) {
+  const [velikostId, setVelikostId] = useState("a4-8");
+  const [obroba, setObroba] = useState(true);
+  const [izkljucene, setIzkljucene] = useState(() => new Set());
+  const [sirinaOkvira, setSirinaOkvira] = useState(0);
+  const tiskRef = useRef(null);
+  const okvirRef = useRef(null);
+
+  useEffect(() => {
+    function izmeri() {
+      if (okvirRef.current) setSirinaOkvira(okvirRef.current.clientWidth || 0);
+    }
+    izmeri();
+    window.addEventListener("resize", izmeri);
+    return () => window.removeEventListener("resize", izmeri);
+  }, []);
+
+  const podatki = nalepkeZaNalog(nalog);
+  const v = VELIKOSTI_NALEPK[velikostId] || VELIKOSTI_NALEPK["a4-8"];
+  const izbrane = podatki.nalepke.filter((n) => !izkljucene.has(n.policaIdx));
+  const listi = razdeliNaListe(izbrane, v);
+  const jeVsaIzbrana = podatki.police.every((p) => !izkljucene.has(p.idx));
+
+  const pxNaMM = 96 / 25.4;
+  const listSirinaPx = v.stolpci * v.w * pxNaMM;
+  const listVisinaPx = v.vrstice * v.h * pxNaMM;
+  const merilo = sirinaOkvira > 0 ? Math.min(1, (sirinaOkvira - 2) / listSirinaPx) : 1;
+
+  function preklopi(idx) {
+    setIzkljucene((prej) => {
+      const novo = new Set(prej);
+      if (novo.has(idx)) novo.delete(idx);
+      else novo.add(idx);
+      return novo;
+    });
+  }
+
+  function natisni() {
+    try {
+      window.print();
+    } catch (e) {
+      alert("Tiskanje ni bilo mogoče zagnati. Uporabi Ctrl+P ali gumb »Prenesi nalepke«.");
+    }
+  }
+
+  return (
+    <div>
+      <style>{cssZaTiskNalepk(v)}</style>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div>
+          <p className="carved text-lg uppercase text-stone-800">Nalepke za police</p>
+          <p className="text-xs text-stone-500">
+            Št. {nalog.stevilka} · {nalog.stranka}
+          </p>
+        </div>
+        <button
+          onClick={onZapri}
+          className="px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors"
+        >
+          Nazaj
+        </button>
+      </div>
+
+      {podatki.police.length === 0 ? (
+        <div className="bg-white border border-stone-200 rounded-xl p-5 text-sm text-stone-600">
+          Na tem nalogu ni nobene police z vpisanimi podatki (naziv, material ali dolžina), zato ni kaj natisniti.
+        </div>
+      ) : (
+        <>
+          <div className="bg-white border border-stone-200 rounded-xl p-4 mb-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-xs text-stone-500 uppercase" htmlFor="nal-velikost">
+                Velikost
+              </label>
+              <select
+                id="nal-velikost"
+                value={velikostId}
+                onChange={(e) => setVelikostId(e.target.value)}
+                className="border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                {Object.entries(VELIKOSTI_NALEPK).map(([id, x]) => (
+                  <option key={id} value={id}>
+                    {x.naziv}
+                  </option>
+                ))}
+              </select>
+              <label className="flex items-center gap-2 text-sm text-stone-700">
+                <input type="checkbox" checked={obroba} onChange={(e) => setObroba(e.target.checked)} /> Obroba okoli nalepke
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={natisni}
+                disabled={izbrane.length === 0}
+                className="bg-red-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-red-500 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Printer size={15} /> Natisni nalepke
+              </button>
+              <button
+                onClick={() => prenesiNalepke(tiskRef.current, nalog, v)}
+                disabled={izbrane.length === 0}
+                className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Download size={15} /> Prenesi nalepke
+              </button>
+              <span className="text-sm text-stone-600" data-povzetek-nalepk>
+                {izbrane.length === 0
+                  ? "Nobena polica ni izbrana."
+                  : `${izbrane.length} ${mnozinaNalepk(izbrane.length)}${v.papir ? ` na ${listi.length} ${mnozinaListov(listi.length)}` : ""}`}
+              </span>
+            </div>
+
+            <p className="text-xs text-stone-500">
+              V oknu za tiskanje izberi tiskalnik (ali »Shrani kot PDF«), merilo 100 % in brez robov. Natisne se samo nalepke.
+            </p>
+
+            {podatki.opozorila.map((o, i) => (
+              <div key={i} className="text-xs bg-amber-50 border border-amber-300 text-amber-800 rounded-lg px-3 py-2">
+                {o}
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white border border-stone-200 rounded-xl p-4 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-stone-800">Police na nalogu</p>
+              <div className="flex gap-3 text-xs">
+                <button onClick={() => setIzkljucene(new Set())} disabled={jeVsaIzbrana} className="text-blue-700 hover:underline disabled:text-stone-400 disabled:no-underline">
+                  Izberi vse
+                </button>
+                <button
+                  onClick={() => setIzkljucene(new Set(podatki.police.map((p) => p.idx)))}
+                  disabled={izbrane.length === 0}
+                  className="text-stone-600 hover:underline disabled:text-stone-400 disabled:no-underline"
+                >
+                  Počisti izbiro
+                </button>
+              </div>
+            </div>
+            <ul className="divide-y divide-stone-100">
+              {podatki.police.map((p) => (
+                <li key={p.idx}>
+                  <label className="flex items-center gap-3 py-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!izkljucene.has(p.idx)}
+                      onChange={() => preklopi(p.idx)}
+                      aria-label={`Polica ${p.stevilka}`}
+                      className="w-4 h-4 shrink-0"
+                    />
+                    <span className="w-7 h-7 shrink-0 rounded border-2 border-stone-800 text-sm font-black flex items-center justify-center">
+                      {p.stevilka}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-stone-800 truncate">{p.ime}</span>
+                      <span className="block text-xs text-stone-500 truncate">
+                        {p.material} · {p.debelina} · {p.mere}
+                      </span>
+                    </span>
+                    <span className="text-xs text-stone-600 shrink-0">
+                      {p.stNalepk} {mnozinaNalepk(p.stNalepk)}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div ref={okvirRef} className="space-y-4">
+            {listi.map((list, i) => (
+              <div key={i}>
+                {v.papir ? (
+                  <p className="text-xs text-stone-500 mb-1">
+                    List {i + 1} od {listi.length}
+                  </p>
+                ) : null}
+                <div
+                  className="bg-white border border-stone-300 shadow-sm"
+                  style={{ width: `${listSirinaPx * merilo}px`, height: `${listVisinaPx * merilo}px`, overflow: "hidden", position: "relative" }}
+                >
+                  <div style={{ width: `${v.stolpci * v.w}mm`, height: `${v.vrstice * v.h}mm`, transform: `scale(${merilo})`, transformOrigin: "0 0" }}>
+                    <ListNalepk list={list} nalog={nalog} v={v} obroba={obroba} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {typeof document !== "undefined" &&
+            createPortal(
+              <div className="nal-tisk-koren" ref={tiskRef}>
+                {listi.map((list, i) => (
+                  <ListNalepk key={i} list={list} nalog={nalog} v={v} obroba={obroba} />
+                ))}
+              </div>,
+              document.body
+            )}
         </>
       )}
     </div>
