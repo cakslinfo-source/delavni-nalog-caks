@@ -171,6 +171,7 @@ export default function Pregled() {
             <a href="/spomeniki" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Spomeniki</a>
             <a href="/sestanki" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Sestanki</a>
             <a href="/material" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">🪨 Material</a>
+            <a href="/inventura" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">📋 Inventura</a>
             <a href="/skladisce" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">📦 Skladišče</a>
           </div>
           <div className="text-xl font-mono tabular-nums text-stone-200">
