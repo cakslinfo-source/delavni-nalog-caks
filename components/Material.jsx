@@ -494,7 +494,8 @@ export default function Material() {
 
         // Povezava iz QR kode: /material?id=...
         try {
-          const id = new URLSearchParams(window.location.search).get("id");
+          const iskaniParametri = new URLSearchParams(window.location.search);
+          const id = iskaniParametri.get("id");
           if (id) {
             const najden = seznam.find((a) => String(a.id) === String(id));
             if (najden) {
@@ -502,7 +503,8 @@ export default function Material() {
               setIzbranId(najden.id);
               setPogled("podrobnosti");
               // Skeniran kos je rezerviran za nalog -> vprašamo, ali je bil porabljen za ta nalog.
-              if (najden.status === "rezervirano") setQrVprasanje(true);
+              // (Povezava iz Inventure vsebuje &ogled=1 — tam samo pregledujemo, zato vprašanja ne postavimo.)
+              if (najden.status === "rezervirano" && !iskaniParametri.get("ogled")) setQrVprasanje(true);
             } else {
               setNapaka("Artikla s to kodo ni več v skladišču (morda je bil izbrisan).");
             }
@@ -924,6 +926,7 @@ export default function Material() {
           <a href="/pulti" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Pulti</a>
           <a href="/spomeniki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Spomeniki</a>
           <a href="/sestanki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Sestanki</a>
+          <a href="/inventura" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">📋 Inventura</a>
           <a href="/skladisce" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">📦 Orodje</a>
           <button
             onClick={() => {
