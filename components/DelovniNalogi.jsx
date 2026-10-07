@@ -1,19 +1,384 @@
 "use client";
 
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment, Component } from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import {
-  izdelajNacrt,
-  izdelajNacrtPredpomnjen,
-  podpisElementov,
-  vrsticeOpomb,
-  opombeZNacrtom,
-  odstraniVrsticeNacrta,
-  normalizirajNastavitve,
-  PRIVZETE_NASTAVITVE,
-  fmt as fmtMera,
-} from "./nesting";
 import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw, Save } from "lucide-react";
+
+// ===== Rezanje (nesting) — vgrajeno v to datoteko, da ni odvisno od druge datoteke na GitHubu =====
+const NESTING = (function () {
+  // Razrez plošč in kosov (nesting) z upoštevanjem debeline reza (šajbe).
+  // Čista logika brez Reacta. Vse mere so v cm (razen kerfMM, ki je v mm).
+  //
+  // Pravila:
+  //  - Rezi so ravni, od roba do roba (guillotine) — tako kot na mostnem rezalniku za kamen.
+  //  - Vsak rez "poje" kerf (privzeto 3,3 mm): med dvema sosednjima kosoma je vsaj toliko razmaka.
+  //  - Najprej se porabijo KOSI (ostanki iz skladišča), šele nato cele PLOŠČE.
+  //  - Material in debelina se morata ujemati.
+
+  const EPS = 1e-6;
+
+  const PRIVZETE_NASTAVITVE = { kerfMM: 3.3, rob: 0, zasuk: true, uporabiPlosce: true };
+
+  const ZNACKA_OPOMB = "🧩 Iz skladišča:";
+
+  function st(v) {
+    const n = parseFloat(String(v ?? "").replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
+
+  function norm(s) {
+    return String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function okroglo(x) {
+    return Math.round(x * 100) / 100;
+  }
+
+  function fmt(x) {
+    return String(Math.round(st(x) * 10) / 10);
+  }
+
+  function normalizirajNastavitve(n) {
+    const v = n || {};
+    return {
+      kerfMM: v.kerfMM === undefined || v.kerfMM === "" ? PRIVZETE_NASTAVITVE.kerfMM : Math.max(0, st(v.kerfMM)),
+      rob: Math.max(0, st(v.rob)),
+      zasuk: v.zasuk !== false,
+      uporabiPlosce: v.uporabiPlosce !== false,
+    };
+  }
+
+  // ------------------------------------------------------------------ pakiranje ene plošče/kosa
+
+  // Po postavitvi kosa w×h v kot prostega pravokotnika fr naredimo en rez čez celoten fr
+  // (vodoravno ali navpično), nato še en rez v ožjem pasu. Vsak rez porabi kerf.
+  function razdeli(fr, w, h, kerf, pravilo) {
+    const desnoW = fr.w - w - kerf;
+    const zgorajH = fr.h - h - kerf;
+    const povrsinaH = Math.max(
+      Math.max(desnoW, 0) * h,
+      fr.w * Math.max(zgorajH, 0)
+    );
+    const povrsinaV = Math.max(
+      Math.max(desnoW, 0) * fr.h,
+      w * Math.max(zgorajH, 0)
+    );
+    let vodoravno;
+    switch (pravilo) {
+      case "H":
+        vodoravno = true;
+        break;
+      case "V":
+        vodoravno = false;
+        break;
+      case "SAS":
+        vodoravno = fr.w - w < fr.h - h;
+        break;
+      case "LAS":
+        vodoravno = fr.w - w >= fr.h - h;
+        break;
+      case "MAXA":
+        vodoravno = povrsinaH >= povrsinaV;
+        break;
+      default: // MINA
+        vodoravno = povrsinaH < povrsinaV;
+    }
+    const novi = [];
+    if (vodoravno) {
+      if (desnoW > EPS) novi.push({ x: fr.x + w + kerf, y: fr.y, w: desnoW, h });
+      if (zgorajH > EPS) novi.push({ x: fr.x, y: fr.y + h + kerf, w: fr.w, h: zgorajH });
+    } else {
+      if (desnoW > EPS) novi.push({ x: fr.x + w + kerf, y: fr.y, w: desnoW, h: fr.h });
+      if (zgorajH > EPS) novi.push({ x: fr.x, y: fr.y + h + kerf, w, h: zgorajH });
+    }
+    return novi;
+  }
+
+  function ocenaPrileganja(fr, w, h, pravilo) {
+    const dw = fr.w - w;
+    const dh = fr.h - h;
+    const kratka = Math.min(dw, dh);
+    const dolga = Math.max(dw, dh);
+    if (pravilo === "BSSF") return [kratka, dolga];
+    if (pravilo === "BLSF") return [dolga, kratka];
+    return [fr.w * fr.h - w * h, kratka]; // BAF
+  }
+
+  function pakiraj(W, H, rob, urejeni, nast, izbira, delitev) {
+    const kerf = nast.kerfMM / 10;
+    let prosti = [{ x: rob, y: rob, w: W - 2 * rob, h: H - 2 * rob }];
+    const postavljeni = [];
+    const nepostavljeni = [];
+    if (prosti[0].w <= EPS || prosti[0].h <= EPS) return { postavljeni, ostanki: [], nepostavljeni: urejeni.slice() };
+
+    for (const el of urejeni) {
+      let najboljsi = null;
+      const usmeritve =
+        nast.zasuk && Math.abs(el.w - el.h) > EPS
+          ? [[el.w, el.h, false], [el.h, el.w, true]]
+          : [[el.w, el.h, false]];
+      for (let i = 0; i < prosti.length; i++) {
+        const fr = prosti[i];
+        for (const [w, h, rot] of usmeritve) {
+          if (w <= fr.w + EPS && h <= fr.h + EPS) {
+            const ocena = ocenaPrileganja(fr, w, h, izbira);
+            if (
+              !najboljsi ||
+              ocena[0] < najboljsi.ocena[0] - EPS ||
+              (Math.abs(ocena[0] - najboljsi.ocena[0]) <= EPS && ocena[1] < najboljsi.ocena[1] - EPS)
+            ) {
+              najboljsi = { i, w, h, rot, ocena };
+            }
+          }
+        }
+      }
+      if (!najboljsi) {
+        nepostavljeni.push(el);
+        continue;
+      }
+      const fr = prosti[najboljsi.i];
+      postavljeni.push({ el, x: fr.x, y: fr.y, w: najboljsi.w, h: najboljsi.h, rot: najboljsi.rot });
+      prosti.splice(najboljsi.i, 1, ...razdeli(fr, najboljsi.w, najboljsi.h, kerf, delitev));
+    }
+    return { postavljeni, ostanki: prosti, nepostavljeni };
+  }
+
+  const RAZVRSTITVE = [
+    (a, b) => b.w * b.h - a.w * a.h,
+    (a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h) || b.w * b.h - a.w * a.h,
+    (a, b) => Math.min(b.w, b.h) - Math.min(a.w, a.h) || b.w * b.h - a.w * a.h,
+    (a, b) => b.w - a.w || b.h - a.h,
+  ];
+
+  // Poskusi več strategij in vrne najboljše pakiranje (največ postavljene površine, nato največji ostanek).
+  function najboljePakiranje(W, H, rob, elementi, nast, hitro) {
+    const razv = hitro ? RAZVRSTITVE.slice(0, 2) : RAZVRSTITVE;
+    const izbire = hitro ? ["BAF", "BSSF"] : ["BAF", "BSSF", "BLSF"];
+    const delitve = hitro ? ["H", "V", "SAS", "MAXA"] : ["H", "V", "SAS", "LAS", "MAXA", "MINA"];
+    let najboljse = null;
+    for (const cmp of razv) {
+      const urejeni = elementi.slice().sort((a, b) => cmp(a, b) || String(a.id).localeCompare(String(b.id)));
+      for (const izbira of izbire) {
+        for (const delitev of delitve) {
+          const r = pakiraj(W, H, rob, urejeni, nast, izbira, delitev);
+          const plos = r.postavljeni.reduce((v, p) => v + p.w * p.h, 0);
+          const najvecji = r.ostanki.reduce((m, o) => Math.max(m, o.w * o.h), 0);
+          if (
+            !najboljse ||
+            plos > najboljse.plos + EPS ||
+            (Math.abs(plos - najboljse.plos) <= EPS && najvecji > najboljse.najvecji + EPS)
+          ) {
+            najboljse = { ...r, plos, najvecji };
+          }
+        }
+      }
+    }
+    return najboljse;
+  }
+
+  // ------------------------------------------------------------------ izbira plošč/kosov
+
+  // Izbere naslednji list: najprej tisti, ki je že rezerviran za nalog, nato najboljši izkoristek.
+  function izberiList(listi, preostali, nast, hitro, faza) {
+    let najboljsi = null;
+    const predpomnilnik = new Map();
+    for (const l of listi) {
+      const rob = l.vrsta === "plosca" ? nast.rob : 0;
+      const kljuc = `${l.w}x${l.h}x${rob}`;
+      let r = predpomnilnik.get(kljuc);
+      if (!r) {
+        r = najboljePakiranje(l.w, l.h, rob, preostali, nast, hitro);
+        predpomnilnik.set(kljuc, r);
+      }
+      if (!r || r.postavljeni.length === 0) continue;
+      const povrsina = l.w * l.h;
+      const postavljenaPovrsina = r.plos;
+      const vse = r.nepostavljeni.length === 0;
+      const izkoristek = postavljenaPovrsina / povrsina;
+      // večja številka = boljše (razen pri površini lista)
+      const ocena =
+        faza === "kos"
+          ? [l.rezerviran ? 1 : 0, izkoristek, postavljenaPovrsina, -povrsina]
+          : [l.rezerviran ? 1 : 0, vse ? 1 : 0, vse ? izkoristek : postavljenaPovrsina, -povrsina];
+      if (!najboljsi || primerjaj(ocena, najboljsi.ocena) > 0) najboljsi = { list: l, r, ocena };
+    }
+    return najboljsi;
+  }
+
+  function primerjaj(a, b) {
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] > b[i] + EPS) return 1;
+      if (a[i] < b[i] - EPS) return -1;
+    }
+    return 0;
+  }
+
+  // Elementi: [{ id, postavkaId, oznaka, w, h, material, debelina }]  (w = dolžina, h = širina, v cm)
+  // Zaloga:   [{ id, koda, vrsta: "kos"|"plosca", material, dolzina, sirina, debelina, status, nalog, lokacija }]
+  // Opcije:   { hitro, dovoliPlosce, nalogStevilka }
+  function izdelajNacrt(elementi, zaloga, nastavitve, opcije) {
+    const nast = normalizirajNastavitve(nastavitve);
+    const op = opcije || {};
+    const dovoliPlosce = op.dovoliPlosce !== undefined ? op.dovoliPlosce : nast.uporabiPlosce;
+    const hitro = !!op.hitro;
+
+    // skupine po materialu in debelini
+    const skupine = new Map();
+    (elementi || []).forEach((e) => {
+      if (!(e.w > 0) || !(e.h > 0)) return;
+      const deb = st(e.debelina);
+      const kljuc = `${norm(e.material)}|${deb > 0 ? Math.round(deb * 20) / 20 : "?"}`;
+      if (!skupine.has(kljuc)) skupine.set(kljuc, { material: e.material, deb, elementi: [] });
+      skupine.get(kljuc).elementi.push(e);
+    });
+
+    const listi = [];
+    const nerazporejeni = [];
+    // Isti kos ali plošča se lahko porabi samo enkrat — tudi če sta v nalogu skupini "debelina 2" in "debelina ni vpisana".
+    const uporabljeniIdji = new Set();
+
+    // najprej skupine z vpisano debelino (bolj določene), nato tiste brez debeline
+    const urejeneSkupine = Array.from(skupine.values()).sort((a, b) => (a.deb > 0 ? 0 : 1) - (b.deb > 0 ? 0 : 1));
+
+    urejeneSkupine.forEach((sk) => {
+      const matNorm = norm(sk.material);
+      const kandidati = (zaloga || [])
+        .filter((k) => {
+          if (k.vrsta !== "kos" && k.vrsta !== "plosca") return false;
+          if (uporabljeniIdji.has(k.id)) return false;
+          const prost =
+            k.status === "zaloga" ||
+            (k.status === "rezervirano" && op.nalogStevilka && norm(k.nalog) === norm(op.nalogStevilka));
+          if (!prost) return false;
+          if (norm(k.material) !== matNorm) return false;
+          if (sk.deb > 0 && Math.abs(st(k.debelina) - sk.deb) > 0.05) return false;
+          return st(k.dolzina) > 0 && st(k.sirina) > 0;
+        })
+        .map((k) => ({
+          id: k.id,
+          koda: k.koda,
+          vrsta: k.vrsta,
+          w: st(k.dolzina),
+          h: st(k.sirina),
+          debelina: st(k.debelina),
+          material: k.material,
+          lokacija: k.lokacija || "",
+          rezerviran: k.status === "rezervirano",
+        }));
+
+      let preostali = sk.elementi.slice();
+      const faze = dovoliPlosce ? ["kos", "plosca"] : ["kos"];
+      for (const faza of faze) {
+        let prosti = kandidati.filter((k) => k.vrsta === faza);
+        while (preostali.length > 0 && prosti.length > 0) {
+          const izbran = izberiList(prosti, preostali, nast, hitro, faza);
+          if (!izbran) break;
+          const { list, r } = izbran;
+          const postavljeniId = new Set(r.postavljeni.map((p) => p.el.id));
+          const skupnaPovrsina = r.postavljeni.reduce((v, p) => v + p.w * p.h, 0);
+          listi.push({
+            id: list.id,
+            koda: list.koda,
+            vrsta: list.vrsta,
+            w: list.w,
+            h: list.h,
+            debelina: list.debelina,
+            material: list.material,
+            lokacija: list.lokacija,
+            rezerviran: list.rezerviran,
+            postavljeni: r.postavljeni.map((p) => ({
+              elId: p.el.id,
+              postavkaId: p.el.postavkaId,
+              oznaka: p.el.oznaka,
+              x: okroglo(p.x),
+              y: okroglo(p.y),
+              w: okroglo(p.w),
+              h: okroglo(p.h),
+              rot: p.rot,
+            })),
+            ostanki: r.ostanki
+              .filter((o) => o.w > 0.5 && o.h > 0.5)
+              .sort((a, b) => b.w * b.h - a.w * a.h)
+              .map((o) => ({ x: okroglo(o.x), y: okroglo(o.y), w: okroglo(o.w), h: okroglo(o.h) })),
+            izkoristek: skupnaPovrsina / (list.w * list.h),
+          });
+          preostali = preostali.filter((e) => !postavljeniId.has(e.id));
+          prosti = prosti.filter((k) => k.id !== list.id);
+          uporabljeniIdji.add(list.id);
+        }
+      }
+
+      preostali.forEach((e) => {
+        nerazporejeni.push({
+          elId: e.id,
+          postavkaId: e.postavkaId,
+          oznaka: e.oznaka,
+          w: e.w,
+          h: e.h,
+          material: e.material,
+          debelina: e.debelina,
+          razlog: kandidati.length === 0 ? "v skladišču ni tega materiala/debeline" : "ne ustreza noben kos ali plošča",
+        });
+      });
+    });
+
+    return { nastavitve: nast, listi, nerazporejeni };
+  }
+
+  // Podpis seznama elementov — z njim ugotovimo, ali se je nalog po izdelavi načrta spremenil.
+  function podpisElementov(elementi) {
+    return (elementi || [])
+      .map((e) => `${e.postavkaId}:${okroglo(e.w)}x${okroglo(e.h)}:${norm(e.material)}:${okroglo(st(e.debelina))}`)
+      .join("|");
+  }
+
+  // Preprost predpomnilnik (da se pri vsaki tipki ne preračunava isti načrt).
+  const predpomnilnikNacrtov = new Map();
+  function izdelajNacrtPredpomnjen(kljuc, fn) {
+    if (predpomnilnikNacrtov.has(kljuc)) return predpomnilnikNacrtov.get(kljuc);
+    const r = fn();
+    if (predpomnilnikNacrtov.size >= 12) predpomnilnikNacrtov.delete(predpomnilnikNacrtov.keys().next().value);
+    predpomnilnikNacrtov.set(kljuc, r);
+    return r;
+  }
+
+  // ------------------------------------------------------------------ opombe
+
+  function vrsticeOpomb(plan) {
+    return ((plan && plan.listi) || []).map((l) => {
+      const oznake = l.postavljeni.map((p) => `${p.oznaka} (${fmt(p.w)} × ${fmt(p.h)})`).join(", ");
+      return `${ZNACKA_OPOMB} ${l.koda} (${fmt(l.w)} × ${fmt(l.h)} × ${fmt(l.debelina)} cm${l.lokacija ? ", " + l.lokacija : ""}) → ${oznake}`;
+    });
+  }
+
+  function odstraniVrsticeNacrta(opombe) {
+    return String(opombe || "")
+      .split("\n")
+      .filter((v) => !v.startsWith(ZNACKA_OPOMB))
+      .join("\n")
+      .replace(/\n+$/, "");
+  }
+
+  function opombeZNacrtom(opombe, vrstice) {
+    const osnova = odstraniVrsticeNacrta(opombe);
+    return [osnova, ...vrstice].filter((x) => x !== "").join("\n");
+  }
+  return { PRIVZETE_NASTAVITVE, ZNACKA_OPOMB, fmt, normalizirajNastavitve, izdelajNacrt, podpisElementov, izdelajNacrtPredpomnjen, vrsticeOpomb, odstraniVrsticeNacrta, opombeZNacrtom };
+})();
+const izdelajNacrt = NESTING.izdelajNacrt;
+const izdelajNacrtPredpomnjen = NESTING.izdelajNacrtPredpomnjen;
+const podpisElementov = NESTING.podpisElementov;
+const vrsticeOpomb = NESTING.vrsticeOpomb;
+const opombeZNacrtom = NESTING.opombeZNacrtom;
+const odstraniVrsticeNacrta = NESTING.odstraniVrsticeNacrta;
+const normalizirajNastavitve = NESTING.normalizirajNastavitve;
+const PRIVZETE_NASTAVITVE = NESTING.PRIVZETE_NASTAVITVE;
+const fmtMera = NESTING.fmt;
 
 const STATUSI = ["Sprejeto", "V izdelavi", "Pripravljeno", "Prevzeto"];
 const DELAVCI = ["Luka", "Miha", "Rok", "Mersad", "Patrik"];
@@ -38,8 +403,118 @@ const STATUS_HEX = {
   "Prevzeto": "#1e40af",
 };
 
+// ===== Varovalka pred sesutjem strani =====
+// Če se pri risanju enega dela strani zgodi napaka, odpove samo ta del (prikaže se obvestilo z vzrokom),
+// ne pa cela aplikacija ("Application error: a client-side exception has occurred").
+const VERZIJA_APLIKACIJE = "2026-10-07-c · rezanje vgrajeno v to datoteko";
+
+function opisNapake(napaka) {
+  try {
+    if (!napaka) return "neznana napaka";
+    if (typeof napaka === "string") return napaka;
+    return String(napaka.message || napaka);
+  } catch (e) {
+    return "neznana napaka";
+  }
+}
+
+class NapakaMeja extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { napaka: null };
+    this.poskusiZnova = this.poskusiZnova.bind(this);
+  }
+
+  static getDerivedStateFromError(napaka) {
+    return { napaka: napaka || new Error("neznana napaka") };
+  }
+
+  componentDidCatch(napaka, info) {
+    try {
+      console.error("Napaka v delu aplikacije «" + (this.props.ime || "aplikacija") + "»:", napaka, info && info.componentStack);
+    } catch (e) {}
+  }
+
+  poskusiZnova() {
+    this.setState({ napaka: null });
+  }
+
+  render() {
+    const napaka = this.state.napaka;
+    if (!napaka) return this.props.children;
+    const sporocilo = opisNapake(napaka);
+
+    if (this.props.tiho) {
+      return <div className="text-xs text-red-700">⚠ {this.props.ime || "Del strani"} ni bilo mogoče prikazati.</div>;
+    }
+
+    let sled = "";
+    try {
+      sled = String(napaka.stack || "").split("\n").slice(0, 5).join("\n");
+    } catch (e) {}
+
+    if (this.props.celaStran) {
+      return (
+        <div className="min-h-screen bg-stone-100 flex items-center justify-center p-5" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+          <div className="max-w-xl w-full bg-white border border-red-300 rounded-xl p-5 shadow-sm">
+            <h1 className="text-lg font-bold text-stone-800 mb-1">Pri prikazu je prišlo do napake</h1>
+            <p className="text-sm text-stone-600 mb-3">
+              Shranjeni podatki niso prizadeti. Pritisni «Nazaj na seznam». Če se napaka ponavlja, naredi posnetek zaslona tega okna in ga pošlji.
+            </p>
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-800 break-words mb-3">{sporocilo}</div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              <button onClick={this.poskusiZnova} className="px-4 py-2.5 rounded-lg bg-stone-800 text-white text-sm font-medium">
+                Nazaj na seznam
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = window.location.pathname + "?osvezeno=" + Date.now();
+                }}
+                className="px-4 py-2.5 rounded-lg border border-stone-300 text-sm font-medium text-stone-700"
+              >
+                Osveži stran
+              </button>
+            </div>
+            <details className="text-xs text-stone-500">
+              <summary className="cursor-pointer">Tehnični podatki</summary>
+              <pre className="whitespace-pre-wrap break-words mt-1">{sled}</pre>
+              <div className="mt-1">Različica: {VERZIJA_APLIKACIJE}</div>
+            </details>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-5 bg-amber-50 border border-amber-300 rounded-xl p-3 text-sm text-amber-900">
+        <div className="font-semibold">⚠ Dela «{this.props.ime || "strani"}» trenutno ni mogoče prikazati.</div>
+        <div className="text-xs mt-0.5">Ostali podatki naloga so v redu in delujejo normalno.</div>
+        <details className="text-xs mt-1">
+          <summary className="cursor-pointer">Zakaj? (tehnični podatek)</summary>
+          <div className="break-words mt-1">{sporocilo}</div>
+        </details>
+        <button onClick={this.poskusiZnova} className="mt-1.5 text-xs underline font-medium">
+          Poskusi znova
+        </button>
+      </div>
+    );
+  }
+}
+
+// Izvede funkcijo, ki vrne JSX, znotraj otroške komponente — tako lahko NapakaMeja ujame njeno napako
+// (napaka v funkciji, ki se izvede kar v izrisu starša, bi podrla celo stran).
+function Izvedi({ fn }) {
+  const r = fn();
+  return r === undefined ? null : r;
+}
+
 // ===== Iskanje ustreznih kosov iz skladišča materiala (/material) =====
 // Funkcije so IDENTIČNE tistim v components/Material.jsx (tam preizkušene).
+// Skladišče iz strežnika: samo veljavni zapisi (en pokvarjen zapis ne sme podreti strani).
+function samoObjekti(m) {
+  return Array.isArray(m) ? m.filter((x) => x && typeof x === "object") : [];
+}
+
 function sklStevilo(v) {
   const n = parseFloat(String(v ?? "").replace(",", "."));
   return isNaN(n) ? 0 : n;
@@ -121,13 +596,14 @@ function barvaNacrta(i) {
 // Iz postavk naredi fizične kose za rezanje (upošteva količino, "iz več kosov" in poševne kose — širša mera).
 function zgradiElemente(postavke) {
   const el = [];
-  (postavke || []).forEach((p, idx) => {
+  (Array.isArray(postavke) ? postavke : []).forEach((p, idx) => {
     if (!p || !String(p.material || "").trim()) return;
     const osnova = (p.naziv && String(p.naziv).trim()) || `Polica ${idx + 1}`;
     const pid = p.id || `p${idx}`;
     segmentiPostavke(p, idx).forEach((seg, si) => {
       if (!(seg.dolzinaMM > 0 && seg.sirinaMM > 0)) return;
-      const kopij = seg.kolicina || 1;
+      // zgornja meja: napačno vpisana količina (npr. 99999999) ne sme zamrzniti brskalnika
+      const kopij = Math.min(seg.kolicina || 1, 1000);
       for (let k = 0; k < kopij; k++) {
         el.push({
           id: `${pid}#${si}#${k}`,
@@ -147,11 +623,15 @@ function zgradiElemente(postavke) {
 // postavkaId -> { idx (barva), koda, lokacija } — za barvanje postavk v nalogu
 function barvePostavkIzNacrta(plan) {
   const m = new Map();
-  ((plan && plan.listi) || []).forEach((l, i) =>
-    l.postavljeni.forEach((p) => {
-      if (!m.has(p.postavkaId)) m.set(p.postavkaId, { idx: i, koda: l.koda, lokacija: l.lokacija });
-    })
-  );
+  try {
+    ((plan && plan.listi) || []).forEach((l, i) =>
+      ((l && l.postavljeni) || []).forEach((p) => {
+        if (p && !m.has(p.postavkaId)) m.set(p.postavkaId, { idx: i, koda: l.koda, lokacija: l.lokacija });
+      })
+    );
+  } catch (e) {
+    m.clear();
+  }
   return m;
 }
 
@@ -428,6 +908,7 @@ function postavkeZaKos(zaloga, nalog, kos) {
 }
 
 function segmentiPostavke(p, idx) {
+  p = p || {};
   const kolicina = parseInt(p.kolicina) || 1;
   const steviloKosov = p.vecKosov ? Math.max(2, parseInt(p.steviloKosov) || 2) : 1;
   const mm = (v) => {
@@ -439,7 +920,7 @@ function segmentiPostavke(p, idx) {
   const sirinaLevoMM = mm(p.sirinaLevo);
   const sirinaMM = p.poseven ? Math.max(sirinaDesnoMM, sirinaLevoMM) : mm(p.sirina);
   const debelinaMM = mm(p.debelina);
-  const imeOsnovno = p.naziv && p.naziv.trim() ? p.naziv.trim() : `Polica ${idx + 1}`;
+  const imeOsnovno = String(p.naziv ?? "").trim() || `Polica ${idx + 1}`;
   const imePolice = p.poseven ? `${imeOsnovno} POŠEVNO D:${sirinaDesnoMM} L:${sirinaLevoMM}` : imeOsnovno;
 
   if (steviloKosov <= 1) {
@@ -459,6 +940,37 @@ function segmentiPostavke(p, idx) {
     });
   }
   return vrstice;
+}
+
+// Podatki s strežnika: en pokvarjen zapis (prazen, brez imena stranke, postavka brez materiala ...)
+// ne sme podreti celega seznama. Zapisi, ki sploh niso objekti, se preskočijo; manjkajoča besedila postanejo "".
+function nizZaPrikaz(v) {
+  return typeof v === "string" ? v : v === null || v === undefined || typeof v === "object" ? "" : String(v);
+}
+
+// Ime stranke pri Pultih/Spomenikih (zapisano kot m.stranka.ime) — vedno besedilo, tudi če je v podatkih kaj čudnega.
+function imeStrankeModula(m) {
+  return nizZaPrikaz(m && m.stranka && m.stranka.ime);
+}
+
+function ocistiPostavko(p) {
+  return { ...p, naziv: nizZaPrikaz(p.naziv), material: nizZaPrikaz(p.material) };
+}
+
+function ocistiNalog(n) {
+  if (!n || typeof n !== "object" || Array.isArray(n)) return null;
+  const postavke = (Array.isArray(n.postavke) ? n.postavke : []).filter((p) => p && typeof p === "object" && !Array.isArray(p));
+  return {
+    ...n,
+    stevilka: nizZaPrikaz(n.stevilka),
+    stranka: nizZaPrikaz(n.stranka),
+    opis: nizZaPrikaz(n.opis),
+    postavke: postavke.length ? postavke.map(ocistiPostavko) : [novaPostavka()],
+  };
+}
+
+function pripraviNaloge(podatki) {
+  return (Array.isArray(podatki) ? podatki : []).map(ocistiNalog).filter(Boolean);
 }
 
 function novaPostavka() {
@@ -1293,7 +1805,7 @@ function izvoziCSVVsiModuli(nalogi, pultiPodatki, spomenikiPodatki, od, doDatuma
         "Pulti",
         p.stevilka || "",
         (p.datum || "").slice(0, 10),
-        p.stranka?.ime || "",
+        imeStrankeModula(p),
         "Pult",
         STATUS_ID_V_IME[normalizirajStatusModula(p.status)],
         p.ponudbenaCena || "",
@@ -1308,7 +1820,7 @@ function izvoziCSVVsiModuli(nalogi, pultiPodatki, spomenikiPodatki, od, doDatuma
         "Spomenik",
         s.stevilka || "",
         (s.datum || "").slice(0, 10),
-        s.stranka?.ime || "",
+        imeStrankeModula(s),
         s.material || "Spomenik",
         STATUS_ID_V_IME[normalizirajStatusModula(s.status)],
         s.cena || "",
@@ -1361,7 +1873,17 @@ function normalizirajObvestilo(obv) {
 
 const ADMIN_PIN = "1991";
 
+// Glavna komponenta je ovita z varovalko: če se karkoli zruši, se namesto bele strani
+// izpiše vzrok in gumb "Nazaj na seznam".
 export default function DelovniNalogi() {
+  return (
+    <NapakaMeja ime="Delovni nalogi" celaStran>
+      <DelovniNalogiGlavna />
+    </NapakaMeja>
+  );
+}
+
+function DelovniNalogiGlavna() {
   const [nalogi, setNalogi] = useState([]);
   const [naloziLoading, setNaloziLoading] = useState(true);
   const [pripravljenoVBrskalniku, setPripravljenoVBrskalniku] = useState(false);
@@ -1415,7 +1937,7 @@ export default function DelovniNalogi() {
   function rezerviraniKosiNaloga(n) {
     return n && n.stevilka ? rezerviranoPoNalogu.get(sklNorm(n.stevilka)) || [] : [];
   }
-  const materialiSeznamPolice = Object.values(cenikPolice).flatMap((s) => s.materiali);
+  const materialiSeznamPolice = Object.values(cenikPolice || {}).flatMap((s) => (s && Array.isArray(s.materiali) ? s.materiali : []));
   const [obvestilo, setObvestilo] = useState(null);
   const [obvestiloVerzija, setObvestiloVerzija] = useState(0);
   const [urejanjeObvestila, setUrejanjeObvestila] = useState(false);
@@ -1432,7 +1954,7 @@ export default function DelovniNalogi() {
     // Skladišče materiala (plošče in kosi) nalagamo neodvisno — morebitna napaka ne sme ovirati ostalih podatkov.
     fetch("/api/material", { cache: "no-store" })
       .then((r) => r.json())
-      .then((m) => setMaterialZaloga(Array.isArray(m) ? m : []))
+      .then((m) => setMaterialZaloga(samoObjekti(m)))
       .catch(() => {});
 
     try {
@@ -1452,9 +1974,9 @@ export default function DelovniNalogi() {
         cenikRes.json(),
         cenikPoliceRes.json(),
       ]);
-      setPultiPodatki(Array.isArray(pulti) ? pulti : []);
-      setSpomenikiPodatki(Array.isArray(spomeniki) ? spomeniki : []);
-      setSestankiPodatki(Array.isArray(sestanki) ? sestanki : []);
+      setPultiPodatki(samoObjekti(pulti));
+      setSpomenikiPodatki(samoObjekti(spomeniki));
+      setSestankiPodatki(samoObjekti(sestanki));
       setPultiCenik(pultiCenikPodatki && Array.isArray(pultiCenikPodatki.materiali) ? pultiCenikPodatki : null);
       setCenikPolice(cenikPolicePodatki && Object.keys(cenikPolicePodatki).length > 0 ? cenikPolicePodatki : PRIVZETI_CENIK_POLICE);
       // Stara oblika je imela samo {besedilo, datum, komentarji} neposredno — preslikamo v {trenutno, arhiv}.
@@ -1477,7 +1999,7 @@ export default function DelovniNalogi() {
       const res = await fetch("/api/material", { cache: "no-store" });
       const sveze = await res.json();
       const verzija = Number(res.headers.get("X-Verzija")) || 0;
-      const osnova = Array.isArray(sveze) ? sveze : [];
+      const osnova = samoObjekti(sveze);
       const novi = transformFn(osnova);
       if (!novi) return false;
       const r = await fetch("/api/material", {
@@ -1680,9 +2202,8 @@ export default function DelovniNalogi() {
         const podatki = await res.json();
         setZadnjaVerzija(Number(res.headers.get("X-Verzija")) || 0);
         if (Array.isArray(podatki)) {
-          const popravljeni = podatki.map((n) => ({
+          const popravljeni = pripraviNaloge(podatki).map((n) => ({
             ...n,
-            postavke: Array.isArray(n.postavke) && n.postavke.length ? n.postavke : [novaPostavka()],
             slike: Array.isArray(n.slike) ? n.slike : n.slikaNarocila ? [n.slikaNarocila] : [],
             dxfDatoteke: Array.isArray(n.dxfDatoteke) ? n.dxfDatoteke : n.dxfDatoteka ? [n.dxfDatoteka] : [],
           }));
@@ -1728,12 +2249,7 @@ export default function DelovniNalogi() {
           const svezRes = await fetch("/api/nalogi", { cache: "no-store" });
           const sveziPodatki = await svezRes.json();
           if (Array.isArray(sveziPodatki)) {
-            setNalogi(
-              sveziPodatki.map((n) => ({
-                ...n,
-                postavke: Array.isArray(n.postavke) && n.postavke.length ? n.postavke : [novaPostavka()],
-              }))
-            );
+            setNalogi(pripraviNaloge(sveziPodatki));
           }
           setZadnjaVerzija(Number(svezRes.headers.get("X-Verzija")) || 0);
         } catch (e2) {}
@@ -1782,10 +2298,7 @@ export default function DelovniNalogi() {
       const sveze = await res.json();
       verzija = Number(res.headers.get("X-Verzija")) || 0;
       if (Array.isArray(sveze)) {
-        osnova = sveze.map((n) => ({
-          ...n,
-          postavke: Array.isArray(n.postavke) && n.postavke.length ? n.postavke : [novaPostavka()],
-        }));
+        osnova = pripraviNaloge(sveze);
       }
     } catch (e) {
       // če osveževanje ne uspe, nadaljujemo z lokalnim stanjem kot rezervo
@@ -2080,12 +2593,12 @@ export default function DelovniNalogi() {
     pultiPodatki.forEach((p) => {
       if (!p.datumMontaze || normalizirajStatusModula(p.status) === "prevzeto") return;
       const rok = new Date(p.datumMontaze);
-      if (rok <= cezTriDni) seznam.push({ vrsta: "Pulti", stevilka: p.stevilka, stranka: p.stranka?.ime, rok: p.datumMontaze, zamujen: rok < danes, id: p.id });
+      if (rok <= cezTriDni) seznam.push({ vrsta: "Pulti", stevilka: p.stevilka, stranka: imeStrankeModula(p), rok: p.datumMontaze, zamujen: rok < danes, id: p.id });
     });
     spomenikiPodatki.forEach((s) => {
       if (!s.montaza || normalizirajStatusModula(s.status) === "prevzeto") return;
       const rok = new Date(s.montaza);
-      if (rok <= cezTriDni) seznam.push({ vrsta: "Spomenik", stevilka: s.stevilka, stranka: s.stranka?.ime, rok: s.montaza, zamujen: rok < danes, id: s.id });
+      if (rok <= cezTriDni) seznam.push({ vrsta: "Spomenik", stevilka: s.stevilka, stranka: imeStrankeModula(s), rok: s.montaza, zamujen: rok < danes, id: s.id });
     });
     return seznam.sort((a, b) => (a.rok < b.rok ? -1 : 1));
   })();
@@ -2100,8 +2613,8 @@ export default function DelovniNalogi() {
   const edinstveneStranke = [
     ...new Set([
       ...nalogi.map((n) => n.stranka).filter(Boolean),
-      ...pultiPodatki.map((p) => p.stranka?.ime).filter(Boolean),
-      ...spomenikiPodatki.map((s) => s.stranka?.ime).filter(Boolean),
+      ...pultiPodatki.map((p) => imeStrankeModula(p)).filter(Boolean),
+      ...spomenikiPodatki.map((s) => imeStrankeModula(s)).filter(Boolean),
     ]),
   ].sort((a, b) => a.localeCompare(b, "sl"));
 
@@ -2116,7 +2629,7 @@ export default function DelovniNalogi() {
   const pultiZaSeznam = pultiPodatki.map((p) => ({
     id: p.id,
     stevilka: p.stevilka,
-    stranka: p.stranka?.ime || "",
+    stranka: imeStrankeModula(p),
     opis: "Pult",
     status: mapModulStatusNaPolice(p.status),
     rok: p.datumMontaze,
@@ -2128,7 +2641,7 @@ export default function DelovniNalogi() {
   const spomenikiZaSeznam = spomenikiPodatki.map((s) => ({
     id: s.id,
     stevilka: s.stevilka,
-    stranka: s.stranka?.ime || "",
+    stranka: imeStrankeModula(s),
     opis: s.material || "Spomenik",
     status: mapModulStatusNaPolice(s.status),
     rok: s.montaza,
@@ -2140,10 +2653,11 @@ export default function DelovniNalogi() {
   const filtrirani = [...nalogi, ...pultiZaSeznam, ...spomenikiZaSeznam]
     .sort((a, b) => (b.datumVnosa || "").localeCompare(a.datumVnosa || ""))
     .filter((n) => {
+    const iskano = iskanje.toLowerCase();
     const ujemaIskanje =
-      n.stranka.toLowerCase().includes(iskanje.toLowerCase()) ||
-      n.opis.toLowerCase().includes(iskanje.toLowerCase()) ||
-      (n.stevilka || "").toLowerCase().includes(iskanje.toLowerCase());
+      nizZaPrikaz(n.stranka).toLowerCase().includes(iskano) ||
+      nizZaPrikaz(n.opis).toLowerCase().includes(iskano) ||
+      nizZaPrikaz(n.stevilka).toLowerCase().includes(iskano);
     const ujemaStatus = filterStatusi.length === 0 || filterStatusi.includes(n.status);
     const ujemaRacun = !pokaziSamoRacune || n.racun === "poslati";
     return ujemaIskanje && ujemaStatus && ujemaRacun;
@@ -2155,51 +2669,70 @@ export default function DelovniNalogi() {
   const skupajM2Obrazec = obrazec.postavke.reduce((vsota, p) => vsota + m2Postavke(p), 0);
 
   // --- Načrt rezanja iz KOSOV za nalog, ki se piše (hitri predogled: samo kosi, privzeta reža šajbe) ---
-  const elForme = pogled === "nov" && obrazec ? zgradiElemente(obrazec.postavke) : [];
+  // (Če izračun iz kakršnegakoli razloga odpove, predlog preprosto ni prikazan — stran ostane živa.)
+  let elForme = [];
   let planForme = null;
   const barvePostavkForme = new Map();
   const pokritjeForme = new Map();
-  if (elForme.length > 0 && materialZaloga.length > 0) {
-    const kosiForme = materialZaloga.filter((k) => k.vrsta === "kos");
-    const stNalogaForme = aktivniNalog ? aktivniNalog.stevilka : "";
-    const kljucForme = JSON.stringify([
-      elForme.map((e) => [e.id, e.w, e.h, e.material, e.debelina]),
-      kosiForme.map((k) => [k.id, k.dolzina, k.sirina, k.debelina, k.material, k.status, k.nalog]),
-      stNalogaForme,
-    ]);
-    const izracunan = izdelajNacrtPredpomnjen(kljucForme, () =>
-      izdelajNacrt(elForme, kosiForme, PRIVZETE_NASTAVITVE, { hitro: true, dovoliPlosce: false, nalogStevilka: stNalogaForme })
-    );
-    if (izracunan.listi.length > 0) {
-      planForme = izracunan;
-      izracunan.listi.forEach((l, i) =>
-        l.postavljeni.forEach((x) => {
-          if (!barvePostavkForme.has(x.postavkaId)) barvePostavkForme.set(x.postavkaId, { idx: i, koda: l.koda, lokacija: l.lokacija, id: l.id });
-          const pk = pokritjeForme.get(x.postavkaId) || { placed: 0, total: 0 };
-          pk.placed += 1;
-          pokritjeForme.set(x.postavkaId, pk);
-        })
+  try {
+    elForme = pogled === "nov" && obrazec ? zgradiElemente(obrazec.postavke) : [];
+    if (elForme.length > 0 && materialZaloga.length > 0) {
+      const kosiForme = materialZaloga.filter((k) => k.vrsta === "kos");
+      const stNalogaForme = aktivniNalog ? aktivniNalog.stevilka : "";
+      const kljucForme = JSON.stringify([
+        elForme.map((e) => [e.id, e.w, e.h, e.material, e.debelina]),
+        kosiForme.map((k) => [k.id, k.dolzina, k.sirina, k.debelina, k.material, k.status, k.nalog]),
+        stNalogaForme,
+      ]);
+      const izracunan = izdelajNacrtPredpomnjen(kljucForme, () =>
+        izdelajNacrt(elForme, kosiForme, PRIVZETE_NASTAVITVE, { hitro: true, dovoliPlosce: false, nalogStevilka: stNalogaForme })
       );
-      elForme.forEach((e) => {
-        const pk = pokritjeForme.get(e.postavkaId);
-        if (pk) pk.total += 1;
-      });
+      if (izracunan.listi.length > 0) {
+        planForme = izracunan;
+        izracunan.listi.forEach((l, i) =>
+          l.postavljeni.forEach((x) => {
+            if (!barvePostavkForme.has(x.postavkaId)) barvePostavkForme.set(x.postavkaId, { idx: i, koda: l.koda, lokacija: l.lokacija, id: l.id });
+            const pk = pokritjeForme.get(x.postavkaId) || { placed: 0, total: 0 };
+            pk.placed += 1;
+            pokritjeForme.set(x.postavkaId, pk);
+          })
+        );
+        elForme.forEach((e) => {
+          const pk = pokritjeForme.get(e.postavkaId);
+          if (pk) pk.total += 1;
+        });
+      }
     }
+  } catch (e) {
+    console.error("Predlog rezanja iz kosov ni na voljo:", e);
+    planForme = null;
+    barvePostavkForme.clear();
+    pokritjeForme.clear();
   }
 
   // --- Potrjen načrt rezanja za odprt nalog (velja samo, če se postavke od izdelave načrta niso spremenile) ---
-  const veljavenNacrt =
-    aktivniNalog &&
-    aktivniNalog.nacrt &&
-    Array.isArray(aktivniNalog.nacrt.listi) &&
-    aktivniNalog.nacrt.podpis === podpisElementov(zgradiElemente(aktivniNalog.postavke))
-      ? aktivniNalog.nacrt
-      : null;
+  let veljavenNacrt = null;
+  try {
+    if (
+      aktivniNalog &&
+      aktivniNalog.nacrt &&
+      Array.isArray(aktivniNalog.nacrt.listi) &&
+      aktivniNalog.nacrt.podpis === podpisElementov(zgradiElemente(aktivniNalog.postavke))
+    ) {
+      veljavenNacrt = aktivniNalog.nacrt;
+    }
+  } catch (e) {
+    console.error("Shranjenega načrta rezanja ni mogoče preveriti:", e);
+    veljavenNacrt = null;
+  }
   const barveShranjenega = barvePostavkIzNacrta(veljavenNacrt);
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-800" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <style>{`
+      {/* dangerouslySetInnerHTML: sicer React na strežniku zamenja ' z &#x27; in pride do napake pri hidraciji (#418/#423/#425) */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .carved {
           font-family: 'Oswald', sans-serif;
           letter-spacing: 0.04em;
@@ -2226,7 +2759,9 @@ export default function DelovniNalogi() {
             grid-template-columns: 2fr 1.6fr 1fr 1fr 1fr 0.8fr auto;
           }
         }
-      `}</style>
+      `,
+        }}
+      />
 
       <header className="bg-black text-stone-100 chisel-line">
         <div className="max-w-4xl mx-auto px-5 py-6 flex items-center justify-between">
@@ -2561,7 +3096,7 @@ export default function DelovniNalogi() {
                   {sestankiDanes.map((s) => (
                     <div key={s.id} className="flex items-center justify-between text-sm">
                       <span className="text-sky-800">
-                        {s.stranka?.ime}{s.tipIzmere ? ` · ${s.tipIzmere}` : ""}
+                        {imeStrankeModula(s)}{s.tipIzmere ? ` · ${s.tipIzmere}` : ""}
                       </span>
                       <span className="text-sky-700 font-semibold">{s.ura}</span>
                     </div>
@@ -2795,7 +3330,7 @@ export default function DelovniNalogi() {
                         <div key={`pulti-${p.id}`} className="flex items-center justify-between text-sm py-1.5 border-b border-stone-800 px-1">
                           <span className="text-stone-300 truncate">
                             <span className="text-blue-400 text-xs mr-1">[Pulti]</span>
-                            {p.stevilka} · {p.stranka?.ime}
+                            {p.stevilka} · {imeStrankeModula(p)}
                           </span>
                           <div className="flex items-center gap-2 shrink-0 ml-2">
                             <span className="font-semibold text-red-400">{p.ponudbenaCena ? `${steviloVarno(p.ponudbenaCena).toFixed(2)} €` : "brez cene"}</span>
@@ -2812,7 +3347,7 @@ export default function DelovniNalogi() {
                         <div key={`spomenik-${s.id}`} className="flex items-center justify-between text-sm py-1.5 border-b border-stone-800 px-1">
                           <span className="text-stone-300 truncate">
                             <span className="text-purple-400 text-xs mr-1">[Spomenik]</span>
-                            {s.stevilka} · {s.stranka?.ime}
+                            {s.stevilka} · {imeStrankeModula(s)}
                           </span>
                           <div className="flex items-center gap-2 shrink-0 ml-2">
                             <span className="font-semibold text-red-400">{s.cena ? `${steviloVarno(s.cena).toFixed(2)} €` : "brez cene"}</span>
@@ -3141,6 +3676,7 @@ export default function DelovniNalogi() {
                 })}
               </div>
             )}
+            <p className="text-center text-[10px] text-stone-400 mt-8 mb-16">Različica: {VERZIJA_APLIKACIJE}</p>
           </div>
         )}
 
@@ -3172,8 +3708,8 @@ export default function DelovniNalogi() {
                   .filter((stranka) => stranka.toLowerCase().includes(iskanjeStranke.toLowerCase()))
                   .map((stranka) => {
                   const naroceilaStranke = nalogi.filter((n) => n.stranka === stranka);
-                  const pultiStranke = pultiPodatki.filter((p) => p.stranka?.ime === stranka);
-                  const spomenikiStranke = spomenikiPodatki.filter((s) => s.stranka?.ime === stranka);
+                  const pultiStranke = pultiPodatki.filter((p) => imeStrankeModula(p) === stranka);
+                  const spomenikiStranke = spomenikiPodatki.filter((s) => imeStrankeModula(s) === stranka);
                   const skupajNarocil = naroceilaStranke.length + pultiStranke.length + spomenikiStranke.length;
                   const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
                   const odprtaVsota = odprta.reduce((v, n) => {
@@ -3217,8 +3753,8 @@ export default function DelovniNalogi() {
         {pogled === "strankaDetalji" && izbranaStranka && (() => {
           const naroceilaStranke = nalogi.filter((n) => n.stranka === izbranaStranka);
           const neplacana = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
-          const pultiStranke = pultiPodatki.filter((p) => p.stranka?.ime === izbranaStranka);
-          const spomenikiStranke = spomenikiPodatki.filter((s) => s.stranka?.ime === izbranaStranka);
+          const pultiStranke = pultiPodatki.filter((p) => imeStrankeModula(p) === izbranaStranka);
+          const spomenikiStranke = spomenikiPodatki.filter((s) => imeStrankeModula(s) === izbranaStranka);
           const neplacaniPultiStranke = pultiStranke.filter((p) => !p.placano);
           const neplacaniSpomenikiStranke = spomenikiStranke.filter((s) => s.placano !== "Da");
           const skupajNeplacano =
@@ -4038,7 +4574,8 @@ export default function DelovniNalogi() {
                 </span>
               </div>
 
-              {(() => {
+              <NapakaMeja ime="Predlog kosov iz skladišča">
+              <Izvedi fn={() => {
                 if (planForme) {
                   const razporejenih = Array.from(pokritjeForme.values()).reduce((v, x) => v + x.placed, 0);
                   return (
@@ -4086,7 +4623,8 @@ export default function DelovniNalogi() {
                     v skladišču — glej zeleno obvestilo pod postavko.
                   </div>
                 );
-              })()}
+              }} />
+              </NapakaMeja>
 
               <div className="bg-stone-50 border border-stone-200 rounded-lg p-2.5 mb-3 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-stone-500 shrink-0">Vse police isti material?</span>
@@ -4773,7 +5311,8 @@ export default function DelovniNalogi() {
               </div>
             )}
 
-            {(() => {
+            <NapakaMeja ime="Kosi iz skladišča za ta nalog">
+            <Izvedi fn={() => {
               const rezervirani = rezerviraniKosiNaloga(aktivniNalog);
               const porabljeni = materialZaloga.filter(
                 (k) => k.status === "porabljeno" && k.nalog && sklNorm(k.nalog) === sklNorm(aktivniNalog.stevilka)
@@ -4831,19 +5370,23 @@ export default function DelovniNalogi() {
                   ))}
                 </div>
               );
-            })()}
+            }} />
+            </NapakaMeja>
 
             {(aktivniNalog.status !== "Prevzeto" || aktivniNalog.nacrt) && (
-              <NacrtRezanja
-                key={aktivniNalog.id}
-                nalog={aktivniNalog}
-                zaloga={materialZaloga}
-                posodobiMaterial={posodobiMaterial}
-                posodobiNaloge={posodobiNaloge}
-              />
+              <NapakaMeja ime="Načrt rezanja" key={aktivniNalog.id}>
+                <NacrtRezanja
+                  nalog={aktivniNalog}
+                  zaloga={materialZaloga}
+                  posodobiMaterial={posodobiMaterial}
+                  posodobiNaloge={posodobiNaloge}
+                />
+              </NapakaMeja>
             )}
 
-            {aktivniNalog.status !== "Prevzeto" && (() => {
+            {aktivniNalog.status !== "Prevzeto" && (
+              <NapakaMeja ime="Predlogi kosov iz skladišča">
+              <Izvedi fn={() => {
               const vrstice = (aktivniNalog.postavke || [])
                 .map((p, i) => {
                   const r = ustrezniKosiZaPostavko(materialZaloga, p, i, aktivniNalog.stevilka);
@@ -4922,7 +5465,9 @@ export default function DelovniNalogi() {
                   </div>
                 </div>
               );
-            })()}
+            }} />
+              </NapakaMeja>
+            )}
 
             <div className="mt-5 pt-4 border-t border-stone-100">
               <label className="block text-xs font-medium text-stone-500 mb-1.5">Spremeni status</label>
@@ -5364,23 +5909,25 @@ function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno, rezerviraniKosi, nacrt }
           </div>
         )}
 
-        {nacrt && nacrt.listi.length > 0 && (
-          <div className="mb-3 pb-2 border-b border-stone-200">
-            <div className="text-xs text-stone-400 uppercase mb-1">
-              Načrt rezanja — reža {fmtMera(nacrt.nastavitve ? nacrt.nastavitve.kerfMM : PRIVZETE_NASTAVITVE.kerfMM)} mm
-            </div>
-            {nacrt.listi.map((l, i) => (
-              <div key={l.id} className="mb-2" style={{ breakInside: "avoid" }}>
-                <div className="text-sm text-stone-800">
-                  <span className="font-bold">{l.koda}</span> · {fmtMera(l.w)} × {fmtMera(l.h)} × {fmtMera(l.debelina)} cm · Lokacija:{" "}
-                  <span className="font-semibold">{l.lokacija || "ni vpisana"}</span>
-                </div>
-                <div style={{ maxWidth: "460px" }}>
-                  <NacrtSvg list={l} barvaIdx={i} />
-                </div>
+        {nacrt && Array.isArray(nacrt.listi) && nacrt.listi.length > 0 && (
+          <NapakaMeja ime="Načrt rezanja" tiho>
+            <div className="mb-3 pb-2 border-b border-stone-200">
+              <div className="text-xs text-stone-400 uppercase mb-1">
+                Načrt rezanja — reža {fmtMera(nacrt.nastavitve ? nacrt.nastavitve.kerfMM : PRIVZETE_NASTAVITVE.kerfMM)} mm
               </div>
-            ))}
-          </div>
+              {nacrt.listi.map((l, i) => (
+                <div key={l.id} className="mb-2" style={{ breakInside: "avoid" }}>
+                  <div className="text-sm text-stone-800">
+                    <span className="font-bold">{l.koda}</span> · {fmtMera(l.w)} × {fmtMera(l.h)} × {fmtMera(l.debelina)} cm · Lokacija:{" "}
+                    <span className="font-semibold">{l.lokacija || "ni vpisana"}</span>
+                  </div>
+                  <div style={{ maxWidth: "460px" }}>
+                    <NacrtSvg list={l} barvaIdx={i} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </NapakaMeja>
         )}
 
         {nalog.opombe && (
@@ -6292,3 +6839,4 @@ function PodpisniPad({ zacetnoIme, onPreklici, onShrani }) {
   );
 }
 
+// === KONEC DATOTEKE: DelovniNalogi.jsx ===
