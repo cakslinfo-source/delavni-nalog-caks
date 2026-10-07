@@ -615,6 +615,7 @@ export default function Pulti() {
             Spomeniki
           </a>
           <a href="/material" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">🪨 Material</a>
+          <a href="/inventura" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">📋 Inventura</a>
           <a href="/skladisce" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">📦 Skladišče</a>
           <a href="/pregled" target="_blank" rel="noopener noreferrer" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">
             📺 Pregled
