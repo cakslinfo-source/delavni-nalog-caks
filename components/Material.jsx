@@ -95,14 +95,112 @@ function sklPoisciKose(seznam, zahteva, nalogStevilka, vkljuciPlosce) {
     .sort((a, b) => a.odpadek - b.odpadek);
 }
 
+// ===================== CENA ZA m² IZ CENIKA POLIC (preizkušena) =====================
+// Cenik polic je zapisan v € na tekoči meter po širinskih razredih (1–15 cm … 96–100 cm), posebej za debelino 2 in 3 cm.
+// Cena za m² = cena najširšega razreda (96–100 cm, torej 1 m širine), preračunana na 1 m: pri širini 1 m je €/m enak €/m².
+// Material se išče enako kot pri policah (prva skupina, kjer je naveden), debelina se zaokroži na 2 ali 3 cm.
+// Če na strežniku cenik še ni shranjen (prazen), velja privzeti cenik — enak kot pri policah.
+const PRIVZETI_CENIK_POLICE_ZA_M2 = {
+  "Rosa Beta": { materiali: ["Rosa Beta"], brackets: [{ min: 96, max: 100, cena2: 82, cena3: 108 }] },
+  "Giandone, Bianco Sardo, Azul Tragal, Rosa Porino, Umetni marmor": {
+    materiali: ["Giandone", "Bianco Sardo", "Azul Tragal", "Rosa Porino", "Umetni marmor bela z piko", "Umetni marmor bela z liso"],
+    brackets: [{ min: 96, max: 100, cena2: 107, cena3: 128 }],
+  },
+  "Juparana Columbo, Multicolor, Nero Impala, Wiscont White, Tonalit, Steel Gray": {
+    materiali: ["Juparana Columbo", "Multicolor", "Nero Impala", "Wiscont White", "Tonalit", "Steel Gray"],
+    brackets: [{ min: 96, max: 100, cena2: 149, cena3: 180 }],
+  },
+  "Ivory Brown, Siwakashi, Paradiso": {
+    materiali: ["Ivory Brown", "Siwakashi", "Paradiso"],
+    brackets: [{ min: 96, max: 100, cena2: 200, cena3: 225 }],
+  },
+  "Black Galaxy, Nero Assoluto, Jet Black": {
+    materiali: ["Black Galaxy", "Nero Assoluto", "Jet Black"],
+    brackets: [{ min: 96, max: 100, cena2: 220, cena3: 255 }],
+  },
+};
+
+const predpomnilnikIndeksaCenika = new WeakMap();
+
+// ime materiala (normalizirano) -> skupina cenika; če je material v več skupinah, velja prva (kot pri policah)
+function indeksCenika(cenik) {
+  if (!cenik || typeof cenik !== "object" || Array.isArray(cenik)) return null;
+  let indeks = predpomnilnikIndeksaCenika.get(cenik);
+  if (!indeks) {
+    indeks = new Map();
+    Object.entries(cenik).forEach(([ime, skupina]) => {
+      if (!skupina || !Array.isArray(skupina.materiali)) return;
+      const razredi = Array.isArray(skupina.brackets) ? skupina.brackets : [];
+      skupina.materiali.forEach((m) => {
+        const k = sklNorm(m);
+        if (k && !indeks.has(k)) indeks.set(k, { ime, razredi });
+      });
+    });
+    predpomnilnikIndeksaCenika.set(cenik, indeks);
+  }
+  return indeks;
+}
+
+// Vrne { cena, skupina, debelina } ali { cena: 0, razlog }.
+// razlog: ni-cenika | ni-materiala | ni-debeline | material-ni-v-ceniku | debelina-ni-v-ceniku | cena-ni-vpisana
+function poisciCenoIzCenika(material, debelina, cenik) {
+  try {
+    const indeks = indeksCenika(cenik);
+    if (!indeks) return { cena: 0, razlog: "ni-cenika" };
+    const k = sklNorm(material);
+    if (!k) return { cena: 0, razlog: "ni-materiala" };
+    const d = sklStevilo(debelina);
+    if (!(d > 0)) return { cena: 0, razlog: "ni-debeline" };
+    const skupina = indeks.get(k);
+    if (!skupina) return { cena: 0, razlog: "material-ni-v-ceniku" };
+    const deb = Math.round(d);
+    if (deb !== 2 && deb !== 3) return { cena: 0, razlog: "debelina-ni-v-ceniku" };
+    let najsirsi = null;
+    skupina.razredi.forEach((b) => {
+      if (!b) return;
+      const max = sklStevilo(b.max);
+      const cenaNaM = sklStevilo(deb === 2 ? b.cena2 : b.cena3);
+      if (max > 0 && cenaNaM > 0 && (!najsirsi || max > najsirsi.max)) najsirsi = { max, cenaNaM };
+    });
+    if (!najsirsi) return { cena: 0, razlog: "cena-ni-vpisana" };
+    return { cena: Math.round((najsirsi.cenaNaM / (najsirsi.max / 100)) * 100) / 100, skupina: skupina.ime, debelina: deb };
+  } catch (e) {
+    return { cena: 0, razlog: "ni-cenika" };
+  }
+}
+
+// Cena za m² artikla: ročno vpisana cena ima prednost, sicer se vzame cena iz cenika polic.
+// Vrne { cena, vir } — vir: "rocno" | "cenik" | "ni" (pri "ni" je v razlog vzrok).
+function cenaM2Artikla(a, cenik) {
+  const rocna = sklStevilo(a && a.cenaM2);
+  if (rocna > 0) return { cena: rocna, vir: "rocno" };
+  const c = poisciCenoIzCenika(a && a.material, a && a.debelina, cenik);
+  return c.cena > 0 ? { cena: c.cena, vir: "cenik", skupina: c.skupina, debelina: c.debelina } : { cena: 0, vir: "ni", razlog: c.razlog };
+}
+
+const RAZLOGI_BREZ_CENE = {
+  "ni-cenika": "Cenik polic se še nalaga ali ni dosegljiv — cene ni mogoče določiti samodejno.",
+  "ni-materiala": "Vpiši material in debelino — cena za m² se potem določi sama iz cenika polic.",
+  "ni-debeline": "Vpiši še debelino — cena za m² se potem določi sama iz cenika polic.",
+  "material-ni-v-ceniku": "Tega materiala ni v ceniku polic — vpiši ceno ročno (ali material dodaj v cenik).",
+  "debelina-ni-v-ceniku": "Cenik polic ima ceno samo za debelino 2 in 3 cm — za to debelino vpiši ceno ročno.",
+  "cena-ni-vpisana": "V ceniku polic za ta material in debelino ni vpisane cene — vpiši ceno ročno.",
+};
+
 // ===================== POMOŽNE FUNKCIJE =====================
 
 function povrsinaM2(a) {
   return (sklStevilo(a.dolzina) * sklStevilo(a.sirina)) / 10000;
 }
 
-function vrednostEur(a) {
-  return povrsinaM2(a) * sklStevilo(a.cenaM2);
+function vrednostEur(a, cenik) {
+  return povrsinaM2(a) * cenaM2Artikla(a, cenik).cena;
+}
+
+// Kratek zapis cene na kartici v seznamu: " · 82.00 €/m²" ali prazno.
+function opisCeneNaKartici(a, cenik) {
+  const c = cenaM2Artikla(a, cenik);
+  return c.cena > 0 ? ` · ${eur(c.cena)}/m²` : "";
 }
 
 function eur(x) {
@@ -374,6 +472,7 @@ export default function Material() {
   const [mera, setMera] = useState({ material: "", debelina: "", dolzina: "", sirina: "", vkljuciPlosce: false });
   const [dialogStatus, setDialogStatus] = useState(null); // { a, status } — okno za izbiro naloga
   const [qrVprasanje, setQrVprasanje] = useState(false); // vprašanje "si ga porabil?" po skeniranju QR kode
+  const [cenikPolice, setCenikPolice] = useState(null); // cenik polic (iz njega se samodejno določi cena za m²); null = še ni naložen
 
   const artikliRef = useRef([]);
   const verzijaRef = useRef(0);
@@ -424,6 +523,10 @@ export default function Material() {
           const c = await fetch("/api/cenik-police", { cache: "no-store" }).then((r) => r.json());
           if (c && typeof c === "object") {
             Object.values(c).forEach((g) => (g && Array.isArray(g.materiali) ? g.materiali.forEach((m) => imena.push(m)) : null));
+          }
+          // Cena za m² se določi iz cenika polic. Prazen odgovor = cenik še ni bil shranjen -> velja privzeti (kot pri policah).
+          if (c && typeof c === "object" && !Array.isArray(c) && !c.napaka) {
+            setCenikPolice(Object.keys(c).length > 0 ? c : PRIVZETI_CENIK_POLICE_ZA_M2);
           }
         } catch (e) {}
         try {
@@ -659,6 +762,11 @@ export default function Material() {
     posodobiArtikle((os) => os.map((x) => (x.id === a.id ? { ...x, lokacija: nova } : x)));
   }
 
+  // Izbriše ročno vpisano ceno za m² -> artikel odslej uporablja ceno iz cenika polic.
+  function ceneIzCenika(a) {
+    posodobiArtikle((os) => os.map((x) => (x.id === a.id ? { ...x, cenaM2: "" } : x)));
+  }
+
   async function izbrisiArtikel(a) {
     if (!vprasajPin()) return;
     if (!confirm(`Res izbrišem ${a.koda} (${a.material})?`)) return;
@@ -746,9 +854,9 @@ export default function Material() {
       a.sirina,
       a.debelina,
       a.obdelava,
-      a.cenaM2,
+      cenaM2Artikla(a, cenikPolice).cena > 0 ? cenaM2Artikla(a, cenikPolice).cena.toFixed(2) : "",
       povrsinaM2(a).toFixed(2),
-      vrednostEur(a).toFixed(2),
+      vrednostEur(a, cenikPolice).toFixed(2),
       a.lokacija,
       (STATUSI.find((s) => s.id === a.status) || {}).naziv || a.status,
       a.nalog,
@@ -794,7 +902,7 @@ export default function Material() {
   const prikazani = vTabu.filter((a) => (filterStatus === "vsi" || a.status === filterStatus) && ujemaIskanje(a, iskanje));
   const skupine = razvrstiVSkupine(prikazani, grupiranje);
   const skupajM2 = prikazani.reduce((v, a) => v + povrsinaM2(a), 0);
-  const skupajVrednost = prikazani.reduce((v, a) => v + vrednostEur(a), 0);
+  const skupajVrednost = prikazani.reduce((v, a) => v + vrednostEur(a, cenikPolice), 0);
   const naZalogiPlosc = artikli.filter((a) => a.vrsta === "plosca" && a.status === "zaloga").length;
   const naZalogiKosov = artikli.filter((a) => a.vrsta === "kos" && a.status === "zaloga").length;
 
@@ -1091,7 +1199,7 @@ export default function Material() {
                       <div className="text-xs text-gray-500 truncate">
                         {a.obdelava ? `${a.obdelava} · ` : ""}
                         {povrsinaM2(a).toFixed(2)} m²
-                        {sklStevilo(a.cenaM2) > 0 ? ` · ${eur(a.cenaM2)}/m²` : ""}
+                        {opisCeneNaKartici(a, cenikPolice)}
                       </div>
                       <div className="text-xs text-gray-600 truncate">
                         📍 {a.lokacija || "lokacija ni vpisana"}
@@ -1109,6 +1217,7 @@ export default function Material() {
       {pogled === "obrazec" && obrazec && (
         <ObrazecArtikla
           zacetni={obrazec}
+          cenik={cenikPolice}
           predlogiMaterialov={predlogiMaterialovVsi}
           predlogiLokacij={predlogiLokacij}
           shranjujem={shranjujem}
@@ -1133,6 +1242,8 @@ export default function Material() {
         <PodrobnostiArtikla
           a={izbran}
           admin={admin}
+          cenik={cenikPolice}
+          onCenaIzCenika={() => ceneIzCenika(izbran)}
           onNazaj={() => setPogled("seznam")}
           onUredi={() => odpriUrejanje(izbran)}
           onStatus={(s) => nastaviStatus(izbran, s)}
@@ -1146,7 +1257,7 @@ export default function Material() {
         />
       )}
 
-      {pogled === "nalepka" && izbran && <NalepkaArtikla a={izbran} onNazaj={() => setPogled("podrobnosti")} />}
+      {pogled === "nalepka" && izbran && <NalepkaArtikla a={izbran} cenik={cenikPolice} onNazaj={() => setPogled("podrobnosti")} />}
 
       {pogled === "admin" && (
         <div className="p-3 space-y-3">
@@ -1154,7 +1265,10 @@ export default function Material() {
           <h2 className="font-bold text-lg">Admin — Material</h2>
 
           <div className="bg-white rounded-xl p-3">
-            <div className="font-semibold text-sm mb-2">Vrednost zaloge (samo "Na zalogi")</div>
+            <div className="font-semibold text-sm mb-1">Vrednost zaloge (samo "Na zalogi")</div>
+            <p className="text-[11px] text-gray-500 mb-2">
+              Cena za m² se določi sama iz cenika polic (po materialu in debelini). Ročno vpisana cena pri artiklu ima prednost.
+            </p>
             {(() => {
               const poMaterialu = new Map();
               artikli
@@ -1165,11 +1279,15 @@ export default function Material() {
                   const p = poMaterialu.get(k);
                   p.n += 1;
                   p.m2 += povrsinaM2(a);
-                  p.eur += vrednostEur(a);
+                  p.eur += vrednostEur(a, cenikPolice);
                 });
               const vrstice = Array.from(poMaterialu.values()).sort((a, b) => a.ime.localeCompare(b.ime, "sl"));
               const skupajEur = vrstice.reduce((v, x) => v + x.eur, 0);
               const skupajPovrsina = vrstice.reduce((v, x) => v + x.m2, 0);
+              // Artikli, pri katerih cene ni bilo mogoče določiti (material ni v ceniku polic, debelina ni 2 ali 3 cm …).
+              const brezCene = cenikPolice
+                ? artikli.filter((a) => a.status === "zaloga" && cenaM2Artikla(a, cenikPolice).cena <= 0)
+                : [];
               return vrstice.length === 0 ? (
                 <div className="text-sm text-gray-500">Zaloga je prazna.</div>
               ) : (
@@ -1184,6 +1302,12 @@ export default function Material() {
                     <span>Skupaj</span>
                     <span>{skupajPovrsina.toFixed(2)} m² · {eur(skupajEur)}</span>
                   </div>
+                  {brezCene.length > 0 && (
+                    <p className="text-xs text-amber-700 mt-2">
+                      Brez cene za m² ({brezCene.length}): {brezCene.slice(0, 8).map((a) => a.koda).join(", ")}
+                      {brezCene.length > 8 ? " …" : ""}. Materiala ni v ceniku polic ali debelina ni 2 ali 3 cm — pri artiklu vpiši ceno ročno.
+                    </p>
+                  )}
                 </div>
               );
             })()}
@@ -1223,7 +1347,7 @@ export default function Material() {
 
 // ===================== OBRAZEC =====================
 
-function ObrazecArtikla({ zacetni, predlogiMaterialov, predlogiLokacij, shranjujem, onShrani, onPreklici }) {
+function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, shranjujem, onShrani, onPreklici }) {
   const [f, setF] = useState(zacetni);
   const [pripravljamSliko, setPripravljamSliko] = useState(false);
   const jeUrejanje = !!f._urejanje;
@@ -1238,7 +1362,11 @@ function ObrazecArtikla({ zacetni, predlogiMaterialov, predlogiLokacij, shranjuj
     },
   });
   const m2 = (sklStevilo(f.dolzina) * sklStevilo(f.sirina)) / 10000;
-  const vrednost = m2 * sklStevilo(f.cenaM2);
+  // Cena za m²: kar je vpisano ročno, sicer samodejno iz cenika polic (po materialu in debelini).
+  const izCenika = poisciCenoIzCenika(f.material, f.debelina, cenik);
+  const rocnaCena = sklStevilo(f.cenaM2);
+  const veljavnaCena = rocnaCena > 0 ? rocnaCena : izCenika.cena;
+  const vrednost = m2 * veljavnaCena;
   const imaSliko = f.novaSlika || (f.slika && !f.odstraniSliko);
 
   async function izberiSliko(e) {
@@ -1303,14 +1431,42 @@ function ObrazecArtikla({ zacetni, predlogiMaterialov, predlogiLokacij, shranjuj
           </div>
           <div>
             <label className={lbl}>Cena za m² (€)</label>
-            <input {...polje("cenaM2")} className={inp} inputMode="decimal" />
+            <input
+              {...polje("cenaM2")}
+              className={inp}
+              inputMode="decimal"
+              placeholder={izCenika.cena > 0 ? `samodejno ${izCenika.cena.toFixed(2)}` : "samodejno"}
+            />
           </div>
         </div>
+
+        <p className="text-[11px] text-gray-500 -mt-1" data-cena-pojasnilo>
+          {rocnaCena > 0 ? (
+            izCenika.cena > 0 && Math.abs(izCenika.cena - rocnaCena) > 0.004 ? (
+              <>
+                Ročno vpisana cena. Cenik polic: <b>{eur(izCenika.cena)}/m²</b> ({izCenika.debelina} cm).{" "}
+                <button type="button" onClick={() => setF((p) => ({ ...p, cenaM2: "" }))} className="underline text-red-600">
+                  Uporabi ceno iz cenika
+                </button>
+              </>
+            ) : izCenika.cena > 0 ? (
+              "Ročno vpisana cena (enaka ceniku polic)."
+            ) : (
+              "Ročno vpisana cena."
+            )
+          ) : izCenika.cena > 0 ? (
+            <>
+              Samodejno iz cenika polic: <b>{eur(izCenika.cena)}/m²</b> ({String(f.material || "").trim()}, {izCenika.debelina} cm). Pusti prazno ali vpiši svojo ceno.
+            </>
+          ) : (
+            RAZLOGI_BREZ_CENE[izCenika.razlog] || ""
+          )}
+        </p>
 
         {m2 > 0 && (
           <div className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
             Površina: <b>{m2.toFixed(2)} m²</b>
-            {sklStevilo(f.cenaM2) > 0 ? <> · Vrednost: <b>{eur(vrednost)}</b></> : null}
+            {veljavnaCena > 0 ? <> · Vrednost: <b>{eur(vrednost)}</b></> : null}
           </div>
         )}
 
@@ -1396,7 +1552,7 @@ function ObrazecArtikla({ zacetni, predlogiMaterialov, predlogiLokacij, shranjuj
 
 // ===================== PODROBNOSTI =====================
 
-function PodrobnostiArtikla({ a, admin, onNazaj, onUredi, onStatus, onPorabljeno, onSprosti, onLokacija, onNalepka, onOstanek, onIzbrisi, predlogiLokacij }) {
+function PodrobnostiArtikla({ a, admin, cenik, onCenaIzCenika, onNazaj, onUredi, onStatus, onPorabljeno, onSprosti, onLokacija, onNalepka, onOstanek, onIzbrisi, predlogiLokacij }) {
   const [lokacija, setLokacija] = useState(a.lokacija || "");
   useEffect(() => {
     setLokacija(a.lokacija || "");
@@ -1404,6 +1560,10 @@ function PodrobnostiArtikla({ a, admin, onNazaj, onUredi, onStatus, onPorabljeno
 
   const vrsta = VRSTE[a.vrsta] || VRSTE.plosca;
   const m2 = povrsinaM2(a);
+  const cena = cenaM2Artikla(a, cenik);
+  // Če je cena vpisana ročno in se razlikuje od cenika polic, ponudimo vrnitev na ceno iz cenika.
+  const ceniku = cena.vir === "rocno" ? poisciCenoIzCenika(a.material, a.debelina, cenik) : null;
+  const rocnaDrugacna = !!ceniku && ceniku.cena > 0 && Math.abs(ceniku.cena - cena.cena) > 0.004;
   const vrstica = (oznaka, vrednost) =>
     vrednost || vrednost === 0 ? (
       <div className="flex justify-between gap-3 py-1 border-b border-gray-100 text-sm">
@@ -1443,8 +1603,19 @@ function PodrobnostiArtikla({ a, admin, onNazaj, onUredi, onStatus, onPorabljeno
         <div>
           {vrstica("Površina", `${m2.toFixed(2)} m²`)}
           {vrstica("Obdelava", a.obdelava)}
-          {sklStevilo(a.cenaM2) > 0 && vrstica("Cena za m²", eur(a.cenaM2))}
-          {sklStevilo(a.cenaM2) > 0 && vrstica("Vrednost", eur(vrednostEur(a)))}
+          {cena.cena > 0 && vrstica("Cena za m²", `${eur(cena.cena)} · ${cena.vir === "cenik" ? "iz cenika polic" : "vpisana ročno"}`)}
+          {cena.cena > 0 && vrstica("Vrednost", eur(m2 * cena.cena))}
+          {rocnaDrugacna && (
+            <div className="flex justify-between items-center gap-3 py-1 border-b border-gray-100 text-xs text-gray-500">
+              <span>Cenik polic: {eur(ceniku.cena)}/m² ({ceniku.debelina} cm)</span>
+              <button type="button" onClick={onCenaIzCenika} className="underline text-red-600 font-medium">
+                Uporabi ceno iz cenika
+              </button>
+            </div>
+          )}
+          {cena.cena <= 0 && cena.razlog && cena.razlog !== "ni-cenika" && (
+            <div className="py-1 border-b border-gray-100 text-xs text-amber-700">⚠ Cena za m² ni določena. {RAZLOGI_BREZ_CENE[cena.razlog]}</div>
+          )}
           {a.nalog ? vrstica(a.status === "rezervirano" ? "Rezervirano za" : "Povezan nalog", a.nalog) : null}
           {a.izvorKoda ? vrstica("Ostanek iz", a.izvorKoda) : null}
           {a.opombe ? vrstica("Opombe", a.opombe) : null}
@@ -1539,12 +1710,13 @@ function PodrobnostiArtikla({ a, admin, onNazaj, onUredi, onStatus, onPorabljeno
 
 // ===================== NALEPKA =====================
 
-function NalepkaArtikla({ a, onNazaj }) {
+function NalepkaArtikla({ a, cenik, onNazaj }) {
   const [velikost, setVelikost] = useState("100x60");
   const [zSliko, setZSliko] = useState(false);
   const v = VELIKOSTI_NALEPKE[velikost];
   const vrsta = VRSTE[a.vrsta] || VRSTE.plosca;
   const m2 = povrsinaM2(a);
+  const cenaNalepke = cenaM2Artikla(a, cenik).cena;
   const pokaziSliko = zSliko && v.h >= 100 && a.slika && a.slika.kljucMini;
 
   return (
@@ -1634,9 +1806,9 @@ function NalepkaArtikla({ a, onNazaj }) {
             ) : null}
             <div>
               Površina: <b>{m2.toFixed(2)} m²</b>
-              {sklStevilo(a.cenaM2) > 0 ? (
+              {cenaNalepke > 0 ? (
                 <>
-                  {" "}· Cena: <b>{eur(a.cenaM2)}/m²</b>
+                  {" "}· Cena: <b>{eur(cenaNalepke)}/m²</b>
                 </>
               ) : null}
             </div>
