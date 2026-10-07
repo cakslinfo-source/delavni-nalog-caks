@@ -2,6 +2,17 @@
 
 import { useState, useEffect, useRef, Fragment } from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import {
+  izdelajNacrt,
+  izdelajNacrtPredpomnjen,
+  podpisElementov,
+  vrsticeOpomb,
+  opombeZNacrtom,
+  odstraniVrsticeNacrta,
+  normalizirajNastavitve,
+  PRIVZETE_NASTAVITVE,
+  fmt as fmtMera,
+} from "./nesting";
 import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw, Save } from "lucide-react";
 
 const STATUSI = ["Sprejeto", "V izdelavi", "Pripravljeno", "Prevzeto"];
@@ -93,6 +104,321 @@ function ustrezniKosiZaPostavko(zaloga, p, idx, nalogStevilka) {
 }
 
 // Številke postavk (1, 2, ...) tega naloga, kamor rezerviran kos ustreza.
+// ===== Načrt rezanja (nesting): barve, elementi iz postavk, prikaz =====
+const BARVE_NACRTA = [
+  { hex: "#059669", mehka: "#d1fae5", vrstica: "bg-emerald-50 border-l-4 border-emerald-500", znacka: "bg-emerald-600 text-white" },
+  { hex: "#0284c7", mehka: "#e0f2fe", vrstica: "bg-sky-50 border-l-4 border-sky-500", znacka: "bg-sky-600 text-white" },
+  { hex: "#7c3aed", mehka: "#ede9fe", vrstica: "bg-violet-50 border-l-4 border-violet-500", znacka: "bg-violet-600 text-white" },
+  { hex: "#d97706", mehka: "#fef3c7", vrstica: "bg-amber-50 border-l-4 border-amber-500", znacka: "bg-amber-600 text-white" },
+  { hex: "#e11d48", mehka: "#ffe4e6", vrstica: "bg-rose-50 border-l-4 border-rose-500", znacka: "bg-rose-600 text-white" },
+  { hex: "#0d9488", mehka: "#ccfbf1", vrstica: "bg-teal-50 border-l-4 border-teal-500", znacka: "bg-teal-600 text-white" },
+];
+
+function barvaNacrta(i) {
+  return BARVE_NACRTA[i % BARVE_NACRTA.length];
+}
+
+// Iz postavk naredi fizične kose za rezanje (upošteva količino, "iz več kosov" in poševne kose — širša mera).
+function zgradiElemente(postavke) {
+  const el = [];
+  (postavke || []).forEach((p, idx) => {
+    if (!p || !String(p.material || "").trim()) return;
+    const osnova = (p.naziv && String(p.naziv).trim()) || `Polica ${idx + 1}`;
+    const pid = p.id || `p${idx}`;
+    segmentiPostavke(p, idx).forEach((seg, si) => {
+      if (!(seg.dolzinaMM > 0 && seg.sirinaMM > 0)) return;
+      const kopij = seg.kolicina || 1;
+      for (let k = 0; k < kopij; k++) {
+        el.push({
+          id: `${pid}#${si}#${k}`,
+          postavkaId: pid,
+          oznaka: osnova + (seg.oznaka ? ` ${seg.oznaka}` : "") + (kopij > 1 ? ` (${k + 1}/${kopij})` : ""),
+          w: seg.dolzinaMM / 10,
+          h: seg.sirinaMM / 10,
+          material: String(p.material).trim(),
+          debelina: sklStevilo(p.debelina),
+        });
+      }
+    });
+  });
+  return el;
+}
+
+// postavkaId -> { idx (barva), koda, lokacija } — za barvanje postavk v nalogu
+function barvePostavkIzNacrta(plan) {
+  const m = new Map();
+  ((plan && plan.listi) || []).forEach((l, i) =>
+    l.postavljeni.forEach((p) => {
+      if (!m.has(p.postavkaId)) m.set(p.postavkaId, { idx: i, koda: l.koda, lokacija: l.lokacija });
+    })
+  );
+  return m;
+}
+
+// Skica razreza ene plošče/kosa: kosi iz naloga (obarvani), ostanki (sivi) in njihove mere.
+function NacrtSvg({ list, barvaIdx }) {
+  const b = barvaNacrta(barvaIdx);
+  const W = list.w;
+  const H = list.h;
+  const pisava = Math.max(1.6, Math.min(W, H) / 13);
+  const crta = Math.max(0.25, Math.max(W, H) / 500);
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full h-auto block border border-stone-400 bg-white"
+      role="img"
+      aria-label={`Načrt rezanja ${list.koda}`}
+    >
+      <rect x={0} y={0} width={W} height={H} fill="#f5f5f4" stroke="#78716c" strokeWidth={crta} />
+      {list.ostanki.map((o, i) => (
+        <g key={`o${i}`}>
+          <rect
+            x={o.x}
+            y={o.y}
+            width={o.w}
+            height={o.h}
+            fill="#e7e5e4"
+            stroke="#a8a29e"
+            strokeWidth={crta / 2}
+            strokeDasharray={`${pisava / 3} ${pisava / 3}`}
+          />
+          {o.w >= pisava * 4 && o.h >= pisava * 1.3 && (
+            <text x={o.x + o.w / 2} y={o.y + o.h / 2} fontSize={pisava * 0.8} textAnchor="middle" dominantBaseline="middle" fill="#78716c">
+              {fmtMera(o.w)} × {fmtMera(o.h)}
+            </text>
+          )}
+        </g>
+      ))}
+      {list.postavljeni.map((p) => {
+        const fs = Math.max(0.9, Math.min(pisava, p.h * 0.34, p.w / Math.max(8, (p.oznaka.length + 2) * 0.62)));
+        return (
+          <g key={p.elId} data-el={p.elId}>
+            <rect x={p.x} y={p.y} width={p.w} height={p.h} fill={b.mehka} stroke={b.hex} strokeWidth={crta * 1.6} />
+            <text x={p.x + p.w / 2} y={p.y + p.h / 2 - fs * 0.55} fontSize={fs} textAnchor="middle" dominantBaseline="middle" fill="#1c1917" fontWeight="700">
+              {p.oznaka}
+            </text>
+            <text x={p.x + p.w / 2} y={p.y + p.h / 2 + fs * 0.7} fontSize={fs * 0.85} textAnchor="middle" dominantBaseline="middle" fill="#44403c">
+              {fmtMera(p.w)} × {fmtMera(p.h)}
+              {p.rot ? " ↻" : ""}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// Razdelek v pregledu naloga: izdela načrt rezanja iz skladišča (kosi, nato plošče), ga potrdi (rezervira),
+// zapiše v opombe in obarva postavke. Reža šajbe (privzeto 3,3 mm) je upoštevana pri vsakem rezu.
+function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
+  const [nast, setNast] = useState({ kerfMM: String(PRIVZETE_NASTAVITVE.kerfMM), rob: "0", zasuk: true, uporabiPlosce: true });
+  const [predogled, setPredogled] = useState(null);
+  const [delam, setDelam] = useState(false);
+
+  const elementi = zgradiElemente(nalog.postavke);
+  const shranjen = nalog.nacrt && Array.isArray(nalog.nacrt.listi) ? nalog.nacrt : null;
+  if (elementi.length === 0 && !shranjen) return null;
+  const podpis = podpisElementov(elementi);
+  const zastarel = !!shranjen && shranjen.podpis !== podpis;
+  const plan = predogled || shranjen;
+  const razporejenih = plan ? plan.listi.reduce((v, l) => v + l.postavljeni.length, 0) : 0;
+
+  function izdelaj() {
+    const n = normalizirajNastavitve(nast);
+    const r = izdelajNacrt(elementi, zaloga, n, { nalogStevilka: nalog.stevilka, dovoliPlosce: n.uporabiPlosce });
+    setPredogled({ ...r, podpis, datum: new Date().toISOString() });
+  }
+
+  async function potrdi() {
+    if (!predogled || delam) return;
+    if (predogled.listi.length === 0) {
+      alert("Načrt ne vsebuje nobenega kosa ali plošče.");
+      return;
+    }
+    setDelam(true);
+    try {
+      const idji = predogled.listi.map((l) => l.id);
+      const stariIdji = shranjen ? shranjen.listi.map((l) => l.id) : [];
+      const zdaj = new Date().toISOString();
+      let sporocilo = "";
+      const okM = await posodobiMaterial((os) => {
+        const manjka = idji.filter((id) => {
+          const x = os.find((y) => y.id === id);
+          return !x || !(x.status === "zaloga" || (x.status === "rezervirano" && sklNorm(x.nalog) === sklNorm(nalog.stevilka)));
+        });
+        if (manjka.length > 0) {
+          sporocilo = "Nekateri kosi ali plošče iz načrta niso več na zalogi. Izdelaj načrt znova.";
+          return null;
+        }
+        return os.map((x) => {
+          if (idji.includes(x.id) && x.status === "zaloga") {
+            return {
+              ...x,
+              status: "rezervirano",
+              nalog: nalog.stevilka,
+              porabljenoDatum: "",
+              zgodovina: [...(x.zgodovina || []), { status: "rezervirano", datum: zdaj, nalog: nalog.stevilka }],
+            };
+          }
+          // iz prejšnjega načrta, ki jih novi ne potrebuje več: sprosti
+          if (stariIdji.includes(x.id) && !idji.includes(x.id) && x.status === "rezervirano" && sklNorm(x.nalog) === sklNorm(nalog.stevilka)) {
+            return { ...x, status: "zaloga", nalog: "", zgodovina: [...(x.zgodovina || []), { status: "zaloga", datum: zdaj, nalog: "" }] };
+          }
+          return x;
+        });
+      });
+      if (!okM) {
+        if (sporocilo) alert(sporocilo);
+        return;
+      }
+      const vrstice = vrsticeOpomb(predogled);
+      const okN = await posodobiNaloge((os) =>
+        os.map((n) => (n.id === nalog.id ? { ...n, nacrt: predogled, opombe: opombeZNacrtom(n.opombe, vrstice) } : n))
+      );
+      if (okN) setPredogled(null);
+    } finally {
+      setDelam(false);
+    }
+  }
+
+  async function preklici() {
+    if (!shranjen || delam) return;
+    if (!confirm("Prekličem načrt? Rezervirani kosi in plošče iz načrta se sprostijo, vrstice načrta pa se odstranijo iz opomb.")) return;
+    setDelam(true);
+    try {
+      const idji = shranjen.listi.map((l) => l.id);
+      const zdaj = new Date().toISOString();
+      await posodobiMaterial((os) =>
+        os.map((x) =>
+          idji.includes(x.id) && x.status === "rezervirano" && sklNorm(x.nalog) === sklNorm(nalog.stevilka)
+            ? { ...x, status: "zaloga", nalog: "", zgodovina: [...(x.zgodovina || []), { status: "zaloga", datum: zdaj, nalog: "" }] }
+            : x
+        )
+      );
+      await posodobiNaloge((os) =>
+        os.map((n) => (n.id === nalog.id ? { ...n, nacrt: null, opombe: odstraniVrsticeNacrta(n.opombe) } : n))
+      );
+      setPredogled(null);
+    } finally {
+      setDelam(false);
+    }
+  }
+
+  return (
+    <div className="mt-5 bg-white border border-stone-300 rounded-xl p-3">
+      <p className="text-xs font-semibold text-stone-700 uppercase mb-2">✂ Načrt rezanja iz skladišča (kosi in plošče)</p>
+
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2 mb-2 text-xs text-stone-600">
+        <label className="flex flex-col gap-0.5">
+          Širina reza (mm)
+          <input
+            value={nast.kerfMM}
+            onChange={(e) => setNast({ ...nast, kerfMM: e.target.value })}
+            inputMode="decimal"
+            className="w-20 border border-stone-300 rounded px-2 py-1 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-0.5">
+          Obrez roba plošče (cm)
+          <input
+            value={nast.rob}
+            onChange={(e) => setNast({ ...nast, rob: e.target.value })}
+            inputMode="decimal"
+            className="w-20 border border-stone-300 rounded px-2 py-1 text-sm"
+          />
+        </label>
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={nast.zasuk} onChange={(e) => setNast({ ...nast, zasuk: e.target.checked })} />
+          Dovoli zasuk
+        </label>
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={nast.uporabiPlosce} onChange={(e) => setNast({ ...nast, uporabiPlosce: e.target.checked })} />
+          Uporabi tudi cele plošče
+        </label>
+      </div>
+
+      <button
+        onClick={izdelaj}
+        disabled={elementi.length === 0}
+        className="px-3 py-2 rounded-lg bg-stone-800 text-white text-sm font-medium disabled:opacity-50"
+      >
+        {plan ? "↻ Preračunaj načrt" : "✂ Izdelaj načrt rezanja"}
+      </button>
+
+      {zastarel && !predogled && (
+        <div className="mt-2 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 text-xs text-amber-900">
+          ⚠ Postavke so se spremenile od zadnjega načrta — barvanje postavk je izklopljeno. Preračunaj načrt.
+        </div>
+      )}
+
+      {plan && (
+        <div className="mt-3 space-y-4">
+          <div className="text-sm text-stone-700">
+            <b>{predogled ? "Predogled načrta (še ni potrjen)" : "Potrjen načrt"}</b> — razporejenih {razporejenih} od {elementi.length} polic.
+            {plan.nastavitve ? ` Reža ${fmtMera(plan.nastavitve.kerfMM)} mm.` : ""}
+          </div>
+
+          {plan.listi.map((l, i) => (
+            <div key={l.id}>
+              <div className="flex flex-wrap items-center gap-2 text-sm mb-1">
+                <span className={`px-2 py-0.5 rounded text-xs font-bold ${barvaNacrta(i).znacka}`}>{l.koda}</span>
+                <span className="text-stone-700">
+                  {l.vrsta === "plosca" ? "Plošča" : "Kos"} {fmtMera(l.w)} × {fmtMera(l.h)} × {fmtMera(l.debelina)} cm · 📍 {l.lokacija || "lokacija ni vpisana"} · izkoristek{" "}
+                  {Math.round(l.izkoristek * 100)} %
+                </span>
+              </div>
+              <div style={{ maxWidth: "560px" }}>
+                <NacrtSvg list={l} barvaIdx={i} />
+              </div>
+              <div className="text-xs text-stone-600 mt-1">
+                Polici: {l.postavljeni.map((p) => `${p.oznaka} (${fmtMera(p.w)} × ${fmtMera(p.h)}${p.rot ? ", zasukano" : ""})`).join(" · ")}
+              </div>
+              {l.ostanki.filter((o) => Math.min(o.w, o.h) >= 5).length > 0 && (
+                <div className="text-xs text-stone-500">
+                  Ostanki za novo zalogo: {l.ostanki.filter((o) => Math.min(o.w, o.h) >= 5).map((o) => `${fmtMera(o.w)} × ${fmtMera(o.h)}`).join(" · ")} cm
+                </div>
+              )}
+            </div>
+          ))}
+
+          {plan.nerazporejeni.length > 0 && (
+            <div className="bg-red-50 border border-red-300 rounded-lg px-3 py-2 text-xs text-red-800">
+              <div className="font-semibold mb-0.5">Ni mogoče razporediti ({plan.nerazporejeni.length}):</div>
+              {plan.nerazporejeni.map((n) => (
+                <div key={n.elId}>
+                  {n.oznaka} ({fmtMera(n.w)} × {fmtMera(n.h)} cm, {n.material}) — {n.razlog}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {predogled && (
+              <>
+                <button
+                  onClick={potrdi}
+                  disabled={delam || predogled.listi.length === 0}
+                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  {delam ? "Shranjujem …" : "✅ Potrdi in rezerviraj"}
+                </button>
+                <button onClick={() => setPredogled(null)} disabled={delam} className="px-3 py-2 rounded-lg border border-stone-300 text-sm">
+                  Zavrzi predogled
+                </button>
+              </>
+            )}
+            {!predogled && shranjen && (
+              <button onClick={preklici} disabled={delam} className="px-3 py-2 rounded-lg border border-red-300 text-red-700 text-sm">
+                Prekliči načrt (sprosti rezervacije)
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function postavkeZaKos(zaloga, nalog, kos) {
   const rezultat = [];
   (nalog.postavke || []).forEach((p, i) => {
@@ -1827,6 +2153,49 @@ export default function DelovniNalogi() {
 
 
   const skupajM2Obrazec = obrazec.postavke.reduce((vsota, p) => vsota + m2Postavke(p), 0);
+
+  // --- Načrt rezanja iz KOSOV za nalog, ki se piše (hitri predogled: samo kosi, privzeta reža šajbe) ---
+  const elForme = pogled === "nov" && obrazec ? zgradiElemente(obrazec.postavke) : [];
+  let planForme = null;
+  const barvePostavkForme = new Map();
+  const pokritjeForme = new Map();
+  if (elForme.length > 0 && materialZaloga.length > 0) {
+    const kosiForme = materialZaloga.filter((k) => k.vrsta === "kos");
+    const stNalogaForme = aktivniNalog ? aktivniNalog.stevilka : "";
+    const kljucForme = JSON.stringify([
+      elForme.map((e) => [e.id, e.w, e.h, e.material, e.debelina]),
+      kosiForme.map((k) => [k.id, k.dolzina, k.sirina, k.debelina, k.material, k.status, k.nalog]),
+      stNalogaForme,
+    ]);
+    const izracunan = izdelajNacrtPredpomnjen(kljucForme, () =>
+      izdelajNacrt(elForme, kosiForme, PRIVZETE_NASTAVITVE, { hitro: true, dovoliPlosce: false, nalogStevilka: stNalogaForme })
+    );
+    if (izracunan.listi.length > 0) {
+      planForme = izracunan;
+      izracunan.listi.forEach((l, i) =>
+        l.postavljeni.forEach((x) => {
+          if (!barvePostavkForme.has(x.postavkaId)) barvePostavkForme.set(x.postavkaId, { idx: i, koda: l.koda, lokacija: l.lokacija, id: l.id });
+          const pk = pokritjeForme.get(x.postavkaId) || { placed: 0, total: 0 };
+          pk.placed += 1;
+          pokritjeForme.set(x.postavkaId, pk);
+        })
+      );
+      elForme.forEach((e) => {
+        const pk = pokritjeForme.get(e.postavkaId);
+        if (pk) pk.total += 1;
+      });
+    }
+  }
+
+  // --- Potrjen načrt rezanja za odprt nalog (velja samo, če se postavke od izdelave načrta niso spremenile) ---
+  const veljavenNacrt =
+    aktivniNalog &&
+    aktivniNalog.nacrt &&
+    Array.isArray(aktivniNalog.nacrt.listi) &&
+    aktivniNalog.nacrt.podpis === podpisElementov(zgradiElemente(aktivniNalog.postavke))
+      ? aktivniNalog.nacrt
+      : null;
+  const barveShranjenega = barvePostavkIzNacrta(veljavenNacrt);
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-800" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -3670,6 +4039,42 @@ export default function DelovniNalogi() {
               </div>
 
               {(() => {
+                if (planForme) {
+                  const razporejenih = Array.from(pokritjeForme.values()).reduce((v, x) => v + x.placed, 0);
+                  return (
+                    <div className="mb-3 bg-emerald-100 border border-emerald-300 rounded-lg px-3 py-2 text-sm text-emerald-900">
+                      <div className="font-semibold">
+                        💡 Iz kosov v skladišču lahko narediš {razporejenih} od {elForme.length} polic (upoštevana reža {fmtMera(PRIVZETE_NASTAVITVE.kerfMM)} mm):
+                      </div>
+                      {planForme.listi.map((l, i) => (
+                        <div key={l.id} className="mt-1">
+                          <a
+                            href={`/material?id=${encodeURIComponent(l.id)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`inline-block rounded px-1.5 py-0.5 text-xs font-bold ${barvaNacrta(i).znacka}`}
+                          >
+                            {l.koda}
+                          </a>{" "}
+                          {fmtMera(l.w)} × {fmtMera(l.h)} × {fmtMera(l.debelina)} cm · 📍 {l.lokacija || "lokacija ni vpisana"} →{" "}
+                          <b>{l.postavljeni.map((x) => x.oznaka).join(" + ")}</b>
+                        </div>
+                      ))}
+                      {razporejenih < elForme.length && (
+                        <div className="mt-1 text-xs text-emerald-800">
+                          Za ostale police (iz celih plošč) izdelaš načrt po shranjevanju naloga: ✂ Načrt rezanja.
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setObrazec((o) => ({ ...o, opombe: opombeZNacrtom(o.opombe, vrsticeOpomb(planForme)) }))}
+                        className="mt-1.5 text-xs underline font-medium"
+                      >
+                        📝 Zapiši v opombe
+                      </button>
+                    </div>
+                  );
+                }
                 const st = obrazec.postavke.filter(
                   (p, i) =>
                     ustrezniKosiZaPostavko(materialZaloga, p, i, aktivniNalog ? aktivniNalog.stevilka : "").ujemanja.length > 0
@@ -3766,7 +4171,14 @@ export default function DelovniNalogi() {
                 }}
               >
                 {obrazec.postavke.map((p, idx) => (
-                  <div key={p.id} className="bg-stone-50 sm:bg-transparent rounded-lg p-2 sm:p-0">
+                  <div
+                    key={p.id}
+                    className={`rounded-lg p-2 sm:p-0 ${
+                      barvePostavkForme.has(p.id)
+                        ? `${barvaNacrta(barvePostavkForme.get(p.id).idx).vrstica} sm:pl-2 sm:py-1.5`
+                        : "bg-stone-50 sm:bg-transparent"
+                    }`}
+                  >
                   <div
                     className="postavka-row grid grid-cols-2 gap-2 items-center"
                   >
@@ -3924,6 +4336,22 @@ export default function DelovniNalogi() {
                       Poševno (druga širina levo/desno)
                     </label>
                   </div>
+                  {barvePostavkForme.has(p.id) && (
+                    <div className="mt-1 text-xs text-stone-700">
+                      <a
+                        href={`/material?id=${encodeURIComponent(barvePostavkForme.get(p.id).id)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-block rounded px-1.5 py-0.5 font-bold ${barvaNacrta(barvePostavkForme.get(p.id).idx).znacka}`}
+                      >
+                        🧩 iz {barvePostavkForme.get(p.id).koda}
+                      </a>{" "}
+                      · 📍 {barvePostavkForme.get(p.id).lokacija || "lokacija ni vpisana"}
+                      {pokritjeForme.get(p.id) && pokritjeForme.get(p.id).placed < pokritjeForme.get(p.id).total
+                        ? ` · ${pokritjeForme.get(p.id).placed} od ${pokritjeForme.get(p.id).total} kosov`
+                        : ""}
+                    </div>
+                  )}
                   {(() => {
                     const { potrebno, ujemanja } = ustrezniKosiZaPostavko(
                       materialZaloga,
@@ -3932,6 +4360,8 @@ export default function DelovniNalogi() {
                       aktivniNalog ? aktivniNalog.stevilka : ""
                     );
                     if (ujemanja.length === 0) return null;
+                    const pokr = pokritjeForme.get(p.id);
+                    if (pokr && pokr.placed >= pokr.total) return null; // že pokrito z načrtom (glej zeleno okvirje zgoraj)
                     return (
                       <div className="mt-1.5 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-2 text-xs text-emerald-900">
                         <div className="font-semibold">
@@ -4267,9 +4697,20 @@ export default function DelovniNalogi() {
                       {aktivniNalog.postavke
                         .filter(p => p.naziv || p.material || p.dolzina)
                         .map((p, idx) => (
-                          <tr key={p.id} className="border-b border-stone-50">
+                          <tr
+                            key={p.id}
+                            className="border-b border-stone-50"
+                            style={barveShranjenega.has(p.id) ? { backgroundColor: barvaNacrta(barveShranjenega.get(p.id).idx).mehka } : undefined}
+                          >
                             <td className="py-1.5 px-2 text-stone-400">{idx + 1}</td>
-                            <td className="py-1.5 px-2 text-stone-700">{p.naziv || "—"}</td>
+                            <td className="py-1.5 px-2 text-stone-700">
+                              {p.naziv || "—"}
+                              {barveShranjenega.has(p.id) && (
+                                <span className={`ml-1.5 text-[10px] rounded px-1.5 py-0.5 font-bold ${barvaNacrta(barveShranjenega.get(p.id).idx).znacka}`}>
+                                  iz {barveShranjenega.get(p.id).koda}
+                                </span>
+                              )}
+                            </td>
                             <td className="py-1.5 px-2 text-stone-600">{p.material || "—"}</td>
                             <td className="py-1.5 px-2 text-stone-600">
                               {p.dolzina || "–"} × {p.poseven ? `L:${p.sirinaLevo || "–"}/D:${p.sirinaDesno || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
@@ -4391,6 +4832,16 @@ export default function DelovniNalogi() {
                 </div>
               );
             })()}
+
+            {(aktivniNalog.status !== "Prevzeto" || aktivniNalog.nacrt) && (
+              <NacrtRezanja
+                key={aktivniNalog.id}
+                nalog={aktivniNalog}
+                zaloga={materialZaloga}
+                posodobiMaterial={posodobiMaterial}
+                posodobiNaloge={posodobiNaloge}
+              />
+            )}
 
             {aktivniNalog.status !== "Prevzeto" && (() => {
               const vrstice = (aktivniNalog.postavke || [])
@@ -4702,6 +5153,7 @@ export default function DelovniNalogi() {
 
         {pogled === "tisk" && aktivniNalog && (
           <TiskNaloga
+            nacrt={veljavenNacrt}
             rezerviraniKosi={rezerviraniKosiNaloga(aktivniNalog).map((k) => ({
               kos: k,
               postavke: postavkeZaKos(materialZaloga, aktivniNalog, k),
@@ -4749,12 +5201,13 @@ export default function DelovniNalogi() {
   );
 }
 
-function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno, rezerviraniKosi }) {
+function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno, rezerviraniKosi, nacrt }) {
   const postavkeZaPrikaz = (nalog.postavke || []).filter(
     (p) => p.naziv || p.material || p.dolzina
   );
   const skupajM2 = postavkeZaPrikaz.reduce((v, p) => v + m2Postavke(p), 0);
   const danes = new Date().toLocaleDateString("sl-SI");
+  const barvePrint = barvePostavkIzNacrta(nacrt);
 
   useEffect(() => {
     function poNatisu() {
@@ -4769,7 +5222,7 @@ function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno, rezerviraniKosi }) {
       <style>{`
         @media print {
           body * { visibility: hidden; }
-          .tisk-list, .tisk-list * { visibility: visible; }
+          .tisk-list, .tisk-list * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .tisk-list { position: absolute; top: 0; left: 0; width: 100%; padding: 0; margin: 0; }
           .tisk-brez { display: none !important; }
         }
@@ -4872,9 +5325,20 @@ function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno, rezerviraniKosi }) {
               </thead>
               <tbody>
                 {postavkeZaPrikaz.map((p, idx) => (
-                  <tr key={p.id} className="border-b border-stone-100">
+                  <tr
+                    key={p.id}
+                    className="border-b border-stone-100"
+                    style={barvePrint.has(p.id) ? { backgroundColor: barvaNacrta(barvePrint.get(p.id).idx).mehka } : undefined}
+                  >
                     <td className="py-2 pr-1 text-xs text-stone-400 align-top overflow-hidden">{idx + 1}</td>
-                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">{p.naziv || "—"}</td>
+                    <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-700 align-top">
+                      {p.naziv || "—"}
+                      {barvePrint.has(p.id) && (
+                        <div className="text-[10px] font-bold" style={{ color: barvaNacrta(barvePrint.get(p.id).idx).hex }}>
+                          iz {barvePrint.get(p.id).koda}
+                        </div>
+                      )}
+                    </td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-600 align-top">{p.material || "—"}</td>
                     <td className="py-2 pr-1 pl-2 border-l border-stone-100 text-xs text-stone-800 align-top overflow-hidden">
                       {p.dolzina || "–"} × {p.poseven ? `L:${p.sirinaLevo || "–"}/D:${p.sirinaDesno || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
@@ -4900,8 +5364,27 @@ function TiskNaloga({ nalog, onZapri, oznaciNatisnjeno, rezerviraniKosi }) {
           </div>
         )}
 
+        {nacrt && nacrt.listi.length > 0 && (
+          <div className="mb-3 pb-2 border-b border-stone-200">
+            <div className="text-xs text-stone-400 uppercase mb-1">
+              Načrt rezanja — reža {fmtMera(nacrt.nastavitve ? nacrt.nastavitve.kerfMM : PRIVZETE_NASTAVITVE.kerfMM)} mm
+            </div>
+            {nacrt.listi.map((l, i) => (
+              <div key={l.id} className="mb-2" style={{ breakInside: "avoid" }}>
+                <div className="text-sm text-stone-800">
+                  <span className="font-bold">{l.koda}</span> · {fmtMera(l.w)} × {fmtMera(l.h)} × {fmtMera(l.debelina)} cm · Lokacija:{" "}
+                  <span className="font-semibold">{l.lokacija || "ni vpisana"}</span>
+                </div>
+                <div style={{ maxWidth: "460px" }}>
+                  <NacrtSvg list={l} barvaIdx={i} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {nalog.opombe && (
-          <p className="text-sm text-stone-700">
+          <p className="text-sm text-stone-700 whitespace-pre-wrap">
             <span className="text-xs font-medium text-stone-400 uppercase mr-1">Opombe:</span>
             {nalog.opombe}
           </p>
@@ -5475,7 +5958,7 @@ function Vrstica({ label, vrednost }) {
   return (
     <div className="flex flex-col sm:flex-row sm:gap-3">
       <span className="text-stone-400 text-xs font-medium sm:w-28 shrink-0 sm:pt-0.5 mb-0.5 sm:mb-0">{label}</span>
-      <span className="text-stone-700">{vrednost}</span>
+      <span className="text-stone-700 whitespace-pre-wrap">{vrednost}</span>
     </div>
   );
 }
