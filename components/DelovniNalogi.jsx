@@ -546,7 +546,7 @@ const STATUS_HEX = {
 // ===== Varovalka pred sesutjem strani =====
 // Če se pri risanju enega dela strani zgodi napaka, odpove samo ta del (prikaže se obvestilo z vzrokom),
 // ne pa cela aplikacija ("Application error: a client-side exception has occurred").
-const VERZIJA_APLIKACIJE = "2026-10-08-h · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-10-08-i · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -778,7 +778,22 @@ function barvePostavkIzNacrta(plan) {
 // Skica razreza ene plošče/kosa: kosi iz naloga (obarvani), ostanki (sivi) in njihove mere.
 // Z "urejanje" se kosi lahko vlečejo z miško ali prstom (prilepijo se k robu plošče in sosednjim kosom, reža je upoštevana),
 // izbrani kos se lahko premika tudi s puščicami in zasuka s tipko R. Brez "urejanje" je skica samo za branje (tudi pri tisku).
-function NacrtSvg({ list, barvaIdx, urejanje, kerf = 0, rob = 0, izbran, onIzberi, onPremik, onZasuk, onSporocilo }) {
+// Kaj je pod kazalcem: plošča (data-cilj = id plošče) ali odlagališče (data-cilj = "odlagalisce").
+function ciljPodTockko(x, y) {
+  try {
+    if (typeof document === "undefined" || !document.elementsFromPoint) return null;
+    const els = document.elementsFromPoint(x, y);
+    for (const el of els) {
+      const c = el && el.closest ? el.closest("[data-cilj]") : null;
+      if (c) return c.getAttribute("data-cilj");
+    }
+  } catch (err) {
+    /* brez zaznave cilja */
+  }
+  return null;
+}
+
+function NacrtSvg({ list, barvaIdx, urejanje, kerf = 0, rob = 0, izbran, onIzberi, onPremik, onZasuk, onSporocilo, onPrenos, onVleka }) {
   const b = barvaNacrta(barvaIdx);
   const W = list.w;
   const H = list.h;
@@ -796,13 +811,42 @@ function NacrtSvg({ list, barvaIdx, urejanje, kerf = 0, rob = 0, izbran, onIzber
     const r = svgRef.current && svgRef.current.getBoundingClientRect();
     if (!r || !(r.width > 0)) return;
     e.stopPropagation();
-    if (onIzberi) onIzberi(p.elId);
+    if (e.cancelable && e.pointerType !== "touch") e.preventDefault(); // brez označevanja besedila med vlečenjem
     try {
-      if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+      if (window.getSelection) window.getSelection().removeAllRanges();
     } catch (err) {
-      /* brez zajema kazalca */
+      /* brez izbora */
     }
+    if (onIzberi) onIzberi(p.elId);
     vlekaRef.current = { elId: p.elId, id: e.pointerId, px: e.clientX, py: e.clientY, x0: p.x, y0: p.y, k: W / r.width, premaknjen: false, zadnji: null };
+    // poslušamo na oknu (ne z zajemom kazalca): vlečeni kos se v DOM premakne naprej, kazalec pa lahko zapusti to skico
+    const pocisti = () => {
+      window.removeEventListener("pointermove", gm);
+      window.removeEventListener("pointerup", gu);
+      window.removeEventListener("pointercancel", gc);
+    };
+    const gm = (ev) => premakni(ev, p);
+    const gu = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      pocisti();
+      konec(ev, p, false);
+    };
+    const gc = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      pocisti();
+      konec(ev, p, true);
+    };
+    window.addEventListener("pointermove", gm);
+    window.addEventListener("pointerup", gu);
+    window.addEventListener("pointercancel", gc);
+  }
+
+  // kazalec je več kot 12 px izven skice te plošče
+  function jeZunaj(e) {
+    const r = svgRef.current && svgRef.current.getBoundingClientRect();
+    if (!r) return false;
+    const m = 12;
+    return e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m;
   }
 
   function premakni(e, p) {
@@ -812,6 +856,19 @@ function NacrtSvg({ list, barvaIdx, urejanje, kerf = 0, rob = 0, izbran, onIzber
     const dy = e.clientY - d.py;
     if (!d.premaknjen && Math.hypot(dx, dy) < 4) return;
     d.premaknjen = true;
+    const zunaj = jeZunaj(e);
+    if (zunaj) {
+      // kos je zunaj te plošče: prikaži "duha" pod kazalcem, cilj (druga plošča / odlagališče) se označi
+      d.zunaj = true;
+      d.zadnji = null;
+      setVleka({ elId: p.elId, zunaj: true });
+      if (onVleka) onVleka({ cx: e.clientX, cy: e.clientY, w: p.w / d.k, h: p.h / d.k, oznaka: p.oznaka, cilj: ciljPodTockko(e.clientX, e.clientY) });
+      return;
+    }
+    if (d.zunaj) {
+      d.zunaj = false;
+      if (onVleka) onVleka(null);
+    }
     const x = omeji(d.x0 + dx * d.k, rob, W - rob - p.w);
     const y = omeji(d.y0 + dy * d.k, rob, H - rob - p.h);
     const ostali = ostaliKosi(p.elId);
@@ -826,7 +883,14 @@ function NacrtSvg({ list, barvaIdx, urejanje, kerf = 0, rob = 0, izbran, onIzber
     if (!d || d.elId !== p.elId || d.id !== e.pointerId) return;
     vlekaRef.current = null;
     setVleka(null);
-    if (preklic || !d.premaknjen || !d.zadnji) return;
+    if (d.zunaj && onVleka) onVleka(null);
+    if (preklic || !d.premaknjen) return;
+    if (jeZunaj(e)) {
+      const cilj = ciljPodTockko(e.clientX, e.clientY);
+      if (cilj && cilj !== list.id && onPrenos) onPrenos(p.elId, cilj, e.clientX, e.clientY);
+      return;
+    }
+    if (!d.zadnji) return;
     let { x, y } = d.zadnji;
     if (!d.zadnji.veljavno) {
       const n = najblizjiVeljavni({ x, y, w: p.w, h: p.h }, ostaliKosi(p.elId), W, H, rob, kerf);
@@ -875,8 +939,9 @@ function NacrtSvg({ list, barvaIdx, urejanje, kerf = 0, rob = 0, izbran, onIzber
     <svg
       ref={svgRef}
       viewBox={`0 0 ${W} ${H}`}
-      className="w-full h-auto block border border-stone-400 bg-white"
+      className="w-full h-auto block border border-stone-400 bg-white select-none"
       role="img"
+      data-cilj={list.id}
       aria-label={`Načrt rezanja ${list.koda}`}
       onPointerDown={urejanje ? () => onIzberi && onIzberi(null) : undefined}
     >
@@ -902,9 +967,10 @@ function NacrtSvg({ list, barvaIdx, urejanje, kerf = 0, rob = 0, izbran, onIzber
       ))}
       {kosi.map((q) => {
         const vleci = vleka && vleka.elId === q.elId;
-        const p = vleci ? { ...q, x: vleka.x, y: vleka.y } : q;
+        const zunajVlek = vleci && vleka.zunaj;
+        const p = vleci && !zunajVlek ? { ...q, x: vleka.x, y: vleka.y } : q;
         const jeIzbran = !!urejanje && izbran === p.elId;
-        const slabo = vleci && !vleka.veljavno;
+        const slabo = vleci && !zunajVlek && !vleka.veljavno;
         const fs = Math.max(0.9, Math.min(pisava, p.h * 0.34, p.w / Math.max(8, (p.oznaka.length + 2) * 0.62)));
         return (
           <g
@@ -916,11 +982,8 @@ function NacrtSvg({ list, barvaIdx, urejanje, kerf = 0, rob = 0, izbran, onIzber
             tabIndex={urejanje ? 0 : undefined}
             role={urejanje ? "button" : undefined}
             aria-label={urejanje ? `${p.oznaka}, ${fmtMera(p.w)} × ${fmtMera(p.h)} cm. Puščice premikajo, R zasuka.` : undefined}
-            style={urejanje ? { cursor: vleci ? "grabbing" : "grab", touchAction: "none", outline: "none" } : undefined}
+            style={urejanje ? { cursor: vleci ? "grabbing" : "grab", touchAction: "none", outline: "none", opacity: zunajVlek ? 0.3 : 1 } : undefined}
             onPointerDown={urejanje ? (e) => zacni(e, q) : undefined}
-            onPointerMove={urejanje ? (e) => premakni(e, q) : undefined}
-            onPointerUp={urejanje ? (e) => konec(e, q, false) : undefined}
-            onPointerCancel={urejanje ? (e) => konec(e, q, true) : undefined}
             onKeyDown={urejanje ? (e) => tipka(e, q) : undefined}
           >
             <rect
@@ -947,6 +1010,81 @@ function NacrtSvg({ list, barvaIdx, urejanje, kerf = 0, rob = 0, izbran, onIzber
   );
 }
 
+
+// Kos v odlagališču (desno): povleci ga na katero koli ploščo.
+function OdlozenKos({ kos, urejanje, onPrenos, onVleka }) {
+  const drRef = useRef(null);
+  const c = Math.min(3, 110 / Math.max(kos.w, kos.h, 1));
+  const sw = Math.max(40, kos.w * c);
+  const sh = Math.max(26, kos.h * c);
+  const neuspel = !!kos.razlog;
+
+  function dol(e) {
+    if (!urejanje || (typeof e.button === "number" && e.button > 0)) return;
+    if (e.cancelable && e.pointerType !== "touch") e.preventDefault();
+    try {
+      if (window.getSelection) window.getSelection().removeAllRanges();
+    } catch (err) {
+      /* brez izbora */
+    }
+    drRef.current = { id: e.pointerId, px: e.clientX, py: e.clientY, premaknjen: false };
+    const pocisti = () => {
+      window.removeEventListener("pointermove", gm);
+      window.removeEventListener("pointerup", gu);
+      window.removeEventListener("pointercancel", gc);
+    };
+    const gm = (ev) => gor(ev);
+    const gu = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      pocisti();
+      gori(ev, false);
+    };
+    const gc = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      pocisti();
+      gori(ev, true);
+    };
+    window.addEventListener("pointermove", gm);
+    window.addEventListener("pointerup", gu);
+    window.addEventListener("pointercancel", gc);
+  }
+  function gor(e) {
+    const d = drRef.current;
+    if (!d || d.id !== e.pointerId) return;
+    if (!d.premaknjen && Math.hypot(e.clientX - d.px, e.clientY - d.py) < 4) return;
+    d.premaknjen = true;
+    if (onVleka) onVleka({ cx: e.clientX, cy: e.clientY, w: sw, h: sh, oznaka: kos.oznaka, cilj: ciljPodTockko(e.clientX, e.clientY) });
+  }
+  function gori(e, preklic) {
+    const d = drRef.current;
+    if (!d || d.id !== e.pointerId) return;
+    drRef.current = null;
+    if (onVleka) onVleka(null);
+    if (preklic || !d.premaknjen) return;
+    const cilj = ciljPodTockko(e.clientX, e.clientY);
+    if (cilj && cilj !== "odlagalisce" && onPrenos) onPrenos(kos.elId, cilj, e.clientX, e.clientY);
+  }
+
+  return (
+    <div
+      data-odlozen={kos.elId}
+      className="bg-white border rounded-lg p-1.5"
+      style={{ borderColor: neuspel ? "#fca5a5" : "#d6d3d1", cursor: urejanje ? "grab" : "default", touchAction: urejanje ? "none" : undefined, userSelect: "none" }}
+      onPointerDown={dol}
+    >
+      <div
+        className="flex items-center justify-center rounded text-[10px] font-bold text-stone-900 overflow-hidden"
+        style={{ width: sw, height: sh, background: neuspel ? "#fee2e2" : "#fef3c7", border: `2px solid ${neuspel ? "#dc2626" : "#d97706"}` }}
+      >
+        {kos.oznaka}
+      </div>
+      <div className="text-[11px] text-stone-700 mt-0.5">
+        {kos.oznaka} · {fmtMera(kos.w)} × {fmtMera(kos.h)} cm{kos.rot ? " ↻" : ""}
+      </div>
+      {neuspel && <div className="text-[10px] text-red-700">{kos.razlog}</div>}
+    </div>
+  );
+}
 // Razdelek v pregledu naloga: izdela načrt rezanja iz skladišča (kosi, nato plošče), ga potrdi (rezervira),
 // zapiše v opombe in obarva postavke. Reža šajbe (privzeto 3,3 mm) je upoštevana pri vsakem rezu.
 function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
@@ -956,6 +1094,7 @@ function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
   const [izbran, setIzbran] = useState(null);
   const [zgod, setZgod] = useState([]); // prejšnja stanja predogleda (null = potrjen načrt)
   const [sporocilo, setSporocilo] = useState("");
+  const [vlek, setVlek] = useState(null); // duh vlečenega kosa zunaj plošče: {cx,cy,w,h,oznaka,cilj}
 
   const elementi = zgradiElemente(nalog.postavke);
   const shranjen = nalog.nacrt && Array.isArray(nalog.nacrt.listi) ? nalog.nacrt : null;
@@ -974,11 +1113,111 @@ function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
   const robLista = (l) => (l.vrsta === "plosca" ? robPlosce : 0);
   const zaokr2 = (v) => Math.round(v * 100) / 100;
 
-  function spremeniListe(fn) {
+  function spremeniPlan(fn) {
     const osnova = predogled || shranjen;
     if (!osnova) return;
     setZgod((z) => [...z.slice(-49), predogled]);
-    setPredogled({ ...osnova, listi: fn(osnova.listi), podpis, datum: new Date().toISOString(), rocno: true });
+    setPredogled({ ...fn(osnova), podpis, datum: new Date().toISOString(), rocno: true });
+  }
+  function spremeniListe(fn) {
+    spremeniPlan((o) => ({ ...o, listi: fn(o.listi) }));
+  }
+
+  // kosi, ki niso na nobeni plošči: neuspeli iz samodejnega načrta + ročno odloženi
+  const parkirani = plan ? [...(plan.nerazporejeni || []), ...(plan.odlozeni || [])] : [];
+  const enak = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+
+  // Prenos kosa na drugo ploščo ali v odlagališče (cx, cy = točka spusta na zaslonu).
+  function prenesi(elId, ciljId, cx, cy) {
+    if (!plan) return;
+    const izvor = plan.listi.find((l) => l.postavljeni.some((p) => p.elId === elId));
+    const kos = izvor ? izvor.postavljeni.find((p) => p.elId === elId) : parkirani.find((p) => p.elId === elId);
+    if (!kos) return;
+    const el = elementi.find((e) => e.id === elId);
+    const odstrani = (l) => {
+      const postavljeni = l.postavljeni.filter((p) => p.elId !== elId);
+      return { ...l, postavljeni, ostanki: izracunajOstanke(l.w, l.h, robLista(l), postavljeni, kerfCm) };
+    };
+    if (ciljId === "odlagalisce") {
+      if (!izvor) return;
+      const odlozen = { elId, postavkaId: kos.postavkaId, oznaka: kos.oznaka, w: kos.w, h: kos.h, rot: !!kos.rot, material: el ? el.material : izvor.material, debelina: el ? el.debelina : izvor.debelina };
+      spremeniPlan((o) => ({ ...o, listi: o.listi.map((l) => (l.id === izvor.id ? odstrani(l) : l)), odlozeni: [...(o.odlozeni || []), odlozen] }));
+      setIzbran(null);
+      setSporocilo("Kos je odložen v odlagališče (desno). Povleci ga na katero koli ploščo.");
+      return;
+    }
+    const cilj = plan.listi.find((l) => l.id === ciljId);
+    if (!cilj) return;
+    if (izvor && izvor.id === cilj.id) return;
+    const matKosa = el ? el.material : kos.material;
+    const debKosa = el ? Number(el.debelina) : Number(kos.debelina);
+    if (matKosa && cilj.material && !enak(matKosa, cilj.material)) {
+      setSporocilo(`Tega kosa ni mogoče dati na to ploščo: material je drugačen (${matKosa} ≠ ${cilj.material}).`);
+      return;
+    }
+    if (debKosa > 0 && Number(cilj.debelina) > 0 && Math.abs(debKosa - Number(cilj.debelina)) > 0.05) {
+      setSporocilo(`Tega kosa ni mogoče dati na to ploščo: debelina je drugačna (${fmtMera(debKosa)} ≠ ${fmtMera(Number(cilj.debelina))} cm).`);
+      return;
+    }
+    const svgEl = typeof document !== "undefined" ? document.querySelector(`[data-cilj="${ciljId}"]`) : null;
+    const r = svgEl && svgEl.getBoundingClientRect();
+    if (!r || !(r.width > 0)) return;
+    const k = cilj.w / r.width;
+    const px = (cx - r.left) * k;
+    const py = (cy - r.top) * k;
+    const rob = robLista(cilj);
+    const ostali = cilj.postavljeni;
+    const omeji = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+    const poskusi = (w, h) => {
+      if (w > cilj.w - 2 * rob + 0.001 || h > cilj.h - 2 * rob + 0.001) return null;
+      const x = omeji(px - w / 2, rob, cilj.w - rob - w);
+      const y = omeji(py - h / 2, rob, cilj.h - rob - h);
+      const s = prilepiKos({ x, y, w, h }, ostali, cilj.w, cilj.h, rob, kerfCm, Math.max(0.8, 9 * k));
+      if (veljavenPolozaj({ x: s.x, y: s.y, w, h }, ostali, cilj.w, cilj.h, rob, kerfCm)) return s;
+      return najblizjiVeljavni({ x: s.x, y: s.y, w, h }, ostali, cilj.w, cilj.h, rob, kerfCm);
+    };
+    let w = kos.w;
+    let h = kos.h;
+    let rot = !!kos.rot;
+    let poz = poskusi(w, h);
+    let zasukan = false;
+    if (!poz && zasukDovoljen) {
+      poz = poskusi(kos.h, kos.w);
+      if (poz) {
+        w = kos.h;
+        h = kos.w;
+        rot = !rot;
+        zasukan = true;
+      }
+    }
+    if (!poz) {
+      setSporocilo(`Na plošči ${cilj.koda} ni dovolj prostora za ta kos.`);
+      return;
+    }
+    const nov = { elId, postavkaId: kos.postavkaId, oznaka: kos.oznaka, x: zaokr2(poz.x), y: zaokr2(poz.y), w, h, rot };
+    spremeniPlan((o) => ({
+      ...o,
+      listi: o.listi.map((l) => {
+        if (izvor && l.id === izvor.id) return odstrani(l);
+        if (l.id !== cilj.id) return l;
+        const postavljeni = [...l.postavljeni, nov];
+        return { ...l, postavljeni, ostanki: izracunajOstanke(l.w, l.h, robLista(l), postavljeni, kerfCm) };
+      }),
+      nerazporejeni: (o.nerazporejeni || []).filter((n) => n.elId !== elId),
+      odlozeni: (o.odlozeni || []).filter((n) => n.elId !== elId),
+    }));
+    setIzbran(elId);
+    setSporocilo(zasukan ? "Kos je prestavljen in zasukan, da gre na to ploščo." : "");
+  }
+
+  // pred shranjevanjem: prazne plošče izpustimo (ne rezerviramo), odložene kose zapišemo med nerazporejene
+  function zakljuciNacrt(n) {
+    const { odlozeni, ...ostalo } = n;
+    return {
+      ...ostalo,
+      listi: n.listi.filter((l) => l.postavljeni.length > 0),
+      nerazporejeni: [...(n.nerazporejeni || []), ...(odlozeni || []).map((o) => ({ ...o, razlog: "ročno odloženo — ni na nobeni plošči" }))],
+    };
   }
 
   function premakniKos(elId, x, y) {
@@ -1044,13 +1283,16 @@ function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
 
   async function potrdi() {
     if (!predogled || delam) return;
-    if (predogled.listi.length === 0) {
+    const koncni = zakljuciNacrt(predogled);
+    if (koncni.listi.length === 0) {
       alert("Načrt ne vsebuje nobenega kosa ali plošče.");
       return;
     }
+    const odl = (predogled.odlozeni || []).length;
+    if (odl > 0 && !confirm(odl + (odl === 1 ? " polica ni na nobeni plošči" : " polic ni na nobeni plošči") + " (ostanejo v odlagališču). Vseeno potrdim načrt?")) return;
     setDelam(true);
     try {
-      const idji = predogled.listi.map((l) => l.id);
+      const idji = koncni.listi.map((l) => l.id);
       const stariIdji = shranjen ? shranjen.listi.map((l) => l.id) : [];
       const zdaj = new Date().toISOString();
       let sporocilo = "";
@@ -1084,15 +1326,16 @@ function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
         if (sporocilo) alert(sporocilo);
         return;
       }
-      const vrstice = vrsticeOpomb(predogled);
+      const vrstice = vrsticeOpomb(koncni);
       const okN = await posodobiNaloge((os) =>
-        os.map((n) => (n.id === nalog.id ? { ...n, nacrt: predogled, opombe: opombeZNacrtom(n.opombe, vrstice) } : n))
+        os.map((n) => (n.id === nalog.id ? { ...n, nacrt: koncni, opombe: opombeZNacrtom(n.opombe, vrstice) } : n))
       );
       if (okN) {
         setPredogled(null);
         setZgod([]);
         setIzbran(null);
         setSporocilo("");
+        setVlek(null);
       }
     } finally {
       setDelam(false);
@@ -1183,7 +1426,7 @@ function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
           {urejanje && (
             <div data-nacrt-orodja className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-700 space-y-2">
               <div>
-                ✋ Kose <b>povleci z miško ali prstom</b>. Prilepijo se k robu plošče in sosednjim kosom (reža je upoštevana). Klikni kos, nato ga lahko zasukaš (↻ ali tipka R) ali premakneš s puščicami (Shift = večji korak).
+                ✋ Kose <b>povleci z miško ali prstom</b>. Prilepijo se k robu plošče in sosednjim kosom (reža je upoštevana). Kos lahko povlečeš tudi <b>na drugo ploščo</b> ali <b>v odlagališče na desni</b> (da narediš prostor), od tam pa ga spet na katero koli ploščo. Klikni kos, nato ga lahko zasukaš (↻ ali tipka R) ali premakneš s puščicami (Shift = večji korak).
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -1205,6 +1448,18 @@ function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
             </div>
           )}
 
+          {vlek && (
+            <div
+              data-nacrt-duh
+              style={{ position: "fixed", left: vlek.cx - vlek.w / 2, top: vlek.cy - vlek.h / 2, width: vlek.w, height: vlek.h, pointerEvents: "none", zIndex: 60, opacity: 0.85 }}
+              className="flex items-center justify-center rounded border-2 border-stone-800 bg-amber-100 text-[10px] font-bold text-stone-900 overflow-hidden"
+            >
+              {vlek.oznaka}
+            </div>
+          )}
+
+          <div className="flex flex-col lg:flex-row gap-4 items-start">
+          <div className="flex-1 min-w-0 w-full space-y-4">
           {plan.listi.map((l, i) => (
             <div key={l.id}>
               <div className="flex flex-wrap items-center gap-2 text-sm mb-1">
@@ -1214,7 +1469,7 @@ function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
                   {Math.round(l.izkoristek * 100)} %
                 </span>
               </div>
-              <div style={{ maxWidth: "560px" }}>
+              <div style={{ maxWidth: "560px" }} className={vlek && vlek.cilj === l.id ? "ring-4 ring-emerald-400 rounded" : ""}>
                 <NacrtSvg
                   list={l}
                   barvaIdx={i}
@@ -1226,8 +1481,15 @@ function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
                   onPremik={premakniKos}
                   onZasuk={zasukajKos}
                   onSporocilo={setSporocilo}
+                  onPrenos={prenesi}
+                  onVleka={setVlek}
                 />
               </div>
+              {l.postavljeni.length === 0 && (
+                <div data-nacrt-prazna className="mt-1 bg-stone-50 border border-stone-300 rounded px-2 py-1 text-xs text-stone-700">
+                  Ta plošča je prazna — pri potrditvi se ne bo rezervirala. Kose lahko povlečeš nanjo.
+                </div>
+              )}
               {!jeGiljotinski(l.postavljeni) && (
                 <div data-nacrt-giljotina className="mt-1 bg-amber-50 border border-amber-300 rounded px-2 py-1 text-xs text-amber-900">
                   ⚠ Tega razporeda ni mogoče izrezati z ravnimi rezi od roba do roba (mostni rezalnik ne more ločiti kosov). Premakni ali zasukaj kakšen kos.
@@ -1244,23 +1506,33 @@ function NacrtRezanja({ nalog, zaloga, posodobiMaterial, posodobiNaloge }) {
             </div>
           ))}
 
-          {plan.nerazporejeni.length > 0 && (
-            <div className="bg-red-50 border border-red-300 rounded-lg px-3 py-2 text-xs text-red-800">
-              <div className="font-semibold mb-0.5">Ni mogoče razporediti ({plan.nerazporejeni.length}):</div>
-              {plan.nerazporejeni.map((n) => (
-                <div key={n.elId}>
-                  {n.oznaka} ({fmtMera(n.w)} × {fmtMera(n.h)} cm, {n.material}) — {n.razlog}
-                </div>
+          </div>
+          {(urejanje || parkirani.length > 0) && (
+            <div
+              data-cilj="odlagalisce"
+              data-nacrt-odlagalisce
+              className={"w-full lg:w-60 shrink-0 rounded-xl border-2 border-dashed p-2 space-y-2 " + (vlek && vlek.cilj === "odlagalisce" ? "border-emerald-500 bg-emerald-50" : "border-stone-300 bg-stone-50")}
+              style={{ minHeight: 140 }}
+            >
+              <div className="text-xs font-semibold text-stone-700">📥 Odlagališče ({parkirani.length})</div>
+              <div className="text-[11px] text-stone-500">
+                {urejanje ? "Sem povleci kos, da narediš prostor na plošči. Od tu ga povleci na katero koli ploščo." : "Kosi, ki niso na nobeni plošči."}
+              </div>
+              {parkirani.length === 0 && <div className="text-[11px] text-stone-400">(prazno)</div>}
+              {plan.nerazporejeni && plan.nerazporejeni.length > 0 && <div className="text-[11px] font-semibold text-red-700">Ni mogoče razporediti ({plan.nerazporejeni.length}) — lahko jih vstaviš ročno:</div>}
+              {parkirani.map((n) => (
+                <OdlozenKos key={n.elId} kos={n} urejanje={urejanje} onPrenos={prenesi} onVleka={setVlek} />
               ))}
             </div>
           )}
+          </div>
 
           <div className="flex flex-wrap gap-2">
             {predogled && (
               <>
                 <button
                   onClick={potrdi}
-                  disabled={delam || predogled.listi.length === 0}
+                  disabled={delam || !predogled.listi.some((l) => l.postavljeni.length > 0)}
                   className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold disabled:opacity-50"
                 >
                   {delam ? "Shranjujem …" : "✅ Potrdi in rezerviraj"}
