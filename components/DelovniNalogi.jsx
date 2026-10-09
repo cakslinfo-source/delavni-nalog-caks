@@ -546,7 +546,7 @@ const STATUS_HEX = {
 // ===== Varovalka pred sesutjem strani =====
 // Če se pri risanju enega dela strani zgodi napaka, odpove samo ta del (prikaže se obvestilo z vzrokom),
 // ne pa cela aplikacija ("Application error: a client-side exception has occurred").
-const VERZIJA_APLIKACIJE = "2026-10-08-i · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-10-09-j · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -6435,7 +6435,7 @@ const NALEPKE_SHRAMBA = "nalepke-polic-nastavitve-2";
 // w × h = velikost ene nalepke (mm); stolpci × vrstice = nalepk na list; papir "A4" ali null (list = ena nalepka);
 // k = merilo pisave; pad = notranji rob nalepke (mm); trak = neprekinjen trak (dolžino izbere uporabnik).
 const VELIKOSTI_NALEPK = {
-  "brother-62": { naziv: "Brother QL-600 · trak 62 mm (dolžina poljubna)", w: 62, h: TRAK_PRIVZETA_MM, stolpci: 1, vrstice: 1, papir: null, k: 0.82, pad: 3.5, trak: true },
+  "brother-62": { naziv: "Brother QL-600 · trak 62 mm (dolžina poljubna)", w: 62, h: TRAK_PRIVZETA_MM, stolpci: 1, vrstice: 1, papir: null, k: 0.82, pad: 2.5, trak: true },
   "a4-8": { naziv: "A4 · 8 nalepk na list (105 × 74 mm)", w: 105, h: 74, stolpci: 2, vrstice: 4, papir: "A4", k: 1, pad: 4 },
   "a4-4": { naziv: "A4 · 4 nalepke na list (105 × 148 mm)", w: 105, h: 148, stolpci: 2, vrstice: 2, papir: "A4", k: 1.3, pad: 6 },
   "a4-24": { naziv: "A4 · 24 nalepk na list (70 × 37 mm)", w: 70, h: 37, stolpci: 3, vrstice: 8, papir: "A4", k: 0.66, pad: 2.2 },
@@ -6456,7 +6456,7 @@ function velikostNalepk(id, dolzinaVnos) {
   const v = Object.prototype.hasOwnProperty.call(VELIKOSTI_NALEPK, id) ? VELIKOSTI_NALEPK[id] : VELIKOSTI_NALEPK[NALEPKE_PRIVZETA_VELIKOST];
   if (!v.trak) return v;
   const h = dolzinaTraku(dolzinaVnos);
-  return { ...v, h, k: Math.round(0.88 * Math.min(1.25, Math.max(0.8, h / 75)) * 100) / 100 };
+  return { ...v, h, k: Math.round(1.0 * Math.min(1.5, Math.max(0.8, h / 50)) * 100) / 100 };
 }
 
 function mnozinaNalepk(n) {
