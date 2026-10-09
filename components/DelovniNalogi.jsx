@@ -546,7 +546,7 @@ const STATUS_HEX = {
 // ===== Varovalka pred sesutjem strani =====
 // Če se pri risanju enega dela strani zgodi napaka, odpove samo ta del (prikaže se obvestilo z vzrokom),
 // ne pa cela aplikacija ("Application error: a client-side exception has occurred").
-const VERZIJA_APLIKACIJE = "2026-10-09-j · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-10-09-k · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -6439,6 +6439,7 @@ const VELIKOSTI_NALEPK = {
   "a4-8": { naziv: "A4 · 8 nalepk na list (105 × 74 mm)", w: 105, h: 74, stolpci: 2, vrstice: 4, papir: "A4", k: 1, pad: 4 },
   "a4-4": { naziv: "A4 · 4 nalepke na list (105 × 148 mm)", w: 105, h: 148, stolpci: 2, vrstice: 2, papir: "A4", k: 1.3, pad: 6 },
   "a4-24": { naziv: "A4 · 24 nalepk na list (70 × 37 mm)", w: 70, h: 37, stolpci: 3, vrstice: 8, papir: "A4", k: 0.66, pad: 2.2 },
+  "36x29": { naziv: "36 × 29 mm (majhna nalepka)", w: 36, h: 29, stolpci: 1, vrstice: 1, papir: null, k: 0.5, pad: 1.5 },
   "100x60": { naziv: "100 × 60 mm (ena nalepka na list)", w: 100, h: 60, stolpci: 1, vrstice: 1, papir: null, k: 0.92, pad: 3.5 },
   "100x100": { naziv: "100 × 100 mm (ena nalepka na list)", w: 100, h: 100, stolpci: 1, vrstice: 1, papir: null, k: 1.1, pad: 5 },
   A6: { naziv: "A6 (105 × 148 mm, ena nalepka na list)", w: 105, h: 148, stolpci: 1, vrstice: 1, papir: null, k: 1.3, pad: 6 },
