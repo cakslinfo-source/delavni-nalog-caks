@@ -218,7 +218,35 @@ function obnoviIzDatotekePulti(event, shraniNaloge) {
   event.target.value = "";
 }
 
+// Cene so vidne samo, če je na glavni strani odklenjen admin (skupna zastavica v brskalniku: admin-odklenjen).
+// Izračuni v ozadju delujejo naprej; skrit je samo prikaz.
+let CENE_VIDNE = false;
+function useCeneVidne() {
+  const [vidne, setVidne] = useState(false);
+  useEffect(() => {
+    const preberi = () => {
+      try {
+        setVidne(localStorage.getItem("admin-odklenjen") === "da");
+      } catch (e) {
+        setVidne(false);
+      }
+    };
+    preberi();
+    window.addEventListener("storage", preberi);
+    window.addEventListener("focus", preberi);
+    document.addEventListener("visibilitychange", preberi);
+    return () => {
+      window.removeEventListener("storage", preberi);
+      window.removeEventListener("focus", preberi);
+      document.removeEventListener("visibilitychange", preberi);
+    };
+  }, []);
+  CENE_VIDNE = vidne;
+  return vidne;
+}
+
 function eur(x) {
+  if (!CENE_VIDNE) return "";
   return (
     (x || 0).toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
     " €"
@@ -471,6 +499,7 @@ function prazenNalog() {
 // ===================== GLAVNA KOMPONENTA =====================
 
 export default function Pulti() {
+  useCeneVidne();
   const [nalogi, setNalogi] = useState([]);
   const [cenik, setCenik] = useState(null);
   const [nalaganje, setNalaganje] = useState(true);
@@ -629,6 +658,7 @@ export default function Pulti() {
           >
             ⟳ Osveži
           </button>
+          {CENE_VIDNE && (
           <button
             onClick={() => {
               if (vprasajPin()) setPogled("cenik");
@@ -637,6 +667,7 @@ export default function Pulti() {
           >
             Cenik
           </button>
+          )}
         </div>
       </div>
 
@@ -756,7 +787,7 @@ export default function Pulti() {
         />
       )}
 
-      {pogled === "tiskPonudbe" && (
+      {pogled === "tiskPonudbe" && CENE_VIDNE && (
         <TiskPonudbePulti
           nalog={nalogi.find((x) => x.id === izbran)}
           cenik={cenik}
@@ -804,7 +835,7 @@ export default function Pulti() {
         />
       )}
 
-      {pogled === "cenik" && (
+      {pogled === "cenik" && CENE_VIDNE && (
         <CenikAdmin cenik={cenik} shrani={shraniCenik} nazaj={() => setPogled("seznam")} nalogi={nalogi} shraniNaloge={shraniNaloge} />
       )}
 
@@ -901,7 +932,7 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
               <div className="flex justify-between items-end mt-2 text-sm">
                 <span className="text-gray-400">{nal.datum}</span>
                 <span className="font-semibold">
-                  {eur(izr.zDdv)}
+                  {CENE_VIDNE && eur(izr.zDdv)}
                   {nal.placano && <span className="text-green-600 ml-1">✓</span>}
                 </span>
               </div>
@@ -1081,7 +1112,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
           <option value="">— izberi material —</option>
           {cenik.materiali.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.naziv} {m.tip === "plosca" ? `(${eur(m.cenaPlosca)}/plošča)` : `(${eur(m.cena2cm)}/${eur(m.cena3cm)} m²)`}
+              {m.naziv}{CENE_VIDNE ? (m.tip === "plosca" ? ` (${eur(m.cenaPlosca)}/plošča)` : ` (${eur(m.cena2cm)}/${eur(m.cena3cm)} m²)`) : ""}
             </option>
           ))}
         </select>
@@ -1090,10 +1121,10 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
           <div className="text-sm text-gray-600 space-y-0.5 bg-gray-50 rounded-lg p-2">
             <div>Debelina se izbere pri vsakem kosu posebej (spodaj).</div>
             {izr.material.m2_2cm > 0 && (
-              <div>2 cm: <span className="font-semibold text-black">{izr.material.m2_2cm.toFixed(2)} m²</span> = {eur(izr.material.cena_2cm)}</div>
+              <div>2 cm: <span className="font-semibold text-black">{izr.material.m2_2cm.toFixed(2)} m²</span>{CENE_VIDNE ? ` = ${eur(izr.material.cena_2cm)}` : ""}</div>
             )}
             {izr.material.m2_3cm > 0 && (
-              <div>3 cm: <span className="font-semibold text-black">{izr.material.m2_3cm.toFixed(2)} m²</span> = {eur(izr.material.cena_3cm)}</div>
+              <div>3 cm: <span className="font-semibold text-black">{izr.material.m2_3cm.toFixed(2)} m²</span>{CENE_VIDNE ? ` = ${eur(izr.material.cena_3cm)}` : ""}</div>
             )}
           </div>
         )}
@@ -1195,7 +1226,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
                   return (
                     <div key={id} className="flex items-center gap-2 py-2">
                       <span className="text-xs text-gray-600 shrink-0">
-                        {s.naziv} <span className="text-gray-400">({eur(s.cena)}/{s.enota})</span>
+                        {s.naziv} {CENE_VIDNE ? <span className="text-gray-400">({eur(s.cena)}/{s.enota})</span> : <span className="text-gray-400">({s.enota})</span>}
                       </span>
                       <span className="flex-1 border-b border-dotted border-gray-300 translate-y-[-2px]" />
                       <input
@@ -1250,6 +1281,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
       {/* OSTALO */}
       <div className="bg-white rounded-xl p-3 space-y-2">
         <div className="grid grid-cols-2 gap-2">
+          {CENE_VIDNE && (
           <div>
             <label className={lbl}>Popust (%)</label>
             <input
@@ -1259,6 +1291,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
               onChange={(e) => setNal({ ...nal, popust: e.target.value })}
             />
           </div>
+          )}
           <div>
             <label className={lbl}>Datum montaže</label>
             <input
@@ -1353,6 +1386,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
       </div>
 
       {/* SKUPAJ */}
+      {CENE_VIDNE && (
       <div className="bg-black text-white rounded-xl p-3 text-sm space-y-1">
         <div className="flex justify-between">
           <span>Material {izr.material.naziv && `(${izr.material.naziv})`}</span>
@@ -1387,6 +1421,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
           <span>{eur(izr.zDdv)}</span>
         </div>
       </div>
+      )}
 
       <div className="flex gap-2">
         <button
@@ -1421,7 +1456,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
               }
             });
             if (izr.zDdv <= 0) {
-              opozorila.push("• Skupna cena je 0 € — preveri material, mere ali storitve.");
+              opozorila.push("• Cena ni izračunana — preveri material, mere ali storitve.");
             }
             if (opozorila.length > 0) {
               const nadaljuj = window.confirm(
@@ -1561,20 +1596,20 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
             {izr.material.m2_2cm > 0 && (
               <div className="flex justify-between text-gray-600">
                 <span>2 cm ({izr.material.m2_2cm.toFixed(2)} m²)</span>
-                <span>{eur(izr.material.cena_2cm)}</span>
+                {CENE_VIDNE && <span>{eur(izr.material.cena_2cm)}</span>}
               </div>
             )}
             {izr.material.m2_3cm > 0 && (
               <div className="flex justify-between text-gray-600">
                 <span>3 cm ({izr.material.m2_3cm.toFixed(2)} m²)</span>
-                <span>{eur(izr.material.cena_3cm)}</span>
+                {CENE_VIDNE && <span>{eur(izr.material.cena_3cm)}</span>}
               </div>
             )}
           </>
         ) : material?.tip === "plosca" ? (
           <div className="flex justify-between text-gray-600">
             <span>Število plošč ({nalog.steviloPlosc || 0})</span>
-            <span>{eur(izr.material.cena)}</span>
+            {CENE_VIDNE && <span>{eur(izr.material.cena)}</span>}
           </div>
         ) : null}
       </div>
@@ -1599,7 +1634,7 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
           {storitveZUporabo.map((s) => (
             <div key={s.id} className="flex justify-between text-gray-600">
               <span>{s.naziv} × {s.kolicina}</span>
-              <span>{eur(s.skupaj)}</span>
+              {CENE_VIDNE && <span>{eur(s.skupaj)}</span>}
             </div>
           ))}
         </div>
@@ -1607,6 +1642,7 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
 
       {/* CENA */}
       <div className="bg-black text-white rounded-xl p-3 text-sm space-y-1">
+        {CENE_VIDNE && (<>
         {nalog.ponudbenaCena != null && (
           <div className="flex justify-between text-gray-400">
             <span>Ponudbena cena</span>
@@ -1617,6 +1653,7 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
           <span>Končna cena (z DDV)</span>
           <span>{eur(izr.zDdv)}</span>
         </div>
+        </>)}
         <button
           onClick={() => preklopiPlacano(nalog)}
           className={`w-full mt-2 rounded-lg py-2 text-sm font-semibold ${
@@ -1718,7 +1755,7 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
         </div>
       )}
 
-      {(nalog.stranka?.email || nalog.stranka?.telefon) && (
+      {CENE_VIDNE && (nalog.stranka?.email || nalog.stranka?.telefon) && (
         <div className="bg-white rounded-xl p-3 space-y-2">
           <div className="text-sm font-semibold">Pošlji ponudbo stranki</div>
           <div className="flex flex-wrap gap-2">
@@ -1743,9 +1780,11 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
       )}
 
       <div className="flex gap-2">
+        {CENE_VIDNE && (
         <button onClick={() => natisni(nalog)} className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-semibold">
           Natisni ponudbo
         </button>
+        )}
         <button onClick={() => natisniDelovniList(nalog)} className="flex-1 bg-stone-700 text-white rounded-xl py-3 font-semibold">
           Natisni delovni list
         </button>
