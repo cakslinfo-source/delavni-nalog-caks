@@ -199,11 +199,40 @@ function vrednostEur(a, cenik) {
 
 // Kratek zapis cene na kartici v seznamu: " · 82.00 €/m²" ali prazno.
 function opisCeneNaKartici(a, cenik) {
+  if (!CENE_VIDNE) return "";
   const c = cenaM2Artikla(a, cenik);
   return c.cena > 0 ? ` · ${eur(c.cena)}/m²` : "";
 }
 
+// Cene so vidne samo, če je na glavni strani odklenjen admin (skupna zastavica v brskalniku: admin-odklenjen).
+// Izračuni v ozadju delujejo naprej; skrit je samo prikaz.
+let CENE_VIDNE = false;
+function useCeneVidne() {
+  const [vidne, setVidne] = useState(false);
+  useEffect(() => {
+    const preberi = () => {
+      try {
+        setVidne(localStorage.getItem("admin-odklenjen") === "da");
+      } catch (e) {
+        setVidne(false);
+      }
+    };
+    preberi();
+    window.addEventListener("storage", preberi);
+    window.addEventListener("focus", preberi);
+    document.addEventListener("visibilitychange", preberi);
+    return () => {
+      window.removeEventListener("storage", preberi);
+      window.removeEventListener("focus", preberi);
+      document.removeEventListener("visibilitychange", preberi);
+    };
+  }, []);
+  CENE_VIDNE = vidne;
+  return vidne;
+}
+
 function eur(x) {
+  if (!CENE_VIDNE) return "";
   return (Number(x) || 0).toFixed(2) + " €";
 }
 
@@ -455,6 +484,7 @@ function SlikaArtikla({ kljuc, className, alt, lazy }) {
 // ===================== GLAVNA KOMPONENTA =====================
 
 export default function Material() {
+  useCeneVidne();
   const [artikli, setArtikli] = useState([]);
   const [nalaganje, setNalaganje] = useState(true);
   const [napaka, setNapaka] = useState("");
@@ -856,9 +886,9 @@ export default function Material() {
       a.sirina,
       a.debelina,
       a.obdelava,
-      cenaM2Artikla(a, cenikPolice).cena > 0 ? cenaM2Artikla(a, cenikPolice).cena.toFixed(2) : "",
+      CENE_VIDNE && cenaM2Artikla(a, cenikPolice).cena > 0 ? cenaM2Artikla(a, cenikPolice).cena.toFixed(2) : "",
       povrsinaM2(a).toFixed(2),
-      vrednostEur(a, cenikPolice).toFixed(2),
+      CENE_VIDNE ? vrednostEur(a, cenikPolice).toFixed(2) : "",
       a.lokacija,
       (STATUSI.find((s) => s.id === a.status) || {}).naziv || a.status,
       a.nalog,
@@ -1149,7 +1179,7 @@ export default function Material() {
           <div className="flex justify-between text-xs text-gray-500 mb-1 px-1">
             <span>
               {prikazani.length} {beseda(prikazani.length, VRSTE[zavihek].oblike)} · {skupajM2.toFixed(2)} m²
-              {admin ? ` · ${eur(skupajVrednost)}` : ""}
+              {admin && CENE_VIDNE ? ` · ${eur(skupajVrednost)}` : ""}
             </span>
             <span>od najmanjšega do največjega</span>
           </div>
@@ -1267,6 +1297,7 @@ export default function Material() {
           <button onClick={() => setPogled("seznam")} className="text-sm text-gray-500">← Nazaj</button>
           <h2 className="font-bold text-lg">Admin — Material</h2>
 
+          {CENE_VIDNE && (
           <div className="bg-white rounded-xl p-3">
             <div className="font-semibold text-sm mb-1">Vrednost zaloge (samo "Na zalogi")</div>
             <p className="text-[11px] text-gray-500 mb-2">
@@ -1315,6 +1346,7 @@ export default function Material() {
               );
             })()}
           </div>
+          )}
 
           <div className="bg-white rounded-xl p-3 space-y-2">
             <div className="font-semibold text-sm">Izvoz in varnostna kopija</div>
@@ -1432,6 +1464,7 @@ function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, s
               ))}
             </datalist>
           </div>
+          {CENE_VIDNE && (
           <div>
             <label className={lbl}>Cena za m² (€)</label>
             <input
@@ -1441,8 +1474,10 @@ function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, s
               placeholder={izCenika.cena > 0 ? `samodejno ${izCenika.cena.toFixed(2)}` : "samodejno"}
             />
           </div>
+          )}
         </div>
 
+        {CENE_VIDNE && (
         <p className="text-[11px] text-gray-500 -mt-1" data-cena-pojasnilo>
           {rocnaCena > 0 ? (
             izCenika.cena > 0 && Math.abs(izCenika.cena - rocnaCena) > 0.004 ? (
@@ -1465,11 +1500,12 @@ function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, s
             RAZLOGI_BREZ_CENE[izCenika.razlog] || ""
           )}
         </p>
+        )}
 
         {m2 > 0 && (
           <div className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
             Površina: <b>{m2.toFixed(2)} m²</b>
-            {veljavnaCena > 0 ? <> · Vrednost: <b>{eur(vrednost)}</b></> : null}
+            {CENE_VIDNE && veljavnaCena > 0 ? <> · Vrednost: <b>{eur(vrednost)}</b></> : null}
           </div>
         )}
 
@@ -1606,9 +1642,9 @@ function PodrobnostiArtikla({ a, admin, cenik, onCenaIzCenika, onNazaj, onUredi,
         <div>
           {vrstica("Površina", `${m2.toFixed(2)} m²`)}
           {vrstica("Obdelava", a.obdelava)}
-          {cena.cena > 0 && vrstica("Cena za m²", `${eur(cena.cena)} · ${cena.vir === "cenik" ? "iz cenika polic" : "vpisana ročno"}`)}
-          {cena.cena > 0 && vrstica("Vrednost", eur(m2 * cena.cena))}
-          {rocnaDrugacna && (
+          {CENE_VIDNE && cena.cena > 0 && vrstica("Cena za m²", `${eur(cena.cena)} · ${cena.vir === "cenik" ? "iz cenika polic" : "vpisana ročno"}`)}
+          {CENE_VIDNE && cena.cena > 0 && vrstica("Vrednost", eur(m2 * cena.cena))}
+          {CENE_VIDNE && rocnaDrugacna && (
             <div className="flex justify-between items-center gap-3 py-1 border-b border-gray-100 text-xs text-gray-500">
               <span>Cenik polic: {eur(ceniku.cena)}/m² ({ceniku.debelina} cm)</span>
               <button type="button" onClick={onCenaIzCenika} className="underline text-red-600 font-medium">
@@ -1616,7 +1652,7 @@ function PodrobnostiArtikla({ a, admin, cenik, onCenaIzCenika, onNazaj, onUredi,
               </button>
             </div>
           )}
-          {cena.cena <= 0 && cena.razlog && cena.razlog !== "ni-cenika" && (
+          {CENE_VIDNE && cena.cena <= 0 && cena.razlog && cena.razlog !== "ni-cenika" && (
             <div className="py-1 border-b border-gray-100 text-xs text-amber-700">⚠ Cena za m² ni določena. {RAZLOGI_BREZ_CENE[cena.razlog]}</div>
           )}
           {a.nalog ? vrstica(a.status === "rezervirano" ? "Rezervirano za" : "Povezan nalog", a.nalog) : null}
@@ -1809,7 +1845,7 @@ function NalepkaArtikla({ a, cenik, onNazaj }) {
             ) : null}
             <div>
               Površina: <b>{m2.toFixed(2)} m²</b>
-              {cenaNalepke > 0 ? (
+              {CENE_VIDNE && cenaNalepke > 0 ? (
                 <>
                   {" "}· Cena: <b>{eur(cenaNalepke)}/m²</b>
                 </>
