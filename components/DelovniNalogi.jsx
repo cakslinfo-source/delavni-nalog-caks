@@ -546,7 +546,7 @@ const STATUS_HEX = {
 // ===== Varovalka pred sesutjem strani =====
 // Če se pri risanju enega dela strani zgodi napaka, odpove samo ta del (prikaže se obvestilo z vzrokom),
 // ne pa cela aplikacija ("Application error: a client-side exception has occurred").
-const VERZIJA_APLIKACIJE = "2026-10-09-k · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-10-14-l · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2849,6 +2849,11 @@ function DelovniNalogiGlavna() {
     setAdminOdklenjen(false);
     try { localStorage.setItem("admin-odklenjen", "ne"); } catch (e) {}
   }
+
+  // zasloni s cenami so samo za admina
+  useEffect(() => {
+    if (!adminOdklenjen && ["ceniki", "tiskCenikov", "tiskPonudbe", "izracunPolic"].includes(pogled)) setPogled("seznam");
+  }, [adminOdklenjen, pogled]);
 
   useEffect(() => {
     (async () => {
@@ -5170,6 +5175,7 @@ function DelovniNalogiGlavna() {
                   placeholder="npr. izdelava in montaža polic, kuhinjski pult…"
                 />
               </div>
+              {adminOdklenjen && (<>
               <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1">Skupna cena – neto (€, samodejno iz postavk)</label>
                 <input
@@ -5214,6 +5220,7 @@ function DelovniNalogiGlavna() {
                   })()}
                 </div>
               </div>
+              </>)}
               <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1">Status</label>
                 <select
@@ -5483,6 +5490,7 @@ function DelovniNalogiGlavna() {
                       <Trash2 size={16} />
                     </button>
                   </div>
+                  {adminOdklenjen && (
                   <div className="flex items-center gap-1.5 mt-2 pl-0.5">
                     <span className="text-xs text-stone-400">Cena postavke (€, samodejno):</span>
                     <input
@@ -5503,6 +5511,7 @@ function DelovniNalogiGlavna() {
                       inputMode="decimal"
                     />
                   </div>
+                  )}
                   <div className="flex items-center gap-1.5 mt-1.5 pl-0.5 flex-wrap">
                     <label className="flex items-center gap-1 text-xs text-stone-500 cursor-pointer">
                       <input
@@ -5760,7 +5769,7 @@ function DelovniNalogiGlavna() {
                 </div>
               )}
               <Vrstica label="Opis dela" vrednost={aktivniNalog.opis} />
-              {aktivniNalog.cena && (() => {
+              {adminOdklenjen && aktivniNalog.cena && (() => {
                 const neto = parseFloat(String(aktivniNalog.cena).replace(",", "."));
                 const popust = parseFloat(String(aktivniNalog.popustSkupaj).replace(",", ".")) || 0;
                 const netoPoPopustu = neto * (1 - popust / 100);
@@ -5890,7 +5899,7 @@ function DelovniNalogiGlavna() {
                         <th className="font-medium py-1.5 px-2">Material</th>
                         <th className="font-medium py-1.5 px-2">D × Š × Deb. (cm)</th>
                         <th className="font-medium py-1.5 px-2">Kos.</th>
-                        <th className="font-medium py-1.5 px-2">Cena (€)</th>
+                        {adminOdklenjen && <th className="font-medium py-1.5 px-2">Cena (€)</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -5916,7 +5925,7 @@ function DelovniNalogiGlavna() {
                               {p.dolzina || "–"} × {p.poseven ? `L:${p.sirinaLevo || "–"}/D:${p.sirinaDesno || "–"}` : (p.sirina || "–")} × {p.debelina || "–"}
                             </td>
                             <td className="py-1.5 px-2 text-stone-600">{p.kolicina || "1"}</td>
-                            <td className="py-1.5 px-2 text-stone-600">{p.cena ? `${p.cena} €` : "—"}</td>
+                            {adminOdklenjen && <td className="py-1.5 px-2 text-stone-600">{p.cena ? `${p.cena} €` : "—"}</td>}
                           </tr>
                         ))}
                     </tbody>
@@ -6254,7 +6263,7 @@ function DelovniNalogiGlavna() {
               </div>
             )}
 
-            {aktivniNalog.vrsta === "ponudba" && (aktivniNalog.email || aktivniNalog.telefon) && (
+            {adminOdklenjen && aktivniNalog.vrsta === "ponudba" && (aktivniNalog.email || aktivniNalog.telefon) && (
               <div className="mt-4 bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span className="text-sm text-stone-600">Pošlji ponudbo stranki v predogled:</span>
                 <div className="flex flex-wrap gap-2 shrink-0">
@@ -6280,7 +6289,7 @@ function DelovniNalogiGlavna() {
 
             <div className="flex flex-wrap gap-2 mt-5">
               {aktivniNalog.vrsta === "ponudba" ? (
-                <button
+                !adminOdklenjen ? null : <button
                   onClick={() => setPogled("tiskPonudbe")}
                   className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
                 >
@@ -6302,12 +6311,14 @@ function DelovniNalogiGlavna() {
                       <Download size={15} /> DXF poševni kosi
                     </button>
                   )}
+                  {adminOdklenjen && (
                   <button
                     onClick={() => setPogled("izracunPolic")}
                     className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
                   >
                     <Ruler size={15} /> Izračun polic
                   </button>
+                  )}
                   <button
                     onClick={() => setPogled("tisk")}
                     className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
@@ -6396,14 +6407,14 @@ function DelovniNalogiGlavna() {
 
       {pogled === "seznam" && !naloziLoading && (
         <>
-          <button
+          {adminOdklenjen && <button
             onClick={odpriNovoPonudbo}
             className="fixed bottom-24 right-6 bg-blue-600 hover:bg-blue-500 text-white rounded-full pl-4 pr-5 h-14 shadow-lg flex items-center gap-2 transition-colors"
             aria-label="Izdelaj ponudbo"
           >
             <Plus size={22} />
             <span className="text-sm font-medium whitespace-nowrap">Izdelaj ponudbo</span>
-          </button>
+          </button>}
           <button
             onClick={odpriNov}
             className="fixed bottom-6 right-6 bg-red-500 hover:bg-red-400 text-stone-900 rounded-full pl-4 pr-5 h-14 shadow-lg flex items-center gap-2 transition-colors"
