@@ -117,7 +117,35 @@ function obnoviIzDatotekeSpomeniki(event, shraniSeznam) {
   event.target.value = "";
 }
 
+// Cene so vidne samo, če je na glavni strani odklenjen admin (skupna zastavica v brskalniku: admin-odklenjen).
+// Izračuni v ozadju delujejo naprej; skrit je samo prikaz.
+let CENE_VIDNE = false;
+function useCeneVidne() {
+  const [vidne, setVidne] = useState(false);
+  useEffect(() => {
+    const preberi = () => {
+      try {
+        setVidne(localStorage.getItem("admin-odklenjen") === "da");
+      } catch (e) {
+        setVidne(false);
+      }
+    };
+    preberi();
+    window.addEventListener("storage", preberi);
+    window.addEventListener("focus", preberi);
+    document.addEventListener("visibilitychange", preberi);
+    return () => {
+      window.removeEventListener("storage", preberi);
+      window.removeEventListener("focus", preberi);
+      document.removeEventListener("visibilitychange", preberi);
+    };
+  }, []);
+  CENE_VIDNE = vidne;
+  return vidne;
+}
+
 function eur(x) {
+  if (!CENE_VIDNE) return "";
   const v = parseFloat(String(x).replace(",", "."));
   if (isNaN(v)) return "—";
   return v.toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -193,6 +221,7 @@ function SlikaPregled({ referenca }) {
 }
 
 export default function Spomeniki() {
+  useCeneVidne();
   const [spomeniki, setSpomeniki] = useState([]);
   const [nalaganje, setNalaganje] = useState(true);
   const [napaka, setNapaka] = useState("");
@@ -444,7 +473,7 @@ export default function Spomeniki() {
                     <div className="flex justify-between items-end mt-2 text-sm">
                       <span className="text-gray-400">{n.montaza ? `Montaža: ${new Date(n.montaza).toLocaleDateString("sl-SI")}` : n.datum}</span>
                       <span className="font-semibold">
-                        {eur(n.cena)}
+                        {CENE_VIDNE && eur(n.cena)}
                         {n.placano === "Da" && <span className="text-green-600 ml-1">✓</span>}
                       </span>
                     </div>
@@ -829,10 +858,12 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
       </div>
 
       <div className="bg-white rounded-xl p-3 space-y-2">
+        {CENE_VIDNE && (
         <div>
           <label className={lbl}>Cena (€)</label>
           <input className={inp} inputMode="decimal" value={nal.cena} onChange={(e) => setNal({ ...nal, cena: e.target.value })} />
         </div>
+        )}
         <div>
           <label className={lbl}>Slika / skica</label>
           {nal.slika ? (
@@ -1192,10 +1223,12 @@ function Podrobnosti({ nalog, potrditevShranjeno, nazaj, uredi, spremeniStatus, 
       )}
 
       <div className="bg-black text-white rounded-xl p-3 text-sm space-y-1">
+        {CENE_VIDNE && (
         <div className="flex justify-between font-bold text-base">
           <span>Cena</span>
           <span>{eur(nalog.cena)}</span>
         </div>
+        )}
         <button
           onClick={() => preklopiPlacano(nalog)}
           className={`w-full mt-2 rounded-lg py-2 text-sm font-semibold ${nalog.placano === "Da" ? "bg-green-600" : "bg-gray-700"}`}
