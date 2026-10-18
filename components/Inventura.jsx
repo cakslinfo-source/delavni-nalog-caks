@@ -61,6 +61,8 @@ function tekst(v) {
 }
 
 function povrsinaM2(a) {
+  // skeniran kos: prava površina obrisa iz fotografije
+  if (a && a.skener && a.skener.povrsinaM2 > 0 && Number.isFinite(a.skener.povrsinaM2)) return a.skener.povrsinaM2;
   const d = sklStevilo(a && a.dolzina);
   const s = sklStevilo(a && a.sirina);
   const m2 = d > 0 && s > 0 ? (d * s) / 10000 : 0;

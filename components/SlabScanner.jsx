@@ -57,6 +57,15 @@ function razdaljaDoDaljice(p, a, b) {
 const fmt = (x, d = 0) => (Number.isFinite(x) ? x.toLocaleString("sl-SI", { minimumFractionDigits: d, maximumFractionDigits: d }) : "–");
 
 export default function SlabScanner() {
+  return <SlabScannerJedro />;
+}
+
+// Jedro skenerja. Samostojno (stran /scanner) ali kot okno znotraj obrazca za material:
+//   zacetnaSlikaUrl / zacetnoIme: slika, ki se odpre takoj
+//   zacetniObris: prej shranjen obris { tocke (normalizirane 0..1), mmPx }
+//   onPotrdi(rezultat), onZapri(): gumba v načinu okna
+export function SlabScannerJedro({ zacetnaSlikaUrl, zacetnoIme, zacetniObris, znanaDolzinaMm, onPotrdi, onZapri }) {
+  const jeOkno = typeof onPotrdi === "function";
   const [slika, setSlika] = useState(null); // { url, w, h, ime }
   const [tocke, setTocke] = useState([]);
   const [zaprt, setZaprt] = useState(false);
@@ -87,6 +96,29 @@ export default function SlabScanner() {
     setOkno({ w: Math.max(200, el.clientWidth), h: Math.max(200, el.clientHeight) });
     return () => ro.disconnect();
   }, []);
+
+  // odpri začetno sliko (način okna)
+  useEffect(() => {
+    if (!zacetnaSlikaUrl) return undefined;
+    let preklicano = false;
+    const im = new Image();
+    im.onload = () => {
+      if (preklicano) return;
+      const s = { url: zacetnaSlikaUrl, w: im.naturalWidth, h: im.naturalHeight, ime: zacetnoIme || "plosca" };
+      setSlika(s);
+      if (zacetniObris && Array.isArray(zacetniObris.tocke) && zacetniObris.tocke.length >= 3) {
+        setTocke(zacetniObris.tocke.map((q) => ({ x: q.x * s.w, y: q.y * s.h })));
+        setZaprt(true);
+        if (zacetniObris.mmPx > 0 && zacetniObris.W > 0) {
+          setMerilo({ a: null, b: null, mm: null, mmPx: zacetniObris.mmPx * (zacetniObris.W / s.w) });
+        }
+      }
+      setTimeout(() => prilagodi(s, stanje.current.okno), 0);
+    };
+    im.onerror = () => !preklicano && setNapaka("Slike ni mogoče odpreti.");
+    im.src = zacetnaSlikaUrl;
+    return () => { preklicano = true; };
+  }, [zacetnaSlikaUrl]);
 
   const visina = pogled.w * (okno.h / okno.w);
   const k = pogled.w / okno.w; // slikovnih točk na zaslonsko točko
@@ -156,7 +188,7 @@ export default function SlabScanner() {
   }
 
   // ---------- miška / prst ----------
-  function prag() { return 9 * (stanje.current.pogled.w / stanje.current.okno.w); }
+  function prag() { return (dotik.current ? 16 : 9) * (stanje.current.pogled.w / stanje.current.okno.w); }
 
   function najdiTocko(p) {
     const { tocke: t } = stanje.current;
@@ -177,11 +209,27 @@ export default function SlabScanner() {
     return naj;
   }
 
+  const kazalci = useRef(new Map()); // aktivni prsti / miška
+  const stiskanje = useRef(null); // štiskanje z dvema prstoma (povečava)
+  const dotik = useRef(false);
+  const premikFn = useRef(null);
+  const konecFn = useRef(null);
+
   function onDown(e) {
     if (!stanje.current.slika) return;
     if (e.button === 2) return;
-    const p = vSliko(e.clientX, e.clientY);
+    dotik.current = e.pointerType === "touch";
+    kazalci.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const st = stanje.current;
+    if (kazalci.current.size >= 2) {
+      // dva prsta: povečava in premik; trenutni klik/vlečenje se prekliče
+      if (interakcija.current) interakcija.current = { ...interakcija.current, premaknjeno: true, cilj: { vrsta: "preklic" } };
+      const [a, b] = Array.from(kazalci.current.values());
+      const sredina = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      stiskanje.current = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), w0: st.pogled.w, tocka0: vSliko(sredina.x, sredina.y) };
+      return;
+    }
+    const p = vSliko(e.clientX, e.clientY);
     let cilj = { vrsta: "ozadje" };
     if (st.nacin === "obris") {
       const i = najdiTocko(p);
@@ -192,42 +240,69 @@ export default function SlabScanner() {
       }
     }
     interakcija.current = { cilj, x0: e.clientX, y0: e.clientY, pogled0: st.pogled, premaknjeno: false, id: e.pointerId };
-    const move = (ev) => {
-      const ia = interakcija.current;
-      if (!ia) return;
-      const dx = ev.clientX - ia.x0, dy = ev.clientY - ia.y0;
-      if (!ia.premaknjeno && Math.hypot(dx, dy) < 4) return;
-      ia.premaknjeno = true;
-      if (ia.cilj.vrsta === "tocka") {
-        const q = vSliko(ev.clientX, ev.clientY);
-        setTocke((t) => t.map((a, i) => (i === ia.cilj.i ? { x: q.x, y: q.y } : a)));
-        setIzbrana(ia.cilj.i);
-      } else if (ia.cilj.vrsta === "rob") {
-        // povlečenje roba vstavi novo točko in jo premika
-        const q = vSliko(ev.clientX, ev.clientY);
-        const pos = ia.cilj.i + 1;
-        setTocke((t) => { const n = t.slice(); n.splice(pos, 0, { x: q.x, y: q.y }); return n; });
-        interakcija.current = { ...ia, cilj: { vrsta: "tocka", i: pos } };
-        setIzbrana(pos);
-      } else {
-        const o = stanje.current.okno;
-        const sk = ia.pogled0.w / o.w;
-        setPogled({ x: ia.pogled0.x - dx * sk, y: ia.pogled0.y - dy * sk, w: ia.pogled0.w });
-      }
-    };
-    const up = (ev) => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
-      const ia = interakcija.current;
-      interakcija.current = null;
-      if (!ia || ia.premaknjeno) return;
-      klik(vSliko(ev.clientX, ev.clientY), ia.cilj);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
   }
+
+  premikFn.current = (ev) => {
+    if (kazalci.current.has(ev.pointerId)) kazalci.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    const sp = stiskanje.current;
+    if (sp && kazalci.current.size >= 2) {
+      const [a, b] = Array.from(kazalci.current.values());
+      const d = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+      const sl = stanje.current.slika;
+      const o = stanje.current.okno;
+      const nw = Math.max(20, Math.min(sl ? Math.max(sl.w, sl.h) * 4 : 10000, sp.w0 * (sp.d0 / d)));
+      const r = svgRef.current.getBoundingClientRect();
+      const fx = ((a.x + b.x) / 2 - r.left) / r.width, fy = ((a.y + b.y) / 2 - r.top) / r.height;
+      setPogled({ x: sp.tocka0.x - fx * nw, y: sp.tocka0.y - fy * (nw * (o.h / o.w)), w: nw });
+      return;
+    }
+    const ia = interakcija.current;
+    if (!ia || ev.pointerId !== ia.id) return;
+    const dx = ev.clientX - ia.x0, dy = ev.clientY - ia.y0;
+    if (!ia.premaknjeno && Math.hypot(dx, dy) < (dotik.current ? 8 : 4)) return;
+    ia.premaknjeno = true;
+    if (ia.cilj.vrsta === "tocka") {
+      const q = vSliko(ev.clientX, ev.clientY);
+      setTocke((t) => t.map((a, i) => (i === ia.cilj.i ? { x: q.x, y: q.y } : a)));
+      setIzbrana(ia.cilj.i);
+    } else if (ia.cilj.vrsta === "rob") {
+      // povlečenje roba vstavi novo točko in jo premika
+      const q = vSliko(ev.clientX, ev.clientY);
+      const pos = ia.cilj.i + 1;
+      setTocke((t) => { const n = t.slice(); n.splice(pos, 0, { x: q.x, y: q.y }); return n; });
+      interakcija.current = { ...ia, cilj: { vrsta: "tocka", i: pos } };
+      setIzbrana(pos);
+    } else if (ia.cilj.vrsta === "ozadje") {
+      const o = stanje.current.okno;
+      const sk = ia.pogled0.w / o.w;
+      setPogled({ x: ia.pogled0.x - dx * sk, y: ia.pogled0.y - dy * sk, w: ia.pogled0.w });
+    }
+  };
+  konecFn.current = (ev) => {
+    const bilo = kazalci.current.size;
+    kazalci.current.delete(ev.pointerId);
+    if (kazalci.current.size < 2) stiskanje.current = null;
+    const ia = interakcija.current;
+    if (!ia || ev.pointerId !== ia.id) {
+      if (bilo >= 2 && kazalci.current.size === 0) interakcija.current = null;
+      return;
+    }
+    interakcija.current = null;
+    if (ia.premaknjeno || ev.type === "pointercancel") return;
+    klik(vSliko(ev.clientX, ev.clientY), ia.cilj);
+  };
+  useEffect(() => {
+    const m = (e) => premikFn.current && premikFn.current(e);
+    const u = (e) => konecFn.current && konecFn.current(e);
+    window.addEventListener("pointermove", m);
+    window.addEventListener("pointerup", u);
+    window.addEventListener("pointercancel", u);
+    return () => {
+      window.removeEventListener("pointermove", m);
+      window.removeEventListener("pointerup", u);
+      window.removeEventListener("pointercancel", u);
+    };
+  }, []);
 
   function klik(p, cilj) {
     const st = stanje.current;
@@ -363,6 +438,26 @@ export default function SlabScanner() {
       setNapaka("PNG ni bilo mogoče ustvariti: " + (e.message || e));
     }
   }
+  function potrdi() {
+    if (!slika || !rezultat) return;
+    onPotrdi({
+      verzija: 1,
+      tocke: tocke.map((p) => ({ x: +(p.x / slika.w).toFixed(5), y: +(p.y / slika.h).toFixed(5) })),
+      W: slika.w,
+      H: slika.h,
+      mmPx: mmPx || null,
+      povrsinaM2: mmPx ? +rezultat.povrsinaM2.toFixed(4) : null,
+      a: mmPx ? +rezultat.pravA.toFixed(1) : null,
+      b: mmPx ? +rezultat.pravB.toFixed(1) : null,
+    });
+  }
+  function meriloIzDolzine() {
+    if (!(znanaDolzinaMm > 0) || tocke.length < 3) return;
+    const mp = najmanjsiPravokotnik(tocke);
+    if (!(mp.a > 0)) return;
+    setMerilo({ a: null, b: null, mm: znanaDolzinaMm, mmPx: znanaDolzinaMm / mp.a });
+    setNapaka("");
+  }
   function pocisti() {
     if (tocke.length && !confirm("Izbrišem celoten obris?")) return;
     setTocke([]); setZaprt(false); setIzbrana(null);
@@ -380,16 +475,27 @@ export default function SlabScanner() {
   const kursor = !slika ? "default" : nacin === "obris" ? "crosshair" : "crosshair";
 
   return (
-    <div className="min-h-screen bg-stone-100 text-stone-900 flex flex-col">
+    <div className={jeOkno ? "fixed inset-0 z-50 bg-stone-100 text-stone-900 flex flex-col overflow-y-auto" : "min-h-screen bg-stone-100 text-stone-900 flex flex-col"}>
       <header className="bg-stone-900 text-white px-4 py-3 flex flex-wrap items-center gap-3">
-        <a href="/" className="text-sm text-stone-300 hover:text-white">← Nazaj</a>
-        <h1 className="font-semibold">📷 Slab Scanner</h1>
-        <span className="text-xs text-stone-400">faza A+B · obris plošče z miško</span>
+        {jeOkno ? (
+          <button onClick={onZapri} className="text-sm text-stone-300 hover:text-white">← Prekliči</button>
+        ) : (
+          <a href="/" className="text-sm text-stone-300 hover:text-white">← Nazaj</a>
+        )}
+        <h1 className="font-semibold">📷 Obris plošče</h1>
+        {!jeOkno && <span className="text-xs text-stone-400">faza A+B · obris plošče z miško</span>}
         <div className="ml-auto flex gap-2">
-          <label className="text-sm px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-stone-900 font-medium cursor-pointer">
-            {slika ? "Druga fotografija" : "Naloži fotografijo"}
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => { naloziDatoteko(e.target.files?.[0]); e.target.value = ""; }} />
-          </label>
+          {jeOkno ? (
+            <button onClick={potrdi} disabled={!rezultat}
+              className="text-sm px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-stone-900 font-medium disabled:opacity-40">
+              ✓ Uporabi obris
+            </button>
+          ) : (
+            <label className="text-sm px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-stone-900 font-medium cursor-pointer">
+              {slika ? "Druga fotografija" : "Naloži fotografijo"}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { naloziDatoteko(e.target.files?.[0]); e.target.value = ""; }} />
+            </label>
+          )}
         </div>
       </header>
 
@@ -485,7 +591,7 @@ export default function SlabScanner() {
                     {meriloTocke.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={sw(5)} fill="#a855f7" stroke="#fff" strokeWidth={sw(1.5)} />)}
                   </g>
                 )}
-                {merilo && nacin !== "merilo" && prikaz !== "brez" && (
+                {merilo && merilo.a && nacin !== "merilo" && prikaz !== "brez" && (
                   <g opacity={0.8}>
                     <line x1={merilo.a.x} y1={merilo.a.y} x2={merilo.b.x} y2={merilo.b.y} stroke="#a855f7" strokeWidth={sw(1.5)} strokeDasharray={`${sw(6)} ${sw(4)}`} />
                   </g>
@@ -551,6 +657,13 @@ export default function SlabScanner() {
                 <span className="text-stone-500">mm</span>
               </div>
               <button onClick={potrdiMerilo} className="w-full px-3 py-2 rounded-lg bg-stone-900 text-white">Uporabi merilo</button>
+              {znanaDolzinaMm > 0 && (
+                <button onClick={() => { meriloIzDolzine(); setNacin("obris"); }} disabled={!rezultat}
+                  className="w-full px-3 py-2 rounded-lg border border-stone-300 disabled:opacity-40 text-left">
+                  Merilo iz vpisane dolžine ({fmt(znanaDolzinaMm / 10, 1)} cm)
+                  <span className="block text-xs text-stone-500">Daljša stranica obrisa = vpisana dolžina. Najprej zapri obris.</span>
+                </button>
+              )}
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
                 Opozorilo: to je preprosto merilo z eno razdaljo. Ne popravi perspektive, leče ali debeline plošče, zato je natančno le približno. Prava kalibracija z oznakami (cilj ±2 mm) pride v fazi D.
               </p>
@@ -607,7 +720,7 @@ export default function SlabScanner() {
 
           {slika && (
             <p className="text-xs text-stone-400 border-t border-stone-100 pt-2">
-              Shranjevanje v skladišče in povezava z nestingom pridejo v naslednjih fazah. Datoteka: {slika.ime}
+              {jeOkno ? "Ko si zadovoljen z obrisom, pritisni »Uporabi obris« zgoraj." : `Shranjevanje v skladišče in povezava z nestingom pridejo v naslednjih fazah. Datoteka: ${slika.ime}`}
             </p>
           )}
         </aside>

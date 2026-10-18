@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { SlabScannerJedro } from "./SlabScanner";
 
 const ADMIN_PIN = "1991";
 const BAZNI_URL = "https://delavni-nalog-caks.vercel.app";
@@ -190,6 +191,8 @@ const RAZLOGI_BREZ_CENE = {
 // ===================== POMOŽNE FUNKCIJE =====================
 
 function povrsinaM2(a) {
+  // Če je plošča/ostanek skeniran (obris iz fotografije z merilom), velja prava površina obrisa.
+  if (a && a.skener && a.skener.povrsinaM2 > 0) return a.skener.povrsinaM2;
   return (sklStevilo(a.dolzina) * sklStevilo(a.sirina)) / 10000;
 }
 
@@ -417,6 +420,22 @@ async function zmanjsajSliko(file, maxStran, kakovost) {
   return canvas.toDataURL("image/jpeg", kakovost);
 }
 
+// Vrne naslov slike za skener: izvirna datoteka (polna ločljivost), nova slika ali shranjena slika.
+async function slikaZaSkener(f) {
+  if (f.izvirnik) return { url: URL.createObjectURL(f.izvirnik), sprosti: true };
+  if (f.novaSlika) return { url: f.novaSlika.full, sprosti: false };
+  if (f.slika && f.slika.kljuc) {
+    if (predpomnilnikSlik.has(f.slika.kljuc)) return { url: predpomnilnikSlik.get(f.slika.kljuc), sprosti: false };
+    const r = await fetch(`/api/priloge-material?kljuc=${encodeURIComponent(f.slika.kljuc)}`, { cache: "no-store" });
+    const d = await r.json();
+    if (d && d.podatki) {
+      predpomnilnikSlik.set(f.slika.kljuc, d.podatki);
+      return { url: d.podatki, sprosti: false };
+    }
+  }
+  throw new Error("Slike ni mogoče odpreti.");
+}
+
 async function naloziSlikoNaStreznik(kljuc, dataUrl) {
   const res = await fetch("/api/priloge-material", {
     method: "POST",
@@ -427,6 +446,18 @@ async function naloziSlikoNaStreznik(kljuc, dataUrl) {
 }
 
 const predpomnilnikSlik = new Map();
+
+// Obris plošče/ostanka, narisan čez fotografijo (točke so normalizirane 0..1). Zunaj obrisa je zatemnjeno.
+function ObrisPrekrivanje({ skener }) {
+  if (!skener || !Array.isArray(skener.tocke) || skener.tocke.length < 3) return null;
+  const pot = "M" + skener.tocke.map((p) => p.x + "," + p.y).join("L") + "Z";
+  return (
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1 1" preserveAspectRatio="none">
+      <path d={"M0,0H1V1H0Z" + pot} fill="rgba(0,0,0,0.5)" fillRule="evenodd" />
+      <path d={pot} fill="none" stroke="#10b981" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function SlikaArtikla({ kljuc, className, alt, lazy }) {
   const [src, setSrc] = useState(kljuc ? predpomnilnikSlik.get(kljuc) || null : null);
@@ -699,7 +730,9 @@ export default function Material() {
         slikaRef = null;
       }
 
-      const { _urejanje, novaSlika, odstraniSliko, steviloKopij, oznaciIzvorPorabljen, ...cist } = f;
+      const { _urejanje, novaSlika, odstraniSliko, steviloKopij, oznaciIzvorPorabljen, izvirnik, ...cist } = f;
+      if (!slikaRef) cist.skener = null; // obris brez slike nima pomena
+      if (!cist.skener) delete cist.skener;
       cist.slika = slikaRef;
       cist.material = String(cist.material).trim();
       cist.lokacija = String(cist.lokacija || "").trim();
@@ -1232,7 +1265,7 @@ export default function Material() {
                       </div>
                       <div className="text-xs text-gray-500 truncate">
                         {a.obdelava ? `${a.obdelava} · ` : ""}
-                        {povrsinaM2(a).toFixed(2)} m²
+                        {povrsinaM2(a).toFixed(2)} m²{a.skener ? " 📐" : ""}
                         {opisCeneNaKartici(a, cenikPolice)}
                       </div>
                       <div className="text-xs text-gray-600 truncate">
@@ -1386,6 +1419,7 @@ export default function Material() {
 function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, shranjujem, onShrani, onPreklici }) {
   const [f, setF] = useState(zacetni);
   const [pripravljamSliko, setPripravljamSliko] = useState(false);
+  const [skenerOdprt, setSkenerOdprt] = useState(null); // { url, sprosti }
   const jeUrejanje = !!f._urejanje;
   const vrsta = VRSTE[f.vrsta] || VRSTE.plosca;
   const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white";
@@ -1397,7 +1431,7 @@ function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, s
       setF((p) => ({ ...p, [ime]: v }));
     },
   });
-  const m2 = (sklStevilo(f.dolzina) * sklStevilo(f.sirina)) / 10000;
+  const m2 = povrsinaM2(f);
   // Cena za m²: kar je vpisano ročno, sicer samodejno iz cenika polic (po materialu in debelini).
   const izCenika = poisciCenoIzCenika(f.material, f.debelina, cenik);
   const rocnaCena = sklStevilo(f.cenaM2);
@@ -1413,13 +1447,38 @@ function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, s
     try {
       const full = await zmanjsajSliko(datoteka, 1200, 0.72);
       const mini = await zmanjsajSliko(datoteka, 240, 0.6);
-      setF((p) => ({ ...p, novaSlika: { ime: datoteka.name, full, mini }, odstraniSliko: false }));
+      // nova slika → star obris ne velja več
+      setF((p) => ({ ...p, novaSlika: { ime: datoteka.name, full, mini }, odstraniSliko: false, izvirnik: datoteka, skener: null }));
     } catch (err) {
       alert("Slike ni bilo mogoče prebrati. Poskusi z drugo sliko.");
     } finally {
       setPripravljamSliko(false);
       vnos.value = "";
     }
+  }
+
+  async function odpriSkener() {
+    try {
+      setSkenerOdprt(await slikaZaSkener(f));
+    } catch (err) {
+      alert("Slike ni mogoče odpreti za skener. Poskusi znova.");
+    }
+  }
+  function zapriSkener() {
+    if (skenerOdprt && skenerOdprt.sprosti) URL.revokeObjectURL(skenerOdprt.url);
+    setSkenerOdprt(null);
+  }
+  function potrdiSkener(r) {
+    setF((p) => {
+      const n = { ...p, skener: r };
+      // z merilom: mere (v cm) iz najmanjšega pravokotnika okoli obrisa
+      if (r.a > 0 && r.b > 0) {
+        n.dolzina = String(Math.round(r.a / 10 * 10) / 10);
+        n.sirina = String(Math.round(r.b / 10 * 10) / 10);
+      }
+      return n;
+    });
+    zapriSkener();
   }
 
   return (
@@ -1528,13 +1587,29 @@ function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, s
 
       <div className="bg-white rounded-xl p-3 space-y-2">
         <div className="font-semibold text-sm">Slika {vrsta.naziv.toLowerCase() === "plošča" ? "plošče" : "kosa"}</div>
-        {imaSliko && (
+        {imaSliko && f.skener && (
+          <div className="relative inline-block max-w-full rounded-lg overflow-hidden bg-stone-100">
+            {f.novaSlika ? (
+              <img src={f.novaSlika.full} alt="Predogled" className="block max-w-full max-h-72 w-auto" />
+            ) : (
+              <SlikaArtikla key={f.slika.kljuc} kljuc={f.slika.kljuc} className="block max-w-full max-h-72 w-auto" alt="Slika" />
+            )}
+            <ObrisPrekrivanje skener={f.skener} />
+          </div>
+        )}
+        {imaSliko && !f.skener && (
           <div className="rounded-lg overflow-hidden bg-stone-100 max-w-xs">
             {f.novaSlika ? (
               <img src={f.novaSlika.mini} alt="Predogled" className="w-full object-cover" />
             ) : (
               <SlikaArtikla key={f.slika.kljucMini} kljuc={f.slika.kljucMini} className="w-full h-40 object-cover" alt="Slika" />
             )}
+          </div>
+        )}
+        {f.skener && (
+          <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+            📐 Obris shranjen: {f.skener.tocke.length} točk
+            {f.skener.povrsinaM2 > 0 ? ` · površina ${f.skener.povrsinaM2.toFixed(3)} m²` : " · brez merila (površina po vpisanih merah)"}
           </div>
         )}
         <div className="flex flex-wrap gap-2 items-center">
@@ -1545,7 +1620,25 @@ function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, s
           {imaSliko && (
             <button
               type="button"
-              onClick={() => setF((p) => ({ ...p, novaSlika: null, odstraniSliko: true }))}
+              onClick={odpriSkener}
+              className="text-sm px-3 py-2 rounded-lg border border-emerald-600 text-emerald-800 bg-emerald-50"
+            >
+              {f.skener ? "📐 Popravi obris" : "📐 Skener: označi obris"}
+            </button>
+          )}
+          {f.skener && (
+            <button
+              type="button"
+              onClick={() => setF((p) => ({ ...p, skener: null }))}
+              className="text-xs text-gray-600 underline"
+            >
+              Odstrani obris
+            </button>
+          )}
+          {imaSliko && (
+            <button
+              type="button"
+              onClick={() => setF((p) => ({ ...p, novaSlika: null, odstraniSliko: true, izvirnik: null, skener: null }))}
               className="text-xs text-red-600 underline"
             >
               Odstrani sliko
@@ -1572,6 +1665,17 @@ function ObrazecArtikla({ zacetni, cenik, predlogiMaterialov, predlogiLokacij, s
             <p className="text-[11px] text-gray-400 mt-1">Vsak vnos dobi svojo kodo in svojo QR nalepko.</p>
           </div>
         </div>
+      )}
+
+      {skenerOdprt && (
+        <SlabScannerJedro
+          zacetnaSlikaUrl={skenerOdprt.url}
+          zacetnoIme={f.novaSlika ? f.novaSlika.ime : f.slika && f.slika.ime}
+          zacetniObris={f.skener}
+          znanaDolzinaMm={Math.max(sklStevilo(f.dolzina), sklStevilo(f.sirina)) * 10}
+          onPotrdi={potrdiSkener}
+          onZapri={zapriSkener}
+        />
       )}
 
       <div className="flex gap-2">
@@ -1630,9 +1734,17 @@ function PodrobnostiArtikla({ a, admin, cenik, onCenaIzCenika, onNazaj, onUredi,
           </span>
         </div>
 
-        {a.slika && a.slika.kljuc && (
+        {a.slika && a.slika.kljuc && !a.skener && (
           <div className="rounded-lg overflow-hidden bg-stone-100">
             <SlikaArtikla key={a.slika.kljuc} kljuc={a.slika.kljuc} className="w-full max-h-80 object-contain" alt={a.material} />
+          </div>
+        )}
+        {a.slika && a.slika.kljuc && a.skener && (
+          <div className="rounded-lg overflow-hidden bg-stone-100 flex justify-center">
+            <div className="relative inline-block max-w-full">
+              <SlikaArtikla key={a.slika.kljuc} kljuc={a.slika.kljuc} className="block max-w-full max-h-80 w-auto" alt={a.material} />
+              <ObrisPrekrivanje skener={a.skener} />
+            </div>
           </div>
         )}
 
@@ -1641,7 +1753,7 @@ function PodrobnostiArtikla({ a, admin, cenik, onCenaIzCenika, onNazaj, onUredi,
         </div>
 
         <div>
-          {vrstica("Površina", `${m2.toFixed(2)} m²`)}
+          {vrstica("Površina", `${m2.toFixed(2)} m²${a.skener && a.skener.povrsinaM2 > 0 ? " (po obrisu iz fotografije)" : ""}`)}
           {vrstica("Obdelava", a.obdelava)}
           {CENE_VIDNE && cena.cena > 0 && vrstica("Cena za m²", `${eur(cena.cena)} · ${cena.vir === "cenik" ? "iz cenika polic" : "vpisana ročno"}`)}
           {CENE_VIDNE && cena.cena > 0 && vrstica("Vrednost", eur(m2 * cena.cena))}
