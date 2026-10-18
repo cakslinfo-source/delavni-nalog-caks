@@ -956,6 +956,7 @@ export default function Material() {
           <a href="/pulti" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Pulti</a>
           <a href="/spomeniki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Spomeniki</a>
           <a href="/sestanki" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">Sestanki</a>
+          <a href="/scanner" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">📷 Skener</a>
           <a href="/inventura" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">📋 Inventura</a>
           <a href="/skladisce" className="text-xs bg-gray-800 px-3 py-2 rounded-lg">📦 Orodje</a>
           <button
