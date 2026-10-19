@@ -546,7 +546,7 @@ const STATUS_HEX = {
 // ===== Varovalka pred sesutjem strani =====
 // Če se pri risanju enega dela strani zgodi napaka, odpove samo ta del (prikaže se obvestilo z vzrokom),
 // ne pa cela aplikacija ("Application error: a client-side exception has occurred").
-const VERZIJA_APLIKACIJE = "2026-10-18-m · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-10-19-n · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2855,6 +2855,14 @@ function DelovniNalogiGlavna() {
     if (!adminOdklenjen && ["ceniki", "tiskCenikov", "tiskPonudbe", "izracunPolic"].includes(pogled)) setPogled("seznam");
   }, [adminOdklenjen, pogled]);
 
+  // ob opozorilu v obrazcu se stran sama pomakne do sporočila ob gumbu Shrani
+  useEffect(() => {
+    if (napaka && pogled === "nov") {
+      const el = document.getElementById("napaka-obrazec");
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [napaka, pogled]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -3549,7 +3557,31 @@ function DelovniNalogiGlavna() {
       </header>
 
       <main className="max-w-4xl mx-auto px-5 py-6 pb-24">
-        {napaka && (
+        {(pogled === "podrobnosti" || pogled === "nov") && (
+          <div className="sticky top-0 z-30 -mx-5 -mt-6 mb-4 px-5 py-2 bg-stone-100/95 backdrop-blur border-b border-stone-300 flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (pogled === "nov") {
+                  if (!window.confirm("Prekinem vnos? Neshranjene spremembe bodo izgubljene.")) return;
+                  setNapaka("");
+                  setPogled(aktivniId ? "podrobnosti" : "seznam");
+                } else {
+                  setPogled("seznam");
+                }
+              }}
+              className="bg-stone-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors flex items-center gap-1.5 shrink-0"
+            >
+              ← Nazaj
+            </button>
+            <span className="text-xs text-stone-500 truncate">
+              {pogled === "nov"
+                ? (aktivniId ? "Urejanje" : "Nov vnos")
+                : [aktivniNalog && aktivniNalog.stevilka, aktivniNalog && aktivniNalog.stranka].filter(Boolean).join(" · ")}
+            </span>
+          </div>
+        )}
+
+        {napaka && pogled !== "nov" && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
             {napaka}
           </div>
@@ -5704,6 +5736,11 @@ function DelovniNalogiGlavna() {
               </div>
             </div>
 
+            {napaka && (
+              <div id="napaka-obrazec" className="mt-5 bg-red-50 border-2 border-red-300 text-red-700 text-sm font-medium rounded-lg px-4 py-3">
+                ⚠ {napaka}
+              </div>
+            )}
             <div className="flex gap-2 mt-5">
               <button
                 onClick={shraniObrazec}
