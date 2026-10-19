@@ -38,3 +38,54 @@ body {
     grid-template-columns: 2fr 1.6fr 1fr 1fr 1fr 0.8fr auto;
   }
 }
+
+/* ===== TELEFON (pokonci): menijske tipke v eni vodoravno drsljivi vrstici, stran se ne širi čez zaslon =====
+   Velja samo za ozke zaslone. Na računalniku in tablici ostane vse enako kot prej. */
+@media (max-width: 767px) {
+  /* zaboj, ki neposredno vsebuje menijske povezave (Pulti, Police, Material, Inventura, Skladišče, Skener …) */
+  div:has(> a[href="/pulti"]),
+  div:has(> a[href="/material"]),
+  div:has(> a[href="/spomeniki"]),
+  div:has(> a[href="/inventura"]),
+  div:has(> a[href="/skladisce"]),
+  div:has(> a[href="/scanner"]) {
+    display: flex;
+    flex-wrap: nowrap;
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  div:has(> a[href="/pulti"])::-webkit-scrollbar,
+  div:has(> a[href="/material"])::-webkit-scrollbar,
+  div:has(> a[href="/spomeniki"])::-webkit-scrollbar,
+  div:has(> a[href="/inventura"])::-webkit-scrollbar,
+  div:has(> a[href="/skladisce"])::-webkit-scrollbar,
+  div:has(> a[href="/scanner"])::-webkit-scrollbar {
+    display: none;
+  }
+  div:has(> a[href="/pulti"]) > *,
+  div:has(> a[href="/material"]) > *,
+  div:has(> a[href="/spomeniki"]) > *,
+  div:has(> a[href="/inventura"]) > *,
+  div:has(> a[href="/skladisce"]) > *,
+  div:has(> a[href="/scanner"]) > * {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  /* nadrejena vrstica (naslov + menijske tipke): naj se prelomi v dve vrstici */
+  div:has(> div > a[href="/pulti"]),
+  div:has(> div > a[href="/material"]),
+  div:has(> div > a[href="/spomeniki"]),
+  div:has(> div > a[href="/inventura"]),
+  div:has(> div > a[href="/skladisce"]),
+  div:has(> div > a[href="/scanner"]) {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+}
