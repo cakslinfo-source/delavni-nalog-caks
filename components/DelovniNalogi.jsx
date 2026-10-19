@@ -2820,23 +2820,21 @@ function DelovniNalogiGlavna() {
   }, []);
 
   useEffect(() => {
-    let odklenjen = false;
     try {
       const shranjeno = localStorage.getItem("admin-odklenjen");
-      if (shranjeno === "da") { setAdminOdklenjen(true); odklenjen = true; }
+      if (shranjeno === "da") setAdminOdklenjen(true);
     } catch (e) {
       // localStorage ni na voljo
     }
     try {
       const id = new URLSearchParams(window.location.search).get("nalog");
-      if (id && !odklenjen) setQrId(String(id));
+      if (id) setQrId(String(id)); // vsak sken QR kode vpraša za kodo, tudi če je admin odklenjen
     } catch (e) {}
   }, []);
 
   function potrdiQrPin() {
     if (qrPin === ADMIN_PIN) {
-      setAdminOdklenjen(true);
-      try { localStorage.setItem("admin-odklenjen", "da"); } catch (e) {}
+      try { window.history.replaceState(null, "", window.location.pathname); } catch (e) {}
       setQrOdpri(qrId);
       setQrId(null);
       setQrPin("");
@@ -2925,9 +2923,7 @@ function DelovniNalogiGlavna() {
           try {
             const parametri = new URLSearchParams(window.location.search);
             const idIzPovezave = parametri.get("nalog");
-            let adminJe = false;
-            try { adminJe = localStorage.getItem("admin-odklenjen") === "da"; } catch (e3) {}
-            if (adminJe && idIzPovezave && popravljeni.some((n) => String(n.id) === String(idIzPovezave))) {
+            if (false && idIzPovezave && popravljeni.some((n) => String(n.id) === String(idIzPovezave))) {
               setAktivniId(idIzPovezave);
               setPogled("podrobnosti");
             }
@@ -3603,7 +3599,7 @@ function DelovniNalogiGlavna() {
         )}
       </header>
 
-      {qrId && !adminOdklenjen && (
+      {qrId && (
         <div className="fixed inset-0 z-[100] bg-stone-900 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl">
             <div className="text-4xl text-center mb-2">🔒</div>
