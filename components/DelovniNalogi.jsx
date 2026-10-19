@@ -2844,12 +2844,6 @@ function DelovniNalogiGlavna() {
       setQrPin("");
     }
   }
-  function preklicQrPin() {
-    setQrId(null);
-    setQrPin("");
-    setQrNapaka("");
-    try { window.history.replaceState(null, "", window.location.pathname); } catch (e) {}
-  }
   // po vnosu kode odpri nalog, ko so podatki naloženi
   useEffect(() => {
     if (!qrOdpri || naloziLoading) return;
@@ -3621,12 +3615,6 @@ function DelovniNalogiGlavna() {
               className="w-full mt-4 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg py-3"
             >
               Odkleni in odpri
-            </button>
-            <button
-              onClick={preklicQrPin}
-              className="w-full mt-2 text-stone-500 text-sm py-2"
-            >
-              Prekliči
             </button>
           </div>
         </div>
