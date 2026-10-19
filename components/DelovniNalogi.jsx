@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-10-19-o · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-10-19-p · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2571,6 +2571,11 @@ function DelovniNalogiGlavna() {
   const [pokaziPinVnos, setPokaziPinVnos] = useState(false);
   const [pinVnos, setPinVnos] = useState("");
   const [pinNapaka, setPinNapaka] = useState("");
+  // QR vrata: povezava ?nalog=ID zahteva kodo admina, preden se pokaže delovni list
+  const [qrId, setQrId] = useState(null); // ID naloga, ki čaka na kodo
+  const [qrOdpri, setQrOdpri] = useState(null); // koda je vnesena, nalog odpremo, ko so podatki naloženi
+  const [qrPin, setQrPin] = useState("");
+  const [qrNapaka, setQrNapaka] = useState("");
   const [izbranaStranka, setIzbranaStranka] = useState(null);
   const [izbranMesec, setIzbranMesec] = useState(null);
   const [iskanjeStranke, setIskanjeStranke] = useState("");
@@ -2815,13 +2820,47 @@ function DelovniNalogiGlavna() {
   }, []);
 
   useEffect(() => {
+    let odklenjen = false;
     try {
       const shranjeno = localStorage.getItem("admin-odklenjen");
-      if (shranjeno === "da") setAdminOdklenjen(true);
+      if (shranjeno === "da") { setAdminOdklenjen(true); odklenjen = true; }
     } catch (e) {
       // localStorage ni na voljo
     }
+    try {
+      const id = new URLSearchParams(window.location.search).get("nalog");
+      if (id && !odklenjen) setQrId(String(id));
+    } catch (e) {}
   }, []);
+
+  function potrdiQrPin() {
+    if (qrPin === ADMIN_PIN) {
+      setAdminOdklenjen(true);
+      try { localStorage.setItem("admin-odklenjen", "da"); } catch (e) {}
+      setQrOdpri(qrId);
+      setQrId(null);
+      setQrPin("");
+      setQrNapaka("");
+    } else {
+      setQrNapaka("Napačna koda.");
+      setQrPin("");
+    }
+  }
+  function preklicQrPin() {
+    setQrId(null);
+    setQrPin("");
+    setQrNapaka("");
+    try { window.history.replaceState(null, "", window.location.pathname); } catch (e) {}
+  }
+  // po vnosu kode odpri nalog, ko so podatki naloženi
+  useEffect(() => {
+    if (!qrOdpri || naloziLoading) return;
+    if (nalogi.some((n) => String(n.id) === String(qrOdpri))) {
+      setAktivniId(qrOdpri);
+      setPogled("podrobnosti");
+    }
+    setQrOdpri(null);
+  }, [qrOdpri, naloziLoading, nalogi]);
 
   // Opozori uporabnika, če poskuša zapreti/osvežiti stran, medtem ko ureja nalog,
   // ki ga še ni shranil na strežnik — prepreči nehoteno izgubo vnesenih podatkov.
@@ -2886,7 +2925,9 @@ function DelovniNalogiGlavna() {
           try {
             const parametri = new URLSearchParams(window.location.search);
             const idIzPovezave = parametri.get("nalog");
-            if (idIzPovezave && popravljeni.some((n) => String(n.id) === String(idIzPovezave))) {
+            let adminJe = false;
+            try { adminJe = localStorage.getItem("admin-odklenjen") === "da"; } catch (e3) {}
+            if (adminJe && idIzPovezave && popravljeni.some((n) => String(n.id) === String(idIzPovezave))) {
               setAktivniId(idIzPovezave);
               setPogled("podrobnosti");
             }
@@ -3561,6 +3602,39 @@ function DelovniNalogiGlavna() {
           </div>
         )}
       </header>
+
+      {qrId && !adminOdklenjen && (
+        <div className="fixed inset-0 z-[100] bg-stone-900 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl">
+            <div className="text-4xl text-center mb-2">🔒</div>
+            <h2 className="text-lg font-bold text-center text-stone-900">Delovni list je zaščiten</h2>
+            <p className="text-sm text-stone-600 text-center mt-1 mb-4">Za ogled vpiši kodo admina.</p>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              value={qrPin}
+              onChange={(e) => { setQrPin(e.target.value); setQrNapaka(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") potrdiQrPin(); }}
+              placeholder="Koda admina"
+              className="w-full border border-stone-300 rounded-lg px-4 py-3 text-center text-lg tracking-widest"
+            />
+            {qrNapaka && <p className="text-red-600 text-sm text-center mt-2">{qrNapaka}</p>}
+            <button
+              onClick={potrdiQrPin}
+              className="w-full mt-4 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg py-3"
+            >
+              Odkleni in odpri
+            </button>
+            <button
+              onClick={preklicQrPin}
+              className="w-full mt-2 text-stone-500 text-sm py-2"
+            >
+              Prekliči
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-4xl mx-auto px-5 py-6 pb-24">
         {(pogled === "podrobnosti" || pogled === "nov") && (
