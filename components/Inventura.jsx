@@ -546,6 +546,7 @@ export default function Inventura() {
           <a href="/sestanki" className={navGumb}>Sestanki</a>
           <a href="/material" className={navGumb}>🪨 Material</a>
           <a href="/skladisce" className={navGumb}>📦 Skladišče</a>
+          <a href="/scanner" className={navGumb}>📷 Skener</a>
           <button
             onClick={() => {
               window.location.href = window.location.pathname + "?osvezeno=" + Date.now();
