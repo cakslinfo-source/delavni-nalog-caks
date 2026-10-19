@@ -546,7 +546,10 @@ const STATUS_HEX = {
 // ===== Varovalka pred sesutjem strani =====
 // Če se pri risanju enega dela strani zgodi napaka, odpove samo ta del (prikaže se obvestilo z vzrokom),
 // ne pa cela aplikacija ("Application error: a client-side exception has occurred").
-const VERZIJA_APLIKACIJE = "2026-10-19-n · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+// Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
+const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
+
+const VERZIJA_APLIKACIJE = "2026-10-19-o · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -1907,6 +1910,7 @@ function nazivObdobja(kljuc, obdobje) {
 }
 
 function izracunajPorocilo(nalogi, obdobje) {
+  nalogi = (nalogi || []).filter(jeBrezPonudbe);
   const dnevneVsote = {};
   nalogi.forEach((n) => {
     const cena = parseFloat(String(n.cena).replace(",", "."));
@@ -1943,7 +1947,7 @@ function izracunajPorocilo(nalogi, obdobje) {
   }
 
   const skupine = {};
-  nalogi.forEach((n) => {
+  nalogi.filter(jeBrezPonudbe).forEach((n) => {
     const cena = parseFloat(String(n.cena).replace(",", "."));
     if (!cena || isNaN(cena) || !n.datumVnosa) return;
     const kljuc = kljucObdobja(n.datumVnosa, obdobje);
@@ -3231,7 +3235,7 @@ function DelovniNalogiGlavna() {
   // (V izdelavi, Pripravljeno, Prevzeto) — beleženo v zgodovini vsakega naloga.
   const podatkiPrevzel = stevecPoPolju("izvajalec");
 
-  const skupnaVrednostVseh = nalogi.reduce((v, n) => {
+  const skupnaVrednostVseh = nalogi.filter(jeBrezPonudbe).reduce((v, n) => {
     const c = parseFloat(String(n.cena).replace(",", "."));
     return v + (isNaN(c) ? 0 : c);
   }, 0);
@@ -3241,10 +3245,10 @@ function DelovniNalogiGlavna() {
     return isNaN(n) ? 0 : n;
   };
   const vrednostPultiSpomeniki =
-    pultiPodatki.reduce((v, p) => v + steviloVarno(p.ponudbenaCena), 0) +
-    spomenikiPodatki.reduce((v, s) => v + steviloVarno(s.cena), 0);
-  const neplacaniPulti = pultiPodatki.filter((p) => !p.placano);
-  const neplacaniSpomeniki = spomenikiPodatki.filter((s) => s.placano !== "Da");
+    pultiPodatki.filter(jeBrezPonudbe).reduce((v, p) => v + steviloVarno(p.ponudbenaCena), 0) +
+    spomenikiPodatki.filter(jeBrezPonudbe).reduce((v, s) => v + steviloVarno(s.cena), 0);
+  const neplacaniPulti = pultiPodatki.filter((p) => !p.placano && jeBrezPonudbe(p));
+  const neplacaniSpomeniki = spomenikiPodatki.filter((s) => s.placano !== "Da" && jeBrezPonudbe(s));
 
   // Opomniki za bližajoče se ali zamujene roke — Police + Pulti + Spomeniki skupaj.
   const opominjeniRoki = (() => {
@@ -3299,6 +3303,7 @@ function DelovniNalogiGlavna() {
     stevilka: p.stevilka,
     stranka: imeStrankeModula(p),
     opis: "Pult",
+    vrsta: p.vrsta,
     status: mapModulStatusNaPolice(p.status),
     rok: p.datumMontaze,
     datumVnosa: p.datum ? `${p.datum}T00:00:00.000Z` : new Date(Number(p.id) || Date.now()).toISOString(),
@@ -3311,6 +3316,7 @@ function DelovniNalogiGlavna() {
     stevilka: s.stevilka,
     stranka: imeStrankeModula(s),
     opis: s.material || "Spomenik",
+    vrsta: s.vrsta,
     status: mapModulStatusNaPolice(s.status),
     rok: s.montaza,
     datumVnosa: s.datum ? `${s.datum}T00:00:00.000Z` : new Date(Number(s.id) || Date.now()).toISOString(),
@@ -3843,16 +3849,16 @@ function DelovniNalogiGlavna() {
 
                 <div className="border-t border-stone-700 pt-3">
                   {(() => {
-                    const skupajVse = nalogi.reduce((v, n) => {
+                    const skupajVse = nalogi.filter(jeBrezPonudbe).reduce((v, n) => {
                       const c = parseFloat(String(n.cena).replace(",", "."));
                       return v + (isNaN(c) ? 0 : c);
                     }, 0);
-                    const skupajPlacano = nalogi.reduce((v, n) => {
+                    const skupajPlacano = nalogi.filter(jeBrezPonudbe).reduce((v, n) => {
                       if ((n.placano || "Ne") !== "Da") return v;
                       const c = parseFloat(String(n.cena).replace(",", "."));
                       return v + (isNaN(c) ? 0 : c);
                     }, 0);
-                    const skupajRacunPoslan = nalogi.reduce((v, n) => {
+                    const skupajRacunPoslan = nalogi.filter(jeBrezPonudbe).reduce((v, n) => {
                       if ((n.placano || "Ne") === "Da") return v;
                       if (n.racun !== "poslan") return v;
                       const c = parseFloat(String(n.cena).replace(",", "."));
@@ -3893,7 +3899,7 @@ function DelovniNalogiGlavna() {
                   <p className="text-xs font-medium text-stone-400 uppercase mb-2">Vrednost naročil po mesecih</p>
                   {(() => {
                     const vsotePoMesecu = {};
-                    nalogi.forEach((n) => {
+                    nalogi.filter(jeBrezPonudbe).forEach((n) => {
                       const c = parseFloat(String(n.cena).replace(",", "."));
                       if (!n.datumVnosa || isNaN(c)) return;
                       const kljuc = n.datumVnosa.slice(0, 7);
@@ -3972,7 +3978,7 @@ function DelovniNalogiGlavna() {
                 )}
 
                 {(() => {
-                  const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
+                  const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && jeBrezPonudbe(n));
                   const skupajNeplacano = neplacana.reduce((v, n) => {
                     const c = parseFloat(String(n.cena).replace(",", "."));
                     return v + (isNaN(c) ? 0 : c);
@@ -4280,7 +4286,9 @@ function DelovniNalogiGlavna() {
                         }
                       }}
                       className={`w-full text-left rounded-xl px-4 py-3.5 hover:shadow-sm transition-all flex items-center justify-between gap-3 ${
-                        n._modul === "Pulti"
+                        n.vrsta === "ponudba"
+                          ? "bg-pink-200 border-2 border-pink-500 hover:border-pink-600"
+                          : n._modul === "Pulti"
                           ? "bg-white border-2 border-purple-300 hover:border-purple-400"
                           : n._modul === "Spomenik"
                           ? "bg-white border-2 border-amber-300 hover:border-amber-400"
@@ -4307,8 +4315,8 @@ function DelovniNalogiGlavna() {
                           )}
                           <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
                           {n.vrsta === "ponudba" && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-medium">
-                              Ponudba
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-pink-600 text-white border border-pink-700 font-bold">
+                              PONUDBA · ne izdelovati
                             </span>
                           )}
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BARVE[n.status]}`}>
@@ -4417,15 +4425,15 @@ function DelovniNalogiGlavna() {
                   const pultiStranke = pultiPodatki.filter((p) => imeStrankeModula(p) === stranka);
                   const spomenikiStranke = spomenikiPodatki.filter((s) => imeStrankeModula(s) === stranka);
                   const skupajNarocil = naroceilaStranke.length + pultiStranke.length + spomenikiStranke.length;
-                  const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
+                  const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && jeBrezPonudbe(n));
                   const odprtaVsota = odprta.reduce((v, n) => {
                     const c = parseFloat(String(n.cena).replace(",", "."));
                     return v + (isNaN(c) ? 0 : c);
                   }, 0);
                   const skupnaVrednostStranke =
-                    naroceilaStranke.reduce((v, n) => v + steviloVarno(n.cena), 0) +
-                    pultiStranke.reduce((v, p) => v + steviloVarno(p.ponudbenaCena), 0) +
-                    spomenikiStranke.reduce((v, s) => v + steviloVarno(s.cena), 0);
+                    naroceilaStranke.filter(jeBrezPonudbe).reduce((v, n) => v + steviloVarno(n.cena), 0) +
+                    pultiStranke.filter(jeBrezPonudbe).reduce((v, p) => v + steviloVarno(p.ponudbenaCena), 0) +
+                    spomenikiStranke.filter(jeBrezPonudbe).reduce((v, s) => v + steviloVarno(s.cena), 0);
                   return (
                     <button
                       key={stranka}
@@ -4458,11 +4466,11 @@ function DelovniNalogiGlavna() {
 
         {pogled === "strankaDetalji" && izbranaStranka && (() => {
           const naroceilaStranke = nalogi.filter((n) => n.stranka === izbranaStranka);
-          const neplacana = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan");
+          const neplacana = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && jeBrezPonudbe(n));
           const pultiStranke = pultiPodatki.filter((p) => imeStrankeModula(p) === izbranaStranka);
           const spomenikiStranke = spomenikiPodatki.filter((s) => imeStrankeModula(s) === izbranaStranka);
-          const neplacaniPultiStranke = pultiStranke.filter((p) => !p.placano);
-          const neplacaniSpomenikiStranke = spomenikiStranke.filter((s) => s.placano !== "Da");
+          const neplacaniPultiStranke = pultiStranke.filter((p) => !p.placano && jeBrezPonudbe(p));
+          const neplacaniSpomenikiStranke = spomenikiStranke.filter((s) => s.placano !== "Da" && jeBrezPonudbe(s));
           const skupajNeplacano =
             neplacana.reduce((v, n) => v + steviloVarno(n.cena), 0) +
             neplacaniPultiStranke.reduce((v, p) => v + steviloVarno(p.ponudbenaCena), 0) +
@@ -4689,7 +4697,7 @@ function DelovniNalogiGlavna() {
                 <div className="space-y-2">
                   {meseci.map((kljuc) => {
                     const nal = skupinePoMesecu[kljuc];
-                    const vsota = nal.reduce((v, n) => {
+                    const vsota = nal.filter(jeBrezPonudbe).reduce((v, n) => {
                       const c = parseFloat(String(n.cena).replace(",", "."));
                       return v + (isNaN(c) ? 0 : c);
                     }, 0);
@@ -4719,7 +4727,7 @@ function DelovniNalogiGlavna() {
 
         {pogled === "mesecDetalji" && izbranMesec && (() => {
           const naroceilaMeseca = nalogi.filter((n) => n.datumVnosa && n.datumVnosa.slice(0, 7) === izbranMesec);
-          const vsota = naroceilaMeseca.reduce((v, n) => {
+          const vsota = naroceilaMeseca.filter(jeBrezPonudbe).reduce((v, n) => {
             const c = parseFloat(String(n.cena).replace(",", "."));
             return v + (isNaN(c) ? 0 : c);
           }, 0);
