@@ -251,7 +251,7 @@ export default function Spomeniki() {
           const parametri = new URLSearchParams(window.location.search);
           const idIzPovezave = parametri.get("nalog");
           const najdenIzPovezave = seznam.find((x) => String(x.id) === String(idIzPovezave));
-          if (najdenIzPovezave) {
+          if (false && najdenIzPovezave) {
             setIzbran(najdenIzPovezave.id);
             setPogled("podrobnosti");
           }
@@ -340,6 +340,39 @@ export default function Spomeniki() {
     return await shraniSeznam(novi, verzija);
   }
 
+  // QR vrata: povezava ?nalog=ID VEDNO zahteva kodo admina, program se ne pokaže
+  const [qrId, setQrId] = useState(null);
+  const [qrOdpri, setQrOdpri] = useState(null);
+  const [qrPin, setQrPin] = useState("");
+  const [qrNapaka, setQrNapaka] = useState("");
+  useEffect(() => {
+    try {
+      const id = new URLSearchParams(window.location.search).get("nalog");
+      if (id) setQrId(String(id));
+    } catch (e) {}
+  }, []);
+  function potrdiQrPin() {
+    if (qrPin === ADMIN_PIN) {
+      try { window.history.replaceState(null, "", window.location.pathname); } catch (e) {}
+      setQrOdpri(qrId);
+      setQrId(null);
+      setQrPin("");
+      setQrNapaka("");
+    } else {
+      setQrNapaka("Napačna koda.");
+      setQrPin("");
+    }
+  }
+  useEffect(() => {
+    if (!qrOdpri || nalaganje) return;
+    const najden = spomeniki.find((x) => String(x.id) === String(qrOdpri));
+    if (najden) {
+      setIzbran(najden.id);
+      setPogled("podrobnosti");
+    }
+    setQrOdpri(null);
+  }, [qrOdpri, nalaganje, spomeniki]);
+
   function vprasajPin() {
     if (admin) return true;
     const pin = prompt("Vnesi admin PIN:");
@@ -356,6 +389,34 @@ export default function Spomeniki() {
     const iskalniNiz = `${n.stranka?.ime || ""} ${n.lokacija || ""} ${n.stevilka || ""}`.toLowerCase();
     return ujemaFilter && iskalniNiz.includes(iskanje.toLowerCase());
   });
+
+  if (qrId)
+    return (
+      <div className="min-h-screen bg-stone-900 flex items-center justify-center p-6">
+        <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl">
+          <div className="text-4xl text-center mb-2">🔒</div>
+          <h2 className="text-lg font-bold text-center text-stone-900">Delovni list je zaščiten</h2>
+          <p className="text-sm text-stone-600 text-center mt-1 mb-4">Za ogled vpiši kodo admina.</p>
+          <input
+            type="password"
+            inputMode="numeric"
+            autoFocus
+            value={qrPin}
+            onChange={(e) => { setQrPin(e.target.value); setQrNapaka(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") potrdiQrPin(); }}
+            placeholder="Koda admina"
+            className="w-full border border-stone-300 rounded-lg px-4 py-3 text-center text-lg tracking-widest"
+          />
+          {qrNapaka && <p className="text-red-600 text-sm text-center mt-2">{qrNapaka}</p>}
+          <button
+            onClick={potrdiQrPin}
+            className="w-full mt-4 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg py-3"
+          >
+            Odkleni in odpri
+          </button>
+        </div>
+      </div>
+    );
 
   if (nalaganje)
     return (
