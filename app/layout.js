@@ -1,4 +1,5 @@
 import "./globals.css";
+import SejaTrak from "./SejaTrak";
 
 export const metadata = {
   title: "Delovni nalogi — Kamnoseštvo Čakš",
@@ -26,7 +27,10 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="sl">
-      <body>{children}</body>
+      <body>
+        {children}
+        <SejaTrak />
+      </body>
     </html>
   );
 }

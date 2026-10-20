@@ -40,50 +40,28 @@ export default function StatusNarocila({ params }) {
   useEffect(() => {
     async function poisci() {
       try {
-        const [nalogiRes, pultiRes, spomenikiRes] = await Promise.all([
-          fetch("/api/nalogi", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
-          fetch("/api/pulti", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
-          fetch("/api/spomeniki", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
-        ]);
-
-        const nalog = Array.isArray(nalogiRes) ? nalogiRes.find((n) => String(n.id) === String(id)) : null;
-        if (nalog) {
-          setRezultat({
-            vrsta: "Police",
-            stevilka: nalog.stevilka,
-            status: nalog.status,
-            naziv: nalog.status,
-            barva: STATUS_BARVE_POLICE[nalog.status] || "bg-stone-200 text-stone-700",
-            rok: nalog.rok,
-          });
-          setNalaganje(false);
-          return;
-        }
-
-        const pult = Array.isArray(pultiRes) ? pultiRes.find((p) => String(p.id) === String(id)) : null;
-        if (pult) {
-          setRezultat({
-            vrsta: "Pulti",
-            stevilka: pult.stevilka,
-            status: pult.status,
-            naziv: STATUS_NAZIV_PULTI[pult.status] || pult.status,
-            barva: "bg-sky-100 text-sky-800",
-            rok: pult.datumMontaze,
-          });
-          setNalaganje(false);
-          return;
-        }
-
-        const spomenik = Array.isArray(spomenikiRes) ? spomenikiRes.find((s) => String(s.id) === String(id)) : null;
-        if (spomenik) {
-          setRezultat({
-            vrsta: "Spomenik",
-            stevilka: spomenik.stevilka,
-            status: spomenik.status,
-            naziv: STATUS_NAZIV_SPOMENIKI[spomenik.status] || spomenik.status,
-            barva: "bg-sky-100 text-sky-800",
-            rok: spomenik.montaza,
-          });
+        const odgovor = await fetch(`/api/status/${encodeURIComponent(id)}`, { cache: "no-store" });
+        if (odgovor.ok) {
+          const d = await odgovor.json();
+          if (d.vrsta === "Police") {
+            setRezultat({
+              vrsta: "Police",
+              stevilka: d.stevilka,
+              status: d.status,
+              naziv: d.status,
+              barva: STATUS_BARVE_POLICE[d.status] || "bg-stone-200 text-stone-700",
+              rok: d.rok,
+            });
+          } else {
+            setRezultat({
+              vrsta: d.vrsta,
+              stevilka: d.stevilka,
+              status: d.status,
+              naziv: (d.vrsta === "Pulti" ? STATUS_NAZIV_PULTI : STATUS_NAZIV_SPOMENIKI)[d.status] || d.status,
+              barva: "bg-sky-100 text-sky-800",
+              rok: d.rok,
+            });
+          }
           setNalaganje(false);
           return;
         }
