@@ -2387,8 +2387,7 @@ function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
   const izracunHtml = adminOdklenjen
     ? `<table style="width:auto;margin-top:16px;margin-left:auto;font-size:14px;border-collapse:collapse;">` +
       `<thead><tr style="color:#78716c;text-align:right;"><th style="padding:4px 10px;text-align:left;"></th><th style="padding:4px 10px;">Neto</th><th style="padding:4px 10px;">DDV 22%</th><th style="padding:4px 10px;">Bruto</th></tr></thead><tbody>` +
-      `<tr style="border-top:2px solid #1c1917;font-weight:700;"><td style="padding:6px 10px;">SKUPAJ (${veljavni.length} naročil)</td><td style="padding:6px 10px;text-align:right;">${eurN(skupajNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(skupajBruto - skupajNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(skupajBruto)}</td></tr>` +
-      `<tr style="color:#b91c1c;"><td style="padding:4px 10px;">Od tega neplačano (${neplacani.length})</td><td style="padding:4px 10px;text-align:right;">${eurN(neplacanoNeto)}</td><td style="padding:4px 10px;text-align:right;">${eurN(neplacanoBruto - neplacanoNeto)}</td><td style="padding:4px 10px;text-align:right;">${eurN(neplacanoBruto)}</td></tr>` +
+      `<tr style="border-top:2px solid #1c1917;font-weight:700;"><td style="padding:6px 10px;">SKUPAJ NEPLAČANO (${neplacani.length} naročil)</td><td style="padding:6px 10px;text-align:right;">${eurN(neplacanoNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(neplacanoBruto - neplacanoNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(neplacanoBruto)}</td></tr>` +
       `</tbody></table>` +
       `<p style="font-size:11px;color:#78716c;margin-top:8px;text-align:right;">Police in spomeniki: vneseni znesek je neto (pri policah po odbitku popusta), pulti: ponudbena cena je z DDV. ` +
       (steviloPonudb > 0 ? `Ponudb (${steviloPonudb}) v seštevek niso všteti.` : "") + `</p>`
