@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-10-22-q · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-10-22-r · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2375,6 +2375,24 @@ async function posljiDokumentPoMailu(selector, naslov, imeDatoteke, na, zadeva, 
 }
 
 function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
+  const veljavni = casovnica.filter((z) => !z.ponudba);
+  const sestej = (seznam, polje) => seznam.reduce((v, z) => v + (Number(z[polje]) || 0), 0);
+  const eurN = (x) => x.toFixed(2).replace(".", ",") + " €";
+  const skupajNeto = sestej(veljavni, "neto");
+  const skupajBruto = sestej(veljavni, "bruto");
+  const neplacani = veljavni.filter((z) => z.neplacano);
+  const neplacanoNeto = sestej(neplacani, "neto");
+  const neplacanoBruto = sestej(neplacani, "bruto");
+  const steviloPonudb = casovnica.length - veljavni.length;
+  const izracunHtml = adminOdklenjen
+    ? `<table style="width:auto;margin-top:16px;margin-left:auto;font-size:14px;border-collapse:collapse;">` +
+      `<thead><tr style="color:#78716c;text-align:right;"><th style="padding:4px 10px;text-align:left;"></th><th style="padding:4px 10px;">Neto</th><th style="padding:4px 10px;">DDV 22%</th><th style="padding:4px 10px;">Bruto</th></tr></thead><tbody>` +
+      `<tr style="border-top:2px solid #1c1917;font-weight:700;"><td style="padding:6px 10px;">SKUPAJ (${veljavni.length} naročil)</td><td style="padding:6px 10px;text-align:right;">${eurN(skupajNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(skupajBruto - skupajNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(skupajBruto)}</td></tr>` +
+      `<tr style="color:#b91c1c;"><td style="padding:4px 10px;">Od tega neplačano (${neplacani.length})</td><td style="padding:4px 10px;text-align:right;">${eurN(neplacanoNeto)}</td><td style="padding:4px 10px;text-align:right;">${eurN(neplacanoBruto - neplacanoNeto)}</td><td style="padding:4px 10px;text-align:right;">${eurN(neplacanoBruto)}</td></tr>` +
+      `</tbody></table>` +
+      `<p style="font-size:11px;color:#78716c;margin-top:8px;text-align:right;">Police in spomeniki: vneseni znesek je neto (pri policah po odbitku popusta), pulti: ponudbena cena je z DDV. ` +
+      (steviloPonudb > 0 ? `Ponudb (${steviloPonudb}) v seštevek niso všteti.` : "") + `</p>`
+    : "";
   const vrstice = casovnica
     .map(
       (z) => `
@@ -2407,10 +2425,11 @@ function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
     `<span style="font-size:13px;color:#78716c;">${new Date().toLocaleDateString("sl-SI")}</span>` +
     `</div>` +
     `<p style="font-size:16px;font-weight:600;margin-bottom:12px;">${stranka}</p>` +
-    `<table><thead><tr>` +
+    `<table class="casovnica"><thead><tr>` +
     `<th style="padding:6px 8px;">Modul</th><th style="padding:6px 8px;">Številka</th><th style="padding:6px 8px;">Opis</th><th style="padding:6px 8px;">Datum</th>` +
     (adminOdklenjen ? `<th style="padding:6px 8px;">Cena</th>` : "") +
     `</tr></thead><tbody>${vrstice}</tbody></table>` +
+    izracunHtml +
     `</div></body></html>`;
 
   const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
@@ -4535,9 +4554,9 @@ function DelovniNalogiGlavna() {
             neplacaniSpomenikiStranke.reduce((v, s) => v + steviloVarno(s.cena), 0);
           const skupajNeplacanihNarocil = neplacana.length + neplacaniPultiStranke.length + neplacaniSpomenikiStranke.length;
           const casovnica = [
-            ...naroceilaStranke.map((n) => ({ vrsta: "Police", stevilka: n.stevilka, datum: n.datumVnosa || n.datum, opis: n.opis, cena: n.cena, id: n.id, objekt: n.objekt || "" })),
-            ...pultiStranke.map((p) => ({ vrsta: "Pulti", stevilka: p.stevilka, datum: p.datum, opis: "Pult", cena: p.ponudbenaCena, id: p.id })),
-            ...spomenikiStranke.map((s) => ({ vrsta: "Spomenik", stevilka: s.stevilka, datum: s.datum, opis: s.material || "Spomenik", cena: s.cena, id: s.id })),
+            ...naroceilaStranke.map((n) => ({ vrsta: "Police", stevilka: n.stevilka, datum: n.datumVnosa || n.datum, opis: n.opis, cena: n.cena, id: n.id, objekt: n.objekt || "", ponudba: !jeBrezPonudbe(n), neplacano: (n.placano || "Ne") !== "Da" && n.racun !== "poslan", neto: steviloVarno(n.cena) * (1 - (parseFloat(String(n.popustSkupaj).replace(",", ".")) || 0) / 100), bruto: steviloVarno(n.cena) * (1 - (parseFloat(String(n.popustSkupaj).replace(",", ".")) || 0) / 100) * 1.22 })),
+            ...pultiStranke.map((p) => ({ vrsta: "Pulti", stevilka: p.stevilka, datum: p.datum, opis: "Pult", cena: p.ponudbenaCena, id: p.id, ponudba: !jeBrezPonudbe(p), neplacano: !p.placano, neto: steviloVarno(p.ponudbenaCena) / 1.22, bruto: steviloVarno(p.ponudbenaCena) })),
+            ...spomenikiStranke.map((s) => ({ vrsta: "Spomenik", stevilka: s.stevilka, datum: s.datum, opis: s.material || "Spomenik", cena: s.cena, id: s.id, ponudba: !jeBrezPonudbe(s), neplacano: s.placano !== "Da", neto: steviloVarno(s.cena), bruto: steviloVarno(s.cena) * 1.22 })),
           ].sort((a, b) => (a.datum || "") < (b.datum || "") ? 1 : -1);
           return (
             <div>
