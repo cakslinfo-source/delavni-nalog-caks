@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-10-19-p · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-10-22-q · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2380,7 +2380,7 @@ function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
       (z) => `
         <tr style="border-bottom:1px solid #f0efee;">
           <td style="padding:6px 8px;">${z.vrsta === "Police" ? "📋 Police" : z.vrsta === "Pulti" ? "🪨 Pulti" : "🪦 Spomenik"}</td>
-          <td style="padding:6px 8px;font-weight:600;">${z.stevilka || ""}</td>
+          <td style="padding:6px 8px;font-weight:600;">${z.stevilka || ""}${z.objekt ? `<div style="font-weight:400;font-size:12px;color:#57534e;">Objekt: ${String(z.objekt).replace(/</g, "&lt;")}</div>` : ""}</td>
           <td style="padding:6px 8px;">${(z.opis || "").replace(/</g, "&lt;")}</td>
           <td style="padding:6px 8px;">${z.datum ? new Date(z.datum).toLocaleDateString("sl-SI") : ""}</td>
           ${adminOdklenjen ? `<td style="padding:6px 8px;">${z.cena ? parseFloat(String(z.cena).replace(",", ".")).toFixed(2) + " €" : ""}</td>` : ""}
@@ -4535,7 +4535,7 @@ function DelovniNalogiGlavna() {
             neplacaniSpomenikiStranke.reduce((v, s) => v + steviloVarno(s.cena), 0);
           const skupajNeplacanihNarocil = neplacana.length + neplacaniPultiStranke.length + neplacaniSpomenikiStranke.length;
           const casovnica = [
-            ...naroceilaStranke.map((n) => ({ vrsta: "Police", stevilka: n.stevilka, datum: n.datumVnosa || n.datum, opis: n.opis, cena: n.cena, id: n.id })),
+            ...naroceilaStranke.map((n) => ({ vrsta: "Police", stevilka: n.stevilka, datum: n.datumVnosa || n.datum, opis: n.opis, cena: n.cena, id: n.id, objekt: n.objekt || "" })),
             ...pultiStranke.map((p) => ({ vrsta: "Pulti", stevilka: p.stevilka, datum: p.datum, opis: "Pult", cena: p.ponudbenaCena, id: p.id })),
             ...spomenikiStranke.map((s) => ({ vrsta: "Spomenik", stevilka: s.stevilka, datum: s.datum, opis: s.material || "Spomenik", cena: s.cena, id: s.id })),
           ].sort((a, b) => (a.datum || "") < (b.datum || "") ? 1 : -1);
@@ -4587,6 +4587,7 @@ function DelovniNalogiGlavna() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
+                          {n.objekt && <span className="text-xs font-semibold text-stone-600">🏢 {n.objekt}</span>}
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BARVE[n.status]}`}>
                             {n.status}
                           </span>
@@ -4620,6 +4621,7 @@ function DelovniNalogiGlavna() {
                             {z.vrsta === "Police" ? "📋" : z.vrsta === "Pulti" ? "🪨" : "🪦"} {z.vrsta}
                           </span>
                           <span className="font-medium text-stone-700">{z.stevilka}</span>
+                          {z.objekt && <span className="text-stone-600 font-medium"> · 🏢 {z.objekt}</span>}
                           <span className="text-stone-500 truncate"> · {z.opis}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-2">
