@@ -34,7 +34,9 @@ export async function middleware(request) {
     pathname === "/prijava" ||
     pathname === "/api/prijava" ||
     pathname.startsWith("/status/") ||
-    pathname.startsWith("/api/status/");
+    pathname.startsWith("/api/status/") ||
+    pathname.startsWith("/ponudba/") ||
+    pathname.startsWith("/api/ponudba/");
   if (javno) return NextResponse.next({ request: { headers: brezGlave(request) } });
 
   // dnevna varnostna kopija, ki jo sproži Vercel
