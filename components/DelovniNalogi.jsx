@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-02-w · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-02-x · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2240,6 +2240,46 @@ function zgradiPotrditevHTML(nalog) {
     stolpecPodpisa("Podpis ob potrditvi naročila", "S podpisom potrjujem, da sem prebral/a točke 1 do 6, preveril/a vse mere in da se z njimi strinjam.", danes) +
     stolpecPodpisa("Podpis ob prevzemu", "S podpisom potrjujem, da sem police ob prevzemu prešel/prešla, da je količina popolna in da poznejših reklamacij ali manjkov ne uveljavljam.", nalog.datumPrevzema ? dat(nalog.datumPrevzema) : "") +
     `</div></body></html>`
+  );
+}
+
+// List za prevzem polic: natisne se skupaj z dobavnico (nova stran)
+function zgradiListZaPrevzem(nalog) {
+  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const postavke = (nalog.postavke || []).filter((p) => p && (p.naziv || p.material || p.dolzina));
+  let skupajKosov = 0;
+  const td = "border:1px solid #d6d3d1;padding:4px 7px;vertical-align:top;";
+  const vrstice = postavke
+    .map((p, idx) => {
+      const kol = parseInt(p.kolicina) || 1;
+      skupajKosov += kol;
+      const seg = segmentiPostavke(p, idx)[0];
+      const mere = seg
+        ? `${(seg.dolzinaMM / 10).toLocaleString("sl-SI")} × ${(seg.sirinaMM / 10).toLocaleString("sl-SI")} × ${(seg.debelinaMM / 10).toLocaleString("sl-SI")} cm`
+        : "";
+      const vecKosov = p.vecKosov ? ` · iz ${parseInt(p.steviloKosov) || 2} kosov` : "";
+      return `<tr><td style="${td}">${idx + 1}</td><td style="${td}">${esc((p.naziv || "").trim() || "Polica " + (idx + 1))}</td><td style="${td}">${esc(p.material || "")}</td><td style="${td}">${mere}${vecKosov}</td><td style="${td}text-align:center;">${kol}</td><td style="${td}text-align:center;font-size:16px;width:50px;">☐</td></tr>`;
+    })
+    .join("");
+  const th = "border:1px solid #d6d3d1;padding:4px 7px;background:#fafaf9;text-align:left;font-size:11px;";
+  return (
+    `<div style="font-size:12.5px;line-height:1.45;color:#1c1917;">` +
+    `<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #1c1917;padding-bottom:6px;margin-bottom:10px;">` +
+    `<div><div style="font-size:19px;font-weight:700;">List za prevzem polic</div><div>Kamnoseštvo Čakš · telefon 031 235 146</div></div>` +
+    `<div style="text-align:right;">Dobavnica ${esc(nalog.stevilka || "")}<br>${new Date().toLocaleDateString("sl-SI")}</div></div>` +
+    `<p><b>Stranka:</b> ${esc(nalog.stranka)}${nalog.objekt ? " · <b>Objekt:</b> " + esc(nalog.objekt) : ""}${nalog.telefon ? " · <b>Tel:</b> " + esc(nalog.telefon) : ""}</p>` +
+    `<p style="margin:10px 0 4px;font-weight:600;">Police preštej in obkljukaj ob prevzemu</p>` +
+    `<table style="width:100%;border-collapse:collapse;"><tr><th style="${th}">#</th><th style="${th}">Naziv</th><th style="${th}">Material</th><th style="${th}">Mere (dolžina × širina × debelina)</th><th style="${th}">Kos.</th><th style="${th}">Prevzeto</th></tr>${vrstice}` +
+    `<tr><td colspan="4" style="${td}text-align:right;font-weight:600;">Skupaj kosov</td><td style="${td}text-align:center;font-weight:600;">${skupajKosov}</td><td style="${td}"></td></tr></table>` +
+    `<p style="margin:14px 0 4px;font-weight:600;">Prevzem</p>` +
+    `<ol style="margin:4px 0 4px 18px;padding:0;">` +
+    `<li>Stranka je dolžna ob prevzemu prešteti vse police in preveriti količino ter stanje (kljukice v tabeli zgoraj).</li>` +
+    `<li>Poznejših reklamacij in manjkov ne upoštevamo.</li>` +
+    `<li>Kamnoseštvo Čakš odgovarja za police samo do prevzema. Kaj se z njimi dogaja po prevzemu (prevoz, nalaganje, vgradnja, uporaba), ni naša odgovornost.</li></ol>` +
+    `<p style="margin-top:8px;">S podpisom potrjujem, da sem police ob prevzemu prešel/prešla, da je količina popolna in da poznejših reklamacij ali manjkov ne uveljavljam.</p>` +
+    `<table style="width:100%;border-collapse:collapse;margin-top:6px;"><tr><th style="${th}">Kraj in datum</th><th style="${th}">Ime in priimek</th><th style="${th}">Podpis stranke</th></tr>` +
+    `<tr><td style="${td}height:56px;">${new Date().toLocaleDateString("sl-SI")}</td><td style="${td}">${esc(nalog.prevzel || nalog.stranka)}</td><td style="${td}"></td></tr></table>` +
+    `</div>`
   );
 }
 
@@ -8363,6 +8403,12 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
 
       <div className="dobavnica-brez-tiska flex flex-wrap gap-2 mb-2">
         <button
+          onClick={() => window.print()}
+          className="bg-emerald-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-500 transition-colors flex items-center gap-2"
+        >
+          🖨 Natisni dobavnico + list za prevzem
+        </button>
+        <button
           onClick={() => prenesiHTMLDokument(".dobavnica-list", `Dobavnica ${nalog.stevilka || ""}`, `dobavnica-${nalog.stevilka || "nalog"}${strankaZaIme(nalog) ? " " + strankaZaIme(nalog) : ""}.html`)}
           className="bg-stone-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-600 transition-colors flex items-center gap-2"
         >
@@ -8377,6 +8423,7 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
       </div>
 
       <div className="dobavnica-list bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
+        <style>{`.dobavnica-prevzem-tisk{display:none;} @media print{ .dobavnica-prevzem-tisk{display:block !important; page-break-before:always; break-before:page; padding-top:8px;} }`}</style>
         <div className="flex items-center justify-between gap-3 border-b-2 border-stone-800 pb-2 mb-3">
           <img
             src={CAKS_LOGO}
@@ -8504,6 +8551,7 @@ function Dobavnica({ nalog, onZapri, shraniPodpis }) {
             </button>
           </>
         )}
+        <div className="dobavnica-prevzem-tisk" dangerouslySetInnerHTML={{ __html: zgradiListZaPrevzem(nalog) }} />
       </div>
 
       {nalog.podpisPrevzemnika && (
