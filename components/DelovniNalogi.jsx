@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-02-t · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-02-u · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2488,7 +2488,10 @@ async function posljiDokumentPoMailu(selector, naslov, imeDatoteke, na, zadeva, 
   }
 }
 
-function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
+function natisniCasovnicoStranke(stranka, casovnicaVse, adminOdklenjen, nacin) {
+  const samoNeplacano = nacin === "neplacano";
+  // pri »samo neplačano« se natisnejo samo odprte neplačane postavke (brez ponudb)
+  const casovnica = samoNeplacano ? casovnicaVse.filter((z) => z.neplacano && !z.ponudba) : casovnicaVse;
   const veljavni = casovnica.filter((z) => !z.ponudba);
   const sestej = (seznam, polje) => seznam.reduce((v, z) => v + (Number(z[polje]) || 0), 0);
   const eurN = (x) => x.toFixed(2).replace(".", ",") + " €";
@@ -2522,7 +2525,7 @@ function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
   const html =
     `<!DOCTYPE html><html lang="sl"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-    `<title>Časovnica — ${stranka}</title>` +
+    `<title>${samoNeplacano ? "Neplačane postavke" : "Časovnica"} — ${stranka}</title>` +
     `<style>
       body{font-family:system-ui,sans-serif;background:#f5f5f4;margin:0;padding:24px;}
       .navodilo{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:14px;max-width:800px;margin-left:auto;margin-right:auto;}
@@ -2534,7 +2537,7 @@ function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
     `<div class="navodilo">To je prenesena datoteka za tiskanje. Uporabi Ctrl+P (Cmd+P na Mac) ali meni brskalnika &rarr; Natisni / Shrani kot PDF.</div>` +
     `<div class="ovoj">` +
     `<div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #1c1917;padding-bottom:8px;margin-bottom:12px;">` +
-    `<strong style="font-size:18px;">ČAKŠ · Časovnica stranke</strong>` +
+    `<strong style="font-size:18px;">ČAKŠ · ${samoNeplacano ? "Odprte neplačane postavke" : "Časovnica stranke"}</strong>` +
     `<span style="font-size:13px;color:#78716c;">${new Date().toLocaleDateString("sl-SI")}</span>` +
     `</div>` +
     `<p style="font-size:16px;font-weight:600;margin-bottom:12px;">${stranka}</p>` +
@@ -2549,7 +2552,7 @@ function natisniCasovnicoStranke(stranka, casovnica, adminOdklenjen) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `casovnica-${stranka.replace(/[\\/:*?"<>|]/g, "").trim()}.html`;
+  a.download = `${samoNeplacano ? "neplacano" : "casovnica"}-${stranka.replace(/[\\/:*?"<>|]/g, "").trim()}.html`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -4738,12 +4741,22 @@ function DelovniNalogiGlavna() {
                 <div className="mt-6 pt-4 border-t border-stone-200">
                   <div className="flex items-center justify-between mb-2">
                     <p className="carved text-sm uppercase text-stone-500">Celotna časovnica — vsi moduli ({casovnica.length})</p>
+                    <div className="flex gap-2 flex-wrap justify-end">
                     <button
                       onClick={() => natisniCasovnicoStranke(izbranaStranka, casovnica, adminOdklenjen)}
                       className="text-xs px-3 py-1.5 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 transition-colors flex items-center gap-1"
                     >
                       <Printer size={13} /> Natisni časovnico
                     </button>
+                    {casovnica.some((z) => z.neplacano && !z.ponudba) && (
+                      <button
+                        onClick={() => natisniCasovnicoStranke(izbranaStranka, casovnica, adminOdklenjen, "neplacano")}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 transition-colors flex items-center gap-1"
+                      >
+                        <Printer size={13} /> Natisni samo neplačano
+                      </button>
+                    )}
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     {casovnica.map((z) => (
