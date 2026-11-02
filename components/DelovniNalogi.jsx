@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-10-22-r · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-02-t · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2144,6 +2144,120 @@ function prenesiDXFPosevnihKosov(nalog) {
   a.href = url;
   const strankaVarno = (nalog.stranka || "").replace(/[\\/:*?"<>|]/g, "").trim();
   a.download = `posevni-kosi-${nalog.stevilka || "nalog"}${strankaVarno ? " " + strankaVarno : ""}.dxf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Potrditveni list za stranko (priloga naročila polic): predizpolnjen s podatki naloga, odpre se v novem zavihku za tisk.
+function zgradiPotrditevHTML(nalog) {
+  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const dat = (v) => {
+    if (!v) return "";
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? "" : d.toLocaleDateString("sl-SI");
+  };
+  const jePonudba = nalog.vrsta === "ponudba";
+  const pravna = nalog.tipStranke === "pravna";
+  const postavke = (nalog.postavke || []).filter((p) => p && (p.naziv || p.material || p.dolzina));
+  let skupajKosov = 0;
+  const vrsticePolic = [];
+  postavke.forEach((p, idx) => {
+    const kol = parseInt(p.kolicina) || 1;
+    skupajKosov += kol;
+    const seg = segmentiPostavke(p, idx)[0];
+    const mere = seg
+      ? `${(seg.dolzinaMM / 10).toLocaleString("sl-SI")} × ${(seg.sirinaMM / 10).toLocaleString("sl-SI")} × ${(seg.debelinaMM / 10).toLocaleString("sl-SI")} cm`
+      : "";
+    const posevno = p.poseven ? ` (poševno: desno ${esc(p.sirinaDesno)} cm, levo ${esc(p.sirinaLevo)} cm)` : "";
+    const vecKosov = p.vecKosov ? ` · sestavljeno iz ${parseInt(p.steviloKosov) || 2} kosov` : "";
+    vrsticePolic.push(
+      `<tr><td>${idx + 1}</td><td>${esc((p.naziv || "").trim() || "Polica " + (idx + 1))}</td><td>${esc(p.material || "")}</td><td>${mere}${posevno}${vecKosov}</td><td style="text-align:center;">${kol}</td><td class="kljuk">☐</td></tr>`
+    );
+  });
+  const podatki = [
+    ["Stranka", pravna ? nalog.stranka + (nalog.zastopnik ? " (zastopnik: " + nalog.zastopnik + ")" : "") : nalog.stranka],
+    ...(pravna && nalog.naslovPodjetja ? [["Naslov podjetja", nalog.naslovPodjetja]] : []),
+    ...(pravna && nalog.davcnaStevilka ? [["Davčna številka", nalog.davcnaStevilka]] : []),
+    ["Telefon", nalog.telefon],
+    ["E-pošta", nalog.email],
+    ...(nalog.objekt ? [["Objekt", nalog.objekt]] : []),
+    [jePonudba ? "Številka ponudbe" : "Številka delovnega naloga", nalog.stevilka],
+    ["Datum naročila", dat(nalog.datumVnosa || nalog.datum)],
+    ["Predviden rok izdelave", dat(nalog.rok) + (nalog.rokUra ? " ob " + nalog.rokUra : "")],
+    ["Datum prevzema", dat(nalog.datumPrevzema)],
+  ];
+  const vrsticePodatkov = podatki
+    .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v) || "&nbsp;"}</td></tr>`)
+    .join("");
+  const danes = new Date().toLocaleDateString("sl-SI");
+  const stolpecPodpisa = (naslov, besedilo, datumVnos) =>
+    `<h2>${naslov}</h2><p>${besedilo}</p>` +
+    `<table class="podpis"><tr><th>Kraj in datum</th><th>Ime in priimek</th><th>Podpis stranke</th></tr>` +
+    `<tr><td style="height:46px;">${datumVnos ? esc(datumVnos) : ""}</td><td>${esc(nalog.stranka)}</td><td></td></tr></table>`;
+  return (
+    `<!DOCTYPE html><html lang="sl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">` +
+    `<title>Potrditev naročila ${esc(nalog.stevilka)} — ${esc(nalog.stranka)}</title>` +
+    `<style>
+      @page { size: A4; margin: 14mm; }
+      body{font-family:system-ui,Arial,sans-serif;color:#1c1917;margin:0;padding:16px;background:#f5f5f4;font-size:12.5px;line-height:1.45;}
+      .list{max-width:780px;margin:0 auto;background:#fff;padding:24px 28px;border:1px solid #e7e5e4;}
+      .orodja{max-width:780px;margin:0 auto 12px;display:flex;gap:8px;align-items:center;}
+      .orodja button{background:#dc2626;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;}
+      .orodja span{color:#78716c;font-size:12px;}
+      h1{font-size:19px;margin:0 0 2px;} h2{font-size:14px;margin:16px 0 4px;border-bottom:1px solid #d6d3d1;padding-bottom:2px;}
+      .glava{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #1c1917;padding-bottom:6px;margin-bottom:10px;}
+      table{width:100%;border-collapse:collapse;margin:4px 0;}
+      th,td{border:1px solid #d6d3d1;padding:4px 7px;text-align:left;vertical-align:top;}
+      table.podatki th{width:34%;background:#fafaf9;font-weight:600;}
+      table.polica th{background:#fafaf9;font-size:11.5px;}
+      .kljuk{text-align:center;font-size:16px;width:34px;}
+      ol{margin:4px 0 4px 18px;padding:0;} li{margin:3px 0;}
+      table.podpis th{background:#fafaf9;font-size:11.5px;}
+      p{margin:4px 0;}
+      @media print{ body{background:#fff;padding:0;} .list{border:0;padding:0;max-width:none;} .orodja{display:none;} }
+    </style></head><body>` +
+    `<div class="orodja"><button onclick="window.print()">🖨 Natisni</button><span>Za shranjevanje v PDF v oknu za tiskanje izberi »Shrani kot PDF«.</span></div>` +
+    `<div class="list">` +
+    `<div class="glava"><div><h1>Potrditev naročila in prevzema polic</h1><div>Kamnoseštvo Čakš · telefon 031 235 146</div></div><div style="text-align:right;">Natisnjeno: ${danes}</div></div>` +
+    `<p>Ta list je priloga naročila polic. Stranka ga prebere in podpiše pred začetkom izdelave. Podpis velja kot potrditev vseh točk.</p>` +
+    `<h2>Podatki naročila</h2><table class="podatki">${vrsticePodatkov}</table>` +
+    (vrsticePolic.length
+      ? `<h2>Police za preverjanje (mere preveri stranka)</h2><table class="polica"><tr><th>#</th><th>Naziv</th><th>Material</th><th>Mere (dolžina × širina × debelina)</th><th>Kos.</th><th>Prevzeto</th></tr>${vrsticePolic.join("")}<tr><td colspan="4" style="text-align:right;font-weight:600;">Skupaj kosov</td><td style="text-align:center;font-weight:600;">${skupajKosov}</td><td></td></tr></table>`
+      : "") +
+    `<h2>Potrditev naročila</h2><ol>` +
+    `<li>Police se izdelajo natanko po merah, skicah in navodilih, ki jih je posredovala stranka.</li>` +
+    `<li>Stranka ob pregledu ponudbe sama preveri vse mere, količine, material in izvedbo. S podpisom potrjuje, da so vsi podatki pravilni.</li>` +
+    `<li>Če so mere ali skice napisane ali narisane neberljivo (na primer ročno), Kamnoseštvo Čakš ne odgovarja za netočnosti, ki nastanejo zaradi napačno prebranih podatkov.</li></ol>` +
+    `<h2>Prevzem</h2><ol start="4">` +
+    `<li>Stranka je dolžna ob prevzemu prešteti vse police in preveriti količino ter stanje (kljukice v tabeli zgoraj).</li>` +
+    `<li>Poznejših reklamacij in manjkov ne upoštevamo.</li>` +
+    `<li>Kamnoseštvo Čakš odgovarja za police samo do prevzema. Kaj se z njimi dogaja po prevzemu (prevoz, nalaganje, vgradnja, uporaba), ni naša odgovornost.</li></ol>` +
+    stolpecPodpisa("Podpis ob potrditvi naročila", "S podpisom potrjujem, da sem prebral/a točke 1 do 6, preveril/a vse mere in da se z njimi strinjam.", danes) +
+    stolpecPodpisa("Podpis ob prevzemu", "S podpisom potrjujem, da sem police ob prevzemu prešel/prešla, da je količina popolna in da poznejših reklamacij ali manjkov ne uveljavljam.", nalog.datumPrevzema ? dat(nalog.datumPrevzema) : "") +
+    `</div></body></html>`
+  );
+}
+
+function odpriPotrditev(nalog) {
+  const html = zgradiPotrditevHTML(nalog);
+  let okno = null;
+  try {
+    okno = window.open("", "_blank");
+  } catch (e) {}
+  if (okno && okno.document) {
+    okno.document.open();
+    okno.document.write(html);
+    okno.document.close();
+    return;
+  }
+  // brskalnik je preprečil novo okno: prenesi datoteko
+  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `potrditev ${nalog.stevilka || "nalog"} ${(nalog.stranka || "").replace(/[\\/:*?"<>|]/g, "").trim()}.html`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -3936,7 +4050,7 @@ function DelovniNalogiGlavna() {
                     }, 0);
                     const skupajRacunPoslan = nalogi.filter(jeBrezPonudbe).reduce((v, n) => {
                       if ((n.placano || "Ne") === "Da") return v;
-                      if (n.racun !== "poslan") return v;
+                      if (n.racun !== "poslan" && n.racun !== "poslati") return v;
                       const c = parseFloat(String(n.cena).replace(",", "."));
                       return v + (isNaN(c) ? 0 : c);
                     }, 0);
@@ -4054,7 +4168,7 @@ function DelovniNalogiGlavna() {
                 )}
 
                 {(() => {
-                  const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && jeBrezPonudbe(n));
+                  const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && n.racun !== "poslati" && jeBrezPonudbe(n));
                   const skupajNeplacano = neplacana.reduce((v, n) => {
                     const c = parseFloat(String(n.cena).replace(",", "."));
                     return v + (isNaN(c) ? 0 : c);
@@ -4501,7 +4615,7 @@ function DelovniNalogiGlavna() {
                   const pultiStranke = pultiPodatki.filter((p) => imeStrankeModula(p) === stranka);
                   const spomenikiStranke = spomenikiPodatki.filter((s) => imeStrankeModula(s) === stranka);
                   const skupajNarocil = naroceilaStranke.length + pultiStranke.length + spomenikiStranke.length;
-                  const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && jeBrezPonudbe(n));
+                  const odprta = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && n.racun !== "poslati" && jeBrezPonudbe(n));
                   const odprtaVsota = odprta.reduce((v, n) => {
                     const c = parseFloat(String(n.cena).replace(",", "."));
                     return v + (isNaN(c) ? 0 : c);
@@ -4542,7 +4656,7 @@ function DelovniNalogiGlavna() {
 
         {pogled === "strankaDetalji" && izbranaStranka && (() => {
           const naroceilaStranke = nalogi.filter((n) => n.stranka === izbranaStranka);
-          const neplacana = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && jeBrezPonudbe(n));
+          const neplacana = naroceilaStranke.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && n.racun !== "poslati" && jeBrezPonudbe(n));
           const pultiStranke = pultiPodatki.filter((p) => imeStrankeModula(p) === izbranaStranka);
           const spomenikiStranke = spomenikiPodatki.filter((s) => imeStrankeModula(s) === izbranaStranka);
           const neplacaniPultiStranke = pultiStranke.filter((p) => !p.placano && jeBrezPonudbe(p));
@@ -4553,7 +4667,7 @@ function DelovniNalogiGlavna() {
             neplacaniSpomenikiStranke.reduce((v, s) => v + steviloVarno(s.cena), 0);
           const skupajNeplacanihNarocil = neplacana.length + neplacaniPultiStranke.length + neplacaniSpomenikiStranke.length;
           const casovnica = [
-            ...naroceilaStranke.map((n) => ({ vrsta: "Police", stevilka: n.stevilka, datum: n.datumVnosa || n.datum, opis: n.opis, cena: n.cena, id: n.id, objekt: n.objekt || "", ponudba: !jeBrezPonudbe(n), neplacano: (n.placano || "Ne") !== "Da" && n.racun !== "poslan", neto: steviloVarno(n.cena) * (1 - (parseFloat(String(n.popustSkupaj).replace(",", ".")) || 0) / 100), bruto: steviloVarno(n.cena) * (1 - (parseFloat(String(n.popustSkupaj).replace(",", ".")) || 0) / 100) * 1.22 })),
+            ...naroceilaStranke.map((n) => ({ vrsta: "Police", stevilka: n.stevilka, datum: n.datumVnosa || n.datum, opis: n.opis, cena: n.cena, id: n.id, objekt: n.objekt || "", ponudba: !jeBrezPonudbe(n), neplacano: (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && n.racun !== "poslati", neto: steviloVarno(n.cena) * (1 - (parseFloat(String(n.popustSkupaj).replace(",", ".")) || 0) / 100), bruto: steviloVarno(n.cena) * (1 - (parseFloat(String(n.popustSkupaj).replace(",", ".")) || 0) / 100) * 1.22 })),
             ...pultiStranke.map((p) => ({ vrsta: "Pulti", stevilka: p.stevilka, datum: p.datum, opis: "Pult", cena: p.ponudbenaCena, id: p.id, ponudba: !jeBrezPonudbe(p), neplacano: !p.placano, neto: steviloVarno(p.ponudbenaCena) / 1.22, bruto: steviloVarno(p.ponudbenaCena) })),
             ...spomenikiStranke.map((s) => ({ vrsta: "Spomenik", stevilka: s.stevilka, datum: s.datum, opis: s.material || "Spomenik", cena: s.cena, id: s.id, ponudba: !jeBrezPonudbe(s), neplacano: s.placano !== "Da", neto: steviloVarno(s.cena), bruto: steviloVarno(s.cena) * 1.22 })),
           ].sort((a, b) => (a.datum || "") < (b.datum || "") ? 1 : -1);
@@ -6469,6 +6583,12 @@ function DelovniNalogiGlavna() {
                   </button>
                 </>
               )}
+              <button
+                onClick={() => odpriPotrditev(aktivniNalog)}
+                className="bg-amber-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-amber-500 transition-colors flex items-center gap-2"
+              >
+                <FileText size={15} /> Potrditev za stranko
+              </button>
               <button
                 onClick={() => odpriUredi(aktivniNalog)}
                 className="bg-stone-800 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors flex items-center gap-2"
