@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-02-x · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-02-y · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2547,6 +2547,9 @@ function natisniCasovnicoStranke(stranka, casovnicaVse, adminOdklenjen, nacin) {
   const izracunHtml = adminOdklenjen
     ? `<table style="width:auto;margin-top:16px;margin-left:auto;font-size:14px;border-collapse:collapse;">` +
       `<thead><tr style="color:#78716c;text-align:right;"><th style="padding:4px 10px;text-align:left;"></th><th style="padding:4px 10px;">Neto</th><th style="padding:4px 10px;">DDV 22%</th><th style="padding:4px 10px;">Bruto</th></tr></thead><tbody>` +
+      (samoNeplacano
+        ? ""
+        : `<tr style="border-top:2px solid #1c1917;font-weight:700;"><td style="padding:6px 10px;">SKUPNI PROMET STRANKE (${veljavni.length} naročil)</td><td style="padding:6px 10px;text-align:right;">${eurN(skupajNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(skupajBruto - skupajNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(skupajBruto)}</td></tr>`) +
       `<tr style="border-top:2px solid #1c1917;font-weight:700;"><td style="padding:6px 10px;">SKUPAJ NEPLAČANO (${neplacani.length} naročil)</td><td style="padding:6px 10px;text-align:right;">${eurN(neplacanoNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(neplacanoBruto - neplacanoNeto)}</td><td style="padding:6px 10px;text-align:right;">${eurN(neplacanoBruto)}</td></tr>` +
       `</tbody></table>` +
       `<p style="font-size:11px;color:#78716c;margin-top:8px;text-align:right;">Police in spomeniki: vneseni znesek je neto (pri policah po odbitku popusta), pulti: ponudbena cena je z DDV. ` +
