@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-02-v · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-02-w · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -3335,6 +3335,19 @@ function DelovniNalogiGlavna() {
       const stevilkaIndex = os.filter((n) => (n.vrsta || "narocilo") === "narocilo").length + 1;
       const novaStevilka = `${praznoStevilo("DN")}${String(stevilkaIndex).padStart(3, "0")}`;
       return os.map((n) => (n.id === id ? { ...n, vrsta: "narocilo", stevilka: novaStevilka, status: "Sprejeto" } : n));
+    });
+  }
+
+  async function pretvoriVPonudbo(id) {
+    const nalog = nalogi.find((n) => n.id === id);
+    if (!nalog) return;
+    const opozorilo = nalog.racun || nalog.placano ? "\n\nOPOZORILO: ta nalog je že označen kot plačan ali ima račun." : "";
+    const potrdi = window.confirm(`Ali želiš delovni nalog ${nalog.stevilka} spremeniti v ponudbo? Dobil bo novo številko ponudbe in ne bo več štet med delovnimi nalogi.${opozorilo}`);
+    if (!potrdi) return;
+    await posodobiNaloge((os) => {
+      const stevilkaIndex = os.filter((n) => n.vrsta === "ponudba").length + 1;
+      const novaStevilka = `${praznoStevilo("PO")}${String(stevilkaIndex).padStart(3, "0")}`;
+      return os.map((n) => (n.id === id ? { ...n, vrsta: "ponudba", stevilka: novaStevilka, status: "Sprejeto" } : n));
     });
   }
 
@@ -6519,6 +6532,18 @@ function DelovniNalogiGlavna() {
                   className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shrink-0"
                 >
                   Pretvori v delovni nalog
+                </button>
+              </div>
+            )}
+
+            {aktivniNalog.vrsta !== "ponudba" && (
+              <div className="mt-4 bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-sm text-stone-600">Ta nalog lahko spremeniš nazaj v ponudbo.</span>
+                <button
+                  onClick={() => pretvoriVPonudbo(aktivniNalog.id)}
+                  className="bg-stone-700 hover:bg-stone-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shrink-0"
+                >
+                  Spremeni v ponudbo
                 </button>
               </div>
             )}
