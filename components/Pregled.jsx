@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import PregledPlosca from "./PregledPlosca";
 
 const STOLPCI = [
   { id: "sprejeto", naziv: "Sprejeto", barva: "#78716c" },
@@ -44,7 +45,25 @@ function materialiPolice(nalog) {
   return rezultat.join(", ");
 }
 
+// Police in spomeniki: vneseni znesek je neto; pulti: ponudbena cena je z DDV (22 %).
+function zneski(znesek, vrsta) {
+  const z = Number(znesek) || 0;
+  if (vrsta === "bruto") return { cena: z, bruto: z, neto: z / 1.22 };
+  return { cena: z, neto: z, bruto: z * 1.22 };
+}
+
 export default function Pregled() {
+  const [nacin, setNacin] = useState("tabla");
+  useEffect(() => {
+    try {
+      const n = localStorage.getItem("pregled-nacin");
+      if (n === "plosca" || n === "tabla") setNacin(n);
+    } catch (e) {}
+  }, []);
+  function izberiNacin(n) {
+    setNacin(n);
+    try { localStorage.setItem("pregled-nacin", n); } catch (e) {}
+  }
   const [postavke, setPostavke] = useState([]);
   const [nalaganje, setNalaganje] = useState(true);
   const [uraOsvezitve, setUraOsvezitve] = useState(null);
@@ -69,6 +88,10 @@ export default function Pregled() {
           material: materialiPolice(n),
           objekt: n.tipStranke === "pravna" ? n.objekt : "",
           stolpec: mapPoliceStatus(n.status),
+          datum: n.datumVnosa || n.datum,
+          ponudba: n.vrsta === "ponudba",
+          placano: (n.placano || "Ne") === "Da" || n.racun === "poslan",
+          ...zneski((Number(String(n.cena).replace(",", ".")) || 0) * (1 - (parseFloat(String(n.popustSkupaj).replace(",", ".")) || 0) / 100), "neto"),
         })),
         ...(Array.isArray(pultiRes) ? pultiRes : []).map((p) => {
           const matPodatki = pultiCenikRes?.materiali?.find((m) => m.id === p.materialId);
@@ -81,6 +104,10 @@ export default function Pregled() {
             material: matPodatki ? matPodatki.naziv : "",
             objekt: "",
             stolpec: mapPultiStatus(p.status),
+            datum: p.datum,
+            ponudba: p.vrsta === "ponudba",
+            placano: !!p.placano,
+            ...zneski(Number(p.ponudbenaCena) || 0, "bruto"),
           };
         }),
         ...(Array.isArray(spomenikiRes) ? spomenikiRes : []).map((s) => ({
@@ -92,6 +119,10 @@ export default function Pregled() {
           material: s.material || "",
           objekt: "",
           stolpec: mapSpomenikStatus(s.status),
+          datum: s.datum,
+          ponudba: s.vrsta === "ponudba",
+          placano: s.placano === "Da",
+          ...zneski(Number(String(s.cena).replace(",", ".")) || 0, "neto"),
         })),
       ];
 
@@ -126,8 +157,8 @@ export default function Pregled() {
     }));
 
   return (
-    <div className="h-screen bg-stone-950 text-white p-4 sm:p-5 flex flex-col overflow-hidden" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <div className="flex items-center justify-between mb-3 shrink-0 gap-4">
+    <div className={nacin === "plosca" ? "min-h-screen bg-stone-100 text-stone-900 p-4 sm:p-5 flex flex-col" : "h-screen bg-stone-950 text-white p-4 sm:p-5 flex flex-col overflow-hidden"} style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <div className={`flex items-center justify-between mb-3 shrink-0 gap-4 ${nacin === "plosca" ? "bg-stone-950 text-white rounded-2xl px-4 py-3" : ""}`}>
         <div className="min-w-0">
           <div className="font-bold text-2xl tracking-tight">
             ČAKŠ <span className="text-red-500">· Pregled proizvodnje</span>
@@ -135,7 +166,7 @@ export default function Pregled() {
           <div className="text-stone-500 text-xs mt-0.5">Kamnoseštvo Čakš — vsi moduli v živo</div>
         </div>
 
-        {podatkiGrafa.length > 0 && (
+        {nacin === "tabla" && podatkiGrafa.length > 0 && (
           <div className="flex items-center gap-3 shrink-0">
             <div style={{ width: 90, height: 90 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -165,7 +196,13 @@ export default function Pregled() {
         )}
 
         <div className="text-right shrink-0">
-          <div className="flex gap-1.5 justify-end mb-1.5">
+          <div className="flex gap-1.5 justify-end mb-1.5 flex-wrap">
+            <button
+              onClick={() => izberiNacin(nacin === "tabla" ? "plosca" : "tabla")}
+              className="text-[10px] bg-red-600 hover:bg-red-500 px-2 py-1 rounded text-white font-semibold transition-colors"
+            >
+              {nacin === "tabla" ? "📊 Nadzorna plošča" : "🗂 Tabla naročil"}
+            </button>
             <a href="/" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Police</a>
             <a href="/pulti" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Pulti</a>
             <a href="/spomeniki" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Spomeniki</a>
@@ -185,6 +222,8 @@ export default function Pregled() {
 
       {nalaganje ? (
         <div className="text-center text-stone-500 py-24 text-lg flex-1">Nalagam …</div>
+      ) : nacin === "plosca" ? (
+        <PregledPlosca postavke={postavke} />
       ) : (
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 min-h-0">
           {STOLPCI.map((stolpec) => {
@@ -235,7 +274,7 @@ export default function Pregled() {
         </div>
       )}
 
-      <div className="text-center text-stone-700 text-[10px] mt-2 shrink-0">
+      <div className="text-center text-stone-400 text-[10px] mt-2 shrink-0">
         {uraOsvezitve && `Osveženo ${uraOsvezitve.toLocaleTimeString("sl-SI")} · `}samodejno se osvežuje vsakih 45 sekund
       </div>
     </div>
