@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-02-y · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-04-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2035,6 +2035,175 @@ function ponudbaSMS(nalog) {
   const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const locilo = jeIOS ? "&" : "?";
   return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besediloPonudbe(nalog))}`;
+}
+
+// ---------- PDF ponudbe (ustvarjen v brskalniku) ----------
+function zgradiPonudboHTML(nalog) {
+  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const postavke = (nalog.postavke || []).filter((p) => p && (p.naziv || p.material || p.dolzina));
+  const skupajM2 = postavke.reduce((v, p) => v + m2Postavke(p), 0);
+  const neto = parseFloat(String(nalog.cena).replace(",", ".")) || 0;
+  const popust = parseFloat(String(nalog.popustSkupaj).replace(",", ".")) || 0;
+  const netoPoPopustu = neto * (1 - popust / 100);
+  const bruto = netoPoPopustu * 1.22;
+  const eur = (x) => x.toFixed(2).replace(".", ",") + " €";
+  const dat = (v) => {
+    if (!v) return "";
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? "" : d.toLocaleDateString("sl-SI");
+  };
+  const td = "border-bottom:1px solid #e7e5e4;padding:5px 6px;vertical-align:top;";
+  const th = "border-bottom:2px solid #a8a29e;padding:5px 6px;text-align:left;font-size:11px;color:#57534e;";
+  const vrstice = postavke
+    .map((p, i) => {
+      const sirina = p.poseven ? `L:${esc(p.sirinaLevo || "–")} / D:${esc(p.sirinaDesno || "–")}` : esc(p.sirina || "–");
+      return `<tr><td style="${td}color:#a8a29e;">${i + 1}</td><td style="${td}">${esc(p.naziv || "—")}</td><td style="${td}">${esc(p.material || "—")}</td><td style="${td}white-space:nowrap;">${esc(p.dolzina || "–")} × ${sirina} × ${esc(p.debelina || "–")}${p.vecKosov ? `<div style="font-size:10px;color:#b45309;">iz ${parseInt(p.steviloKosov) || 2} kosov</div>` : ""}</td><td style="${td}">${esc(p.kolicina || "1")}</td><td style="${td}">${p.popust ? esc(p.popust) + " %" : "—"}</td><td style="${td}font-weight:600;white-space:nowrap;">${p.cena ? esc(p.cena) + " €" : "—"}</td></tr>`;
+    })
+    .join("");
+  return (
+    `<div style="width:794px;box-sizing:border-box;padding:40px 44px;background:#fff;color:#1c1917;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.45;">` +
+    `<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1c1917;padding-bottom:8px;margin-bottom:14px;">` +
+    `<img src="${CAKS_LOGO}" style="height:34px;" /><div style="text-align:right;"><div style="font-size:20px;font-weight:700;letter-spacing:1px;">PONUDBA</div><div style="font-size:12px;color:#57534e;">Kamnoseštvo Čakš · 031 235 146</div></div></div>` +
+    `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;"><tr>` +
+    `<td style="vertical-align:top;width:55%;"><div style="font-size:11px;color:#78716c;">STRANKA</div><div style="font-size:15px;font-weight:700;">${esc(nalog.stranka)}</div>` +
+    (nalog.tipStranke === "pravna" && nalog.naslovPodjetja ? `<div>${esc(nalog.naslovPodjetja)}</div>` : "") +
+    (nalog.objekt ? `<div style="margin-top:3px;"><span style="color:#78716c;font-size:11px;">OBJEKT </span>${esc(nalog.objekt)}</div>` : "") +
+    `</td><td style="vertical-align:top;text-align:right;"><div><span style="color:#78716c;font-size:11px;">ŠTEVILKA </span><b>${esc(nalog.stevilka || "")}</b></div><div><span style="color:#78716c;font-size:11px;">DATUM </span>${new Date().toLocaleDateString("sl-SI")}</div>` +
+    (nalog.veljavnostPonudbe ? `<div><span style="color:#78716c;font-size:11px;">VELJA DO </span><b>${dat(nalog.veljavnostPonudbe)}</b></div>` : "") +
+    `</td></tr></table>` +
+    (nalog.opis ? `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e7e5e4;"><span style="color:#78716c;font-size:11px;">OPIS DELA </span>${esc(nalog.opis)}</div>` : "") +
+    (postavke.length
+      ? `<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="${th}">#</th><th style="${th}">Naziv</th><th style="${th}">Material</th><th style="${th}">Mere (cm)</th><th style="${th}">Kos.</th><th style="${th}">Popust</th><th style="${th}">Cena (€)</th></tr></thead><tbody>${vrstice}</tbody>` +
+        (skupajM2 > 0 ? `<tfoot><tr><td colspan="5" style="padding:6px;text-align:right;color:#57534e;">Skupaj m²</td><td colspan="2" style="padding:6px;font-weight:700;">${skupajM2.toFixed(2).replace(".", ",")} m²</td></tr></tfoot>` : "") +
+        `</table>`
+      : "") +
+    (nalog.cena
+      ? `<div style="margin-top:12px;text-align:right;border-top:2px solid #e7e5e4;padding-top:8px;">` +
+        `<div>Skupna cena brez DDV: <b>${eur(neto)}</b></div>` +
+        (popust > 0 ? `<div>Cena po popustu (${popust} %): <b>${eur(netoPoPopustu)}</b></div>` : "") +
+        `<div style="color:#57534e;">DDV 22 %: ${eur(bruto - netoPoPopustu)}</div>` +
+        `<div style="font-size:16px;font-weight:700;margin-top:3px;">Skupaj z DDV: ${eur(bruto)}</div></div>`
+      : "") +
+    (nalog.opombe ? `<p style="margin-top:12px;"><span style="color:#78716c;font-size:11px;">OPOMBE </span>${esc(nalog.opombe)}</p>` : "") +
+    `<div style="margin-top:16px;font-size:11.5px;color:#44403c;"><b>Pogoji</b><ol style="margin:4px 0 0 18px;padding:0;">` +
+    `<li>Police se izdelajo natanko po merah, skicah in navodilih, ki jih je posredovala stranka.</li>` +
+    `<li>Stranka ob pregledu ponudbe sama preveri vse mere, količine, material in izvedbo.</li>` +
+    `<li>Če so mere ali skice neberljive (na primer ročno napisane), Kamnoseštvo Čakš ne odgovarja za netočnosti zaradi napačno prebranih podatkov.</li>` +
+    `<li>Stranka je dolžna ob prevzemu prešteti vse police in preveriti količino ter stanje. Poznejših reklamacij in manjkov ne upoštevamo.</li>` +
+    `<li>Kamnoseštvo Čakš odgovarja za police samo do prevzema.</li></ol></div>` +
+    (nalog.veljavnostPonudbe ? `<p style="font-size:11px;color:#78716c;margin-top:10px;">Ta ponudba velja do ${dat(nalog.veljavnostPonudbe)}. Cene se lahko po tem datumu spremenijo.</p>` : "") +
+    (nalog.podpisToken && !nalog.ponudbaPodpis
+      ? `<p style="font-size:12px;margin-top:12px;padding:8px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;">Ponudbo lahko preko spleta podpišete na povezavi:<br><b>https://delavni-nalog-caks.vercel.app/ponudba/${esc(nalog.podpisToken)}</b></p>`
+      : "") +
+    `</div>`
+  );
+}
+
+async function ustvariPonudboPDF(nalog) {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+  const okvir = document.createElement("iframe");
+  okvir.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;height:1200px;border:0;";
+  document.body.appendChild(okvir);
+  try {
+    const d = okvir.contentDocument;
+    d.open();
+    d.write(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#fff;">${zgradiPonudboHTML(nalog)}</body></html>`);
+    d.close();
+    await new Promise((r) => setTimeout(r, 300));
+    const platno = await html2canvas(d.body.firstElementChild, { scale: 2, backgroundColor: "#ffffff", useCORS: true, windowWidth: 794 });
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    const sirinaStrani = 210;
+    const visinaStrani = 297;
+    const pxNaStran = Math.floor((platno.width * visinaStrani) / sirinaStrani);
+    let y = 0;
+    let stran = 0;
+    while (y < platno.height - 2) {
+      const rez = Math.min(pxNaStran, platno.height - y);
+      const kos = document.createElement("canvas");
+      kos.width = platno.width;
+      kos.height = rez;
+      kos.getContext("2d").drawImage(platno, 0, y, platno.width, rez, 0, 0, platno.width, rez);
+      if (stran > 0) pdf.addPage();
+      pdf.addImage(kos.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, sirinaStrani, (rez * sirinaStrani) / platno.width);
+      y += rez;
+      stran++;
+    }
+    const buf = pdf.output("arraybuffer");
+    let bin = "";
+    const bajti = new Uint8Array(buf);
+    for (let i = 0; i < bajti.length; i += 0x8000) bin += String.fromCharCode.apply(null, bajti.subarray(i, i + 0x8000));
+    return { base64: btoa(bin), blob: new Blob([bajti], { type: "application/pdf" }) };
+  } finally {
+    document.body.removeChild(okvir);
+  }
+}
+
+function imePDFPonudbe(nalog) {
+  const stranka = (nalog.stranka || "").replace(/[\\/:*?"<>|]/g, "").trim();
+  return `ponudba-${nalog.stevilka || "nalog"}${stranka ? " " + stranka : ""}.pdf`;
+}
+
+async function prenesiPonudboPDF(nalog) {
+  try {
+    const { blob } = await ustvariPonudboPDF(nalog);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = imePDFPonudbe(nalog);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return true;
+  } catch (e) {
+    alert("PDF ponudbe ni bilo mogoče ustvariti: " + (e && e.message ? e.message : e));
+    return false;
+  }
+}
+
+// Pošlje ponudbo po e-pošti s PDF v priponki (preko strežnika). Če Resend še ne sme pošiljati
+// neposredno strankam (domena ni preverjena), ponudi pošiljanje nanj, da PDF preposlješ ročno.
+async function posljiPonudboSPDF(nalog) {
+  let pdf;
+  try {
+    pdf = await ustvariPonudboPDF(nalog);
+  } catch (e) {
+    alert("PDF ponudbe ni bilo mogoče ustvariti: " + (e && e.message ? e.message : e));
+    return false;
+  }
+  const zadeva = `Ponudba ${nalog.stevilka || ""} — Kamnoseštvo Čakš`;
+  const besedilo = besediloPonudbe(nalog).replace("Za vsa vprašanja", "Ponudbo najdete tudi v priponki (PDF).\n\nZa vsa vprašanja");
+  const poslji = async (na, dodatek) => {
+    const res = await fetch("/api/posljidobavnico", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ na, zadeva: dodatek ? `${zadeva} (za ${nalog.stranka})` : zadeva, besedilo: (dodatek || "") + besedilo, imeDatoteke: imePDFPonudbe(nalog), vsebinaBase64: pdf.base64 }),
+    });
+    const odg = await res.json().catch(() => ({}));
+    return { ok: res.ok, odg };
+  };
+  try {
+    const r = await poslji(nalog.email, "");
+    if (r.ok) {
+      alert(`Ponudba s PDF je bila poslana na ${nalog.email}.`);
+      return true;
+    }
+    const omejitev = /own email|verify a domain|testing emails|not allowed/i.test(JSON.stringify(r.odg));
+    if (omejitev && window.confirm(`Pošiljanje neposredno stranki še ni omogočeno (domena ni preverjena pri Resendu).\n\nAli naj ponudbo s PDF pošljem na ${ZACASNI_PREJEMNIK_DOBAVNIC}, da jo preposlješ stranki (${nalog.email})?`)) {
+      const r2 = await poslji(ZACASNI_PREJEMNIK_DOBAVNIC, `[PREPOSLJI STRANKI: ${nalog.email}]\n\n`);
+      if (r2.ok) {
+        alert(`Ponudba s PDF je bila poslana na ${ZACASNI_PREJEMNIK_DOBAVNIC}. Preposlji jo stranki.`);
+        return true;
+      }
+      alert(`Pošiljanje ni uspelo: ${r2.odg.napaka || ""}\n${r2.odg.podrobnosti || ""}`);
+      return false;
+    }
+    if (!omejitev) alert(`Pošiljanje ni uspelo: ${r.odg.napaka || ""}\n${r.odg.podrobnosti || ""}`);
+    return false;
+  } catch (e) {
+    alert("Napaka pri pošiljanju e-pošte. Preveri povezavo.");
+    return false;
+  }
 }
 
 function izracunajRazredePolic(nalog, cenik) {
@@ -6588,6 +6757,28 @@ function DelovniNalogiGlavna() {
                 >
                   Spremeni v ponudbo
                 </button>
+              </div>
+            )}
+
+            {adminOdklenjen && aktivniNalog.vrsta === "ponudba" && (
+              <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-sm text-amber-800">PDF ponudbe:</span>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {aktivniNalog.email && (
+                    <button
+                      onClick={() => posljiPonudboSPDF(aktivniNalog)}
+                      className="bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                    >
+                      📎 Pošlji e-mail s PDF
+                    </button>
+                  )}
+                  <button
+                    onClick={() => prenesiPonudboPDF(aktivniNalog)}
+                    className="bg-stone-700 hover:bg-stone-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                  >
+                    ⬇ Prenesi PDF
+                  </button>
+                </div>
               </div>
             )}
 
