@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { prenesiPDF, posljiPDF } from "../lib/pdf-ponudba";
 
 // ===================== NASTAVITVE =====================
 
@@ -359,6 +360,67 @@ function ponudbaPultiSMS(nalog, izr) {
   const jeIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const locilo = jeIOS ? "&" : "?";
   return `sms:${stevilkaCista}${locilo}body=${encodeURIComponent(besediloPonudbePulti(nalog, izr))}`;
+}
+
+function zgradiPonudboPultiHTML(nalog, cenik) {
+  const izr = izracunNaloga(nalog, cenik);
+  const material = najdiMaterial(cenik, nalog.materialId);
+  const storitve = izr.storitve.filter((s) => s.kolicina > 0);
+  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const td = "border-bottom:1px solid #e7e5e4;padding:5px 6px;vertical-align:top;";
+  const th = "border-bottom:2px solid #a8a29e;padding:5px 6px;text-align:left;font-size:11px;color:#57534e;";
+  const kosi = (nalog.kosi || []).filter((k) => k.naziv || k.dolzina || k.sirina);
+  const lbl = (t) => `<span style="color:#78716c;font-size:11px;">${t} </span>`;
+  return (
+    `<div style="width:794px;box-sizing:border-box;padding:40px 44px;background:#fff;color:#1c1917;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.45;">` +
+    `<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1c1917;padding-bottom:8px;margin-bottom:14px;">` +
+    `<div style="font-size:22px;font-weight:700;">ČAKŠ <span style="color:#dc2626;">· Pulti</span></div><div style="text-align:right;"><div style="font-size:20px;font-weight:700;letter-spacing:1px;">PONUDBA</div><div style="font-size:12px;color:#57534e;">Kamnoseštvo Čakš · 031 235 146</div></div></div>` +
+    `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;"><tr><td style="vertical-align:top;width:55%;">${lbl("STRANKA")}<div style="font-size:15px;font-weight:700;">${esc(nalog.stranka?.ime)}</div>` +
+    (nalog.stranka?.naslov ? `<div>${esc(nalog.stranka.naslov)}</div>` : "") +
+    `</td><td style="vertical-align:top;text-align:right;"><div>${lbl("ŠTEVILKA")}<b>${esc(nalog.stevilka || "")}</b></div><div>${lbl("DATUM")}${new Date().toLocaleDateString("sl-SI")}</div>` +
+    (nalog.datumMontaze ? `<div>${lbl("PREDVIDEN DATUM MONTAŽE")}<b>${esc(nalog.datumMontaze)}</b></div>` : "") +
+    `</td></tr></table>` +
+    `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e7e5e4;">${lbl("MATERIAL")}<b>${esc(material ? material.naziv : "—")}</b>` +
+    (material?.tip === "plosca" ? ` · ${nalog.steviloPlosc || 0} plošč` : "") +
+    (material?.tip === "m2"
+      ? (izr.material.m2_2cm > 0 ? `<div>2 cm: ${izr.material.m2_2cm.toFixed(2)} m² = ${eur(izr.material.cena_2cm)}</div>` : "") +
+        (izr.material.m2_3cm > 0 ? `<div>3 cm: ${izr.material.m2_3cm.toFixed(2)} m² = ${eur(izr.material.cena_3cm)}</div>` : "")
+      : "") +
+    `</div>` +
+    (kosi.length
+      ? `<div style="margin-bottom:10px;">${lbl("KOSI")}<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="${th}">Naziv</th><th style="${th}">Mere (cm)</th><th style="${th}">Deb.</th></tr></thead><tbody>` +
+        kosi.map((k, i) => `<tr><td style="${td}">${esc(k.naziv || "Kos " + (i + 1))}</td><td style="${td}">${esc(k.dolzina || "–")} × ${esc(k.sirina || "–")}</td><td style="${td}">${esc(k.debelina || "2")} cm</td></tr>`).join("") +
+        `</tbody></table></div>`
+      : "") +
+    (storitve.length
+      ? `<div style="margin-bottom:10px;">${lbl("STORITVE")}<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="${th}">Postavka</th><th style="${th}">Kol.</th><th style="${th}text-align:right;">Cena</th></tr></thead><tbody>` +
+        storitve.map((s) => `<tr><td style="${td}">${esc(s.naziv)}</td><td style="${td}">${esc(s.kolicina)} ${esc(s.enota)}</td><td style="${td}text-align:right;">${eur(s.skupaj)}</td></tr>`).join("") +
+        `</tbody></table></div>`
+      : "") +
+    `<div style="margin-top:12px;text-align:right;border-top:2px solid #e7e5e4;padding-top:8px;">` +
+    `<div>Material: <b>${eur(izr.material.cena)}</b></div><div>Storitve: <b>${eur(izr.storitveSkupaj)}</b></div>` +
+    (izr.popust > 0 ? `<div>Popust (${esc(nalog.popust)} %): <b>−${eur(izr.popust)}</b></div><div>Osnova po popustu: <b>${eur(izr.brezDdv)}</b></div>` : "") +
+    `<div style="color:#57534e;">DDV 22 %: ${eur(izr.ddv)}</div><div style="font-size:16px;font-weight:700;margin-top:3px;">Skupaj z DDV: ${eur(izr.zDdv)}</div></div>` +
+    (nalog.opombe ? `<p style="margin-top:12px;">${lbl("OPOMBE")}${esc(nalog.opombe)}</p>` : "") +
+    `<p style="font-size:11px;color:#78716c;margin-top:14px;border-top:1px solid #e7e5e4;padding-top:8px;">Za vsa vprašanja smo dosegljivi na 031 235 146. Cene so informativne narave.</p>` +
+    `</div>`
+  );
+}
+
+function imePDFPulti(nalog) {
+  const stranka = (nalog.stranka?.ime || "").replace(/[\\/:*?"<>|]/g, "").trim();
+  return `ponudba-pult-${nalog.stevilka || "nalog"}${stranka ? " " + stranka : ""}.pdf`;
+}
+
+function posljiPonudboPultiSPDF(nalog, cenik, izr) {
+  return posljiPDF({
+    htmlVsebina: zgradiPonudboPultiHTML(nalog, cenik),
+    imeDatoteke: imePDFPulti(nalog),
+    na: nalog.stranka?.email,
+    zadeva: `Ponudba ${nalog.stevilka || ""} — Kamnoseštvo Čakš`,
+    besedilo: besediloPonudbePulti(nalog, izr).replace("Za vsa vprašanja", "Ponudbo najdete tudi v priponki (PDF).\n\nZa vsa vprašanja"),
+    stranka: nalog.stranka?.ime,
+  });
 }
 
 function zgradiHTMLDokumentPulti(selector, naslov) {
@@ -1829,6 +1891,20 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
                 Pošlji e-mail
               </a>
             )}
+            {nalog.stranka?.email && (
+              <button
+                onClick={() => posljiPonudboPultiSPDF(nalog, cenik, izr)}
+                className="bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+              >
+                📎 Pošlji e-mail s PDF
+              </button>
+            )}
+            <button
+              onClick={() => prenesiPDF(zgradiPonudboPultiHTML(nalog, cenik), imePDFPulti(nalog))}
+              className="bg-stone-700 hover:bg-stone-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+            >
+              ⬇ Prenesi PDF
+            </button>
             {nalog.stranka?.telefon && (
               <a
                 href={ponudbaPultiSMS(nalog, izr)}
