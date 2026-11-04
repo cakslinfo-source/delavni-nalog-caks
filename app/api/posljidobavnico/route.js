@@ -4,7 +4,7 @@ export const revalidate = 0;
 
 export async function POST(request) {
   try {
-    const { na, zadeva, besedilo, imeDatoteke, vsebinaDatoteke } = await request.json();
+    const { na, zadeva, besedilo, imeDatoteke, vsebinaDatoteke, vsebinaBase64 } = await request.json();
 
     if (!na) {
       return Response.json({ napaka: "Stranka nima vnesenega e-mail naslova." }, { status: 400 });
@@ -18,7 +18,7 @@ export async function POST(request) {
       );
     }
 
-    const base64Vsebina = Buffer.from(vsebinaDatoteke, "utf-8").toString("base64");
+    const base64Vsebina = vsebinaBase64 ? String(vsebinaBase64) : Buffer.from(vsebinaDatoteke || "", "utf-8").toString("base64");
 
     const odgovor = await fetch("https://api.resend.com/emails", {
       method: "POST",
