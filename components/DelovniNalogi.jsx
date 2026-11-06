@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-06-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-06-b · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -1714,6 +1714,116 @@ function razclenjiTabeloPolic(besedilo) {
     rezultat.push({ naziv: "", material, dolzina: cistoStevilo(mere[1]), sirina: cistoStevilo(mere[2]), debelina: cistoStevilo(mere[3]), kolicina: kos ? kos[1] : "1" });
   });
   return rezultat.filter((p) => p.dolzina || p.sirina || p.material || p.naziv);
+}
+
+// ---------- Narekovanje polic ----------
+// Pretvori narekovano besedilo (»sto dvajset krat štirideset krat tri, dva kosa, rosa beta«)
+// v zapis, ki ga razume razclenjiTabeloPolic (»120 x 40 x 3 2 kosa rosa beta«).
+function normalizirajNarek(besedilo) {
+  const bn = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const ENOTE = { nic: 0, ena: 1, en: 1, eno: 1, enega: 1, dva: 2, dve: 2, tri: 3, stiri: 4, pet: 5, sest: 6, sedem: 7, osem: 8, devet: 9,
+    deset: 10, enajst: 11, dvanajst: 12, trinajst: 13, stirinajst: 14, petnajst: 15, sestnajst: 16, sedemnajst: 17, osemnajst: 18, devetnajst: 19 };
+  const DESETICE = { dvajset: 20, trideset: 30, stirideset: 40, petdeset: 50, sestdeset: 60, sedemdeset: 70, osemdeset: 80, devetdeset: 90 };
+  const STOTICE = { sto: 100, dvesto: 200, tristo: 300, stiristo: 400, petsto: 500, seststo: 600, sedemsto: 700, osemsto: 800, devetsto: 900 };
+  // sestavljenke tipa »petindvajset«
+  const razdeli = (b) => {
+    if (b in ENOTE || b in DESETICE || b in STOTICE) return [b];
+    const m = b.match(/^(.+?)in(.+)$/);
+    if (m && m[1] in ENOTE && m[2] in DESETICE) return [m[1], "in", m[2]];
+    return null;
+  };
+  const zetoni = String(besedilo || "")
+    .replace(/[,;]+/g, " , ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .flatMap((t) => {
+      if (t === ",") return [t];
+      const b = bn(t).replace(/[^a-z0-9]/g, "");
+      const r = /^\d+$/.test(b) ? null : razdeli(b);
+      return r ? r : [t];
+    });
+  const vrednost = (t) => {
+    const b = bn(t).replace(/[^a-z0-9]/g, "");
+    if (b in STOTICE) return ["sto", STOTICE[b]];
+    if (b in DESETICE) return ["des", DESETICE[b]];
+    if (b in ENOTE) return [ENOTE[b] >= 10 ? "teen" : "eno", ENOTE[b]];
+    return null;
+  };
+  const izhod = [];
+  let i = 0;
+  const preberiStevilo = () => {
+    let vsota = 0;
+    let vzeto = false;
+    let v = vrednost(zetoni[i]);
+    if (v && v[0] === "sto") { vsota += v[1]; i++; vzeto = true; v = zetoni[i] ? vrednost(zetoni[i]) : null; }
+    if (v && v[0] === "teen") { vsota += v[1]; i++; return vsota; }
+    const jeKos = (k) => k !== undefined && /^(kos|kosa|kosov|kosi|kom)$/.test(bn(k).replace(/[^a-z]/g, ""));
+    if (v && v[0] === "des") {
+      vsota += v[1];
+      i++;
+      // »devetdeset pet« = 95, razen če je naslednja številka količina (»trideset dva kosa«)
+      const enota = zetoni[i] ? vrednost(zetoni[i]) : null;
+      if (enota && enota[0] === "eno" && !jeKos(zetoni[i + 1])) { vsota += enota[1]; i++; }
+      return vsota;
+    }
+    if (v && v[0] === "eno") {
+      const naslednji = zetoni[i + 1] && bn(zetoni[i + 1]) === "in" && zetoni[i + 2] ? vrednost(zetoni[i + 2]) : null;
+      if (naslednji && naslednji[0] === "des") { vsota += v[1] + naslednji[1]; i += 3; return vsota; }
+      if (vzeto && jeKos(zetoni[i + 1])) return vsota;
+      vsota += v[1];
+      i++;
+      return vsota;
+    }
+    return vzeto ? vsota : null;
+  };
+  while (i < zetoni.length) {
+    const t = zetoni[i];
+    const b = bn(t).replace(/[^a-z0-9]/g, "");
+    if (vrednost(t)) {
+      const zacetek = i;
+      const n = preberiStevilo();
+      if (n === null) { i = zacetek + 1; izhod.push(t); continue; }
+      let niz = String(n);
+      // decimalke: »devetdeset pet celih pet«, »petnajst pika pet«
+      if (zetoni[i] && /^(celih|cela|cele|cel|pika|vejica)$/.test(bn(zetoni[i]))) {
+        const shr = i;
+        i++;
+        const d = vrednost(zetoni[i]) ? preberiStevilo() : /^\d+$/.test(zetoni[i] || "") ? zetoni[i++] : null;
+        if (d !== null && d !== undefined) niz += "," + d; else i = shr + 1;
+      }
+      izhod.push(niz);
+    } else if (/^(krat|krát|x|iks|times)$/.test(b) || t === "×") {
+      izhod.push("x");
+      i++;
+    } else if (/^(naslednja|naslednje|naslednji|naprej|nova|novo)$/.test(b)) {
+      izhod.push("\n");
+      i++;
+    } else if (t === ",") {
+      izhod.push(" ");
+      i++;
+    } else {
+      izhod.push(t);
+      i++;
+    }
+  }
+  return izhod
+    .join(" ")
+    .replace(/ *\n */g, "\n")
+    .replace(/(\d)\s*x\s*(?=\d)/g, "$1 x ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+// Prilagodi ime materiala iz besedila imenom iz cenika (brez razlik v velikosti črk in naglasih)
+function uskladiMaterial(ime, cenik) {
+  const bn = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+  const vsi = Object.values(cenik || {}).flatMap((g) => (g && Array.isArray(g.materiali) ? g.materiali : []));
+  const cilj = bn(ime);
+  if (!cilj) return ime;
+  const tocen = vsi.find((m) => bn(m) === cilj);
+  if (tocen) return tocen;
+  const delen = vsi.find((m) => bn(m).includes(cilj) || cilj.includes(bn(m)));
+  return delen || ime;
 }
 
 function novaPostavka() {
@@ -3000,6 +3110,56 @@ function DelovniNalogiGlavna() {
   const [obrazec, setObrazec] = useState(prazenObrazec());
   const [prilepiOdprto, setPrilepiOdprto] = useState(false);
   const [prilepiBesedilo, setPrilepiBesedilo] = useState("");
+  const [poslusam, setPoslusam] = useState(false);
+  const narekRef = useRef(false);
+  const prepoznavaRef = useRef(null);
+
+  function ustaviNarekovanje() {
+    narekRef.current = false;
+    setPoslusam(false);
+    try { prepoznavaRef.current && prepoznavaRef.current.stop(); } catch (e) {}
+  }
+
+  function zacniNarekovanje() {
+    const SR = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
+    if (!SR) {
+      alert("Ta brskalnik ne podpira narekovanja. Uporabi Chrome (računalnik, Android) ali Safari (iPhone).");
+      return;
+    }
+    const rec = new SR();
+    rec.lang = "sl-SI";
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          const t = normalizirajNarek(e.results[i][0].transcript);
+          if (t) setPrilepiBesedilo((prej) => (prej ? prej.replace(/\s+$/, "") + "\n" : "") + t);
+        }
+      }
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        alert("Mikrofon ni dovoljen. V brskalniku dovoli uporabo mikrofona za to stran.");
+        ustaviNarekovanje();
+      }
+    };
+    rec.onend = () => {
+      if (narekRef.current) {
+        try { rec.start(); } catch (e) { ustaviNarekovanje(); }
+      } else {
+        setPoslusam(false);
+      }
+    };
+    prepoznavaRef.current = rec;
+    narekRef.current = true;
+    try {
+      rec.start();
+      setPoslusam(true);
+    } catch (e) {
+      ustaviNarekovanje();
+    }
+  }
   const [iskanje, setIskanje] = useState("");
   const [filterStatusi, setFilterStatusi] = useState([]);
   const [pokaziSamoRacune, setPokaziSamoRacune] = useState(false);
@@ -3544,7 +3704,7 @@ function DelovniNalogiGlavna() {
     const razclenjene = razclenjiTabeloPolic(prilepiBesedilo);
     if (!razclenjene.length) return;
     const nove = razclenjene.map((r) => {
-      const p = { ...novaPostavka(), ...r };
+      const p = { ...novaPostavka(), ...r, material: uskladiMaterial(r.material, cenikPolice) };
       const izracunana = izracunajCenoPostavke(p, cenikPolice);
       if (izracunana !== null) p.cena = String(izracunana);
       return p;
@@ -3553,6 +3713,7 @@ function DelovniNalogiGlavna() {
     const obstojece = obrazec.postavke.filter((p) => p.naziv || p.material || p.dolzina || p.sirina || p.debelina);
     const vse = [...obstojece, ...nove];
     setObrazec({ ...obrazec, postavke: vse, cena: vsotaPostavk(vse) });
+    ustaviNarekovanje();
     setPrilepiBesedilo("");
     setPrilepiOdprto(false);
   }
@@ -6214,8 +6375,19 @@ function DelovniNalogiGlavna() {
               {prilepiOdprto && (
                 <div className="mt-3 border border-amber-300 bg-amber-50 rounded-lg p-3">
                   <p className="text-xs text-amber-900 mb-2">
-                    Prilepi tabelo (stolpci: Naziv, Material, Dolžina, Širina, Debelina, Kos.). Vsaka vrstica postane ena postavka. Prepoznan je tudi prosti zapis, npr. »120 x 40 x 3, 2 kos, Rosa Beta«.
+                    Prilepi tabelo (stolpci: Naziv, Material, Dolžina, Širina, Debelina, Kos.) ali narekuj. Vsaka vrstica postane ena postavka.
                   </p>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <button
+                      onClick={poslusam ? ustaviNarekovanje : zacniNarekovanje}
+                      className={`text-sm font-medium px-4 py-2 rounded-lg text-white transition-colors ${poslusam ? "bg-red-600 hover:bg-red-500 animate-pulse" : "bg-stone-800 hover:bg-stone-700"}`}
+                    >
+                      {poslusam ? "⏹ Ustavi narekovanje" : "🎤 Narekuj police"}
+                    </button>
+                    <span className="text-xs text-amber-900">
+                      Reci: »dolžina krat širina krat debelina, dva kosa, material«. Za naslednjo polico reci »naslednja« ali naredi premor.
+                    </span>
+                  </div>
                   <textarea
                     value={prilepiBesedilo}
                     onChange={(e) => setPrilepiBesedilo(e.target.value)}
@@ -6223,6 +6395,20 @@ function DelovniNalogiGlavna() {
                     placeholder={"| Naziv | Material | Dolžina | Širina | Debelina | Kos. |\n| Polica 1 | Rosa Beta | 120 | 40 | 3 | 2 |"}
                     className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                   />
+                  {(() => {
+                    const pred = razclenjiTabeloPolic(prilepiBesedilo);
+                    return pred.length ? (
+                      <div className="mt-2 bg-white border border-amber-200 rounded-lg p-2 text-xs">
+                        <div className="font-medium text-stone-600 mb-1">Predogled ({pred.length}):</div>
+                        {pred.map((r, i) => (
+                          <div key={i} className={!r.dolzina || !r.sirina ? "text-red-600" : "text-stone-700"}>
+                            {i + 1}. {r.dolzina || "?"} × {r.sirina || "?"} × {r.debelina || "?"} cm · {r.kolicina} kos · {uskladiMaterial(r.material, cenikPolice) || "material ni izbran"}
+                            {r.naziv ? ` · ${r.naziv}` : ""}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="flex items-center gap-3 mt-2">
                     <button
                       onClick={vstaviPrilepljenoTabelo}
@@ -6231,7 +6417,7 @@ function DelovniNalogiGlavna() {
                     >
                       Vstavi {razclenjiTabeloPolic(prilepiBesedilo).length || ""} polic
                     </button>
-                    <button onClick={() => { setPrilepiOdprto(false); setPrilepiBesedilo(""); }} className="text-sm text-stone-600 px-3 py-2">
+                    <button onClick={() => { ustaviNarekovanje(); setPrilepiOdprto(false); setPrilepiBesedilo(""); }} className="text-sm text-stone-600 px-3 py-2">
                       Prekliči
                     </button>
                   </div>
