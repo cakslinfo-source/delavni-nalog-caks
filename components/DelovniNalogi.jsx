@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-04-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-06-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -1629,6 +1629,91 @@ function ocistiNalog(n) {
 
 function pripraviNaloge(podatki) {
   return (Array.isArray(podatki) ? podatki : []).map(ocistiNalog).filter(Boolean);
+}
+
+// Razčleni prilepljeno tabelo polic (iz Excela, Wordove tabele ali besedila s |) v seznam polic.
+// Če ima tabela glavo (Naziv, Material, Dolžina, Širina, Debelina, Kos.), se stolpci poiščejo po glavi.
+// Brez glave velja vrstni red: Naziv | Material | Dolžina | Širina | Debelina | Kos.
+// Vrstice v prostem zapisu (npr. »120 x 40 x 3, 2 kos, Rosa Beta«) se prav tako prepoznajo.
+function razclenjiTabeloPolic(besedilo) {
+  const brezNaglasov = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  const cistoStevilo = (t) => {
+    const m = String(t || "").replace(/\s/g, "").match(/\d+(?:[.,]\d+)?/);
+    return m ? m[0] : "";
+  };
+  const polja = [
+    ["naziv", /^(naziv|polica|opis|oznaka|ime)/],
+    ["material", /^(material|kamen|vrsta)/],
+    ["dolzina", /^(dolz|d$|l$|length)/],
+    ["sirina", /^(sir|g$|globin|w$|width)/],
+    ["debelina", /^(debel|deb$|h$|thick)/],
+    ["kolicina", /^(kos|kom|kolic|stevil|st\.?$|pcs|qty)/],
+  ];
+  const vrstice = String(besedilo || "")
+    .split(/\r?\n/)
+    .map((v) => v.trim())
+    .filter((v) => v && !/^[\s|:\-–—+=_]+$/.test(v));
+  const celice = (v) => {
+    let c;
+    if (v.includes("\t")) c = v.split("\t");
+    else if (v.includes("|")) c = v.split("|");
+    else if (v.includes(";")) c = v.split(";");
+    else return null;
+    if (v.includes("|") && !v.includes("\t")) {
+      if (c[0].trim() === "") c.shift();
+      if (c.length && c[c.length - 1].trim() === "") c.pop();
+    }
+    return c.map((x) => x.trim());
+  };
+  let preslikava = null;
+  const rezultat = [];
+  vrstice.forEach((v) => {
+    const c = celice(v);
+    if (c && c.length >= 3) {
+      const jeGlava = c.every((x) => !/\d/.test(x)) && c.some((x) => polja.some(([, re]) => re.test(brezNaglasov(x))));
+      if (jeGlava) {
+        preslikava = {};
+        c.forEach((x, i) => {
+          const najden = polja.find(([ime, re]) => re.test(brezNaglasov(x)) && preslikava[ime] === undefined);
+          if (najden) preslikava[najden[0]] = i;
+        });
+        return;
+      }
+      let p;
+      if (preslikava) {
+        p = {};
+        Object.entries(preslikava).forEach(([ime, i]) => (p[ime] = c[i] || ""));
+      } else if (c.length >= 6) {
+        p = { naziv: c[0], material: c[1], dolzina: c[2], sirina: c[3], debelina: c[4], kolicina: c[5] };
+      } else if (c.length === 5) {
+        p = { material: c[0], dolzina: c[1], sirina: c[2], debelina: c[3], kolicina: c[4] };
+      } else {
+        p = { dolzina: c[0], sirina: c[1], debelina: c[2], kolicina: c[3] || "1" };
+      }
+      rezultat.push({
+        naziv: String(p.naziv || "").trim(),
+        material: String(p.material || "").trim(),
+        dolzina: cistoStevilo(p.dolzina),
+        sirina: cistoStevilo(p.sirina),
+        debelina: cistoStevilo(p.debelina),
+        kolicina: cistoStevilo(p.kolicina) || "1",
+      });
+      return;
+    }
+    // prosti zapis
+    const mere = v.match(/(\d+(?:[.,]\d+)?)\s*(?:cm)?\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*(?:cm)?(?:\s*[x×*]\s*(\d+(?:[.,]\d+)?))?/i);
+    if (!mere) return;
+    const ostanek = v.replace(mere[0], " ");
+    const kos = ostanek.match(/(\d+)\s*(?:kos(?:ov|a|i)?|kom|pcs)\b/i) || ostanek.match(/\b(?:kos(?:ov|a|i)?|kom|stevilo|količina)\s*[:=]?\s*(\d+)/i);
+    const material = ostanek
+      .replace(kos ? kos[0] : "", " ")
+      .replace(/\b(cm|mm|kos(?:ov|a|i)?|kom)\b/gi, " ")
+      .replace(/[\d.,;:|()\-–]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    rezultat.push({ naziv: "", material, dolzina: cistoStevilo(mere[1]), sirina: cistoStevilo(mere[2]), debelina: cistoStevilo(mere[3]), kolicina: kos ? kos[1] : "1" });
+  });
+  return rezultat.filter((p) => p.dolzina || p.sirina || p.material || p.naziv);
 }
 
 function novaPostavka() {
@@ -2913,6 +2998,8 @@ function DelovniNalogiGlavna() {
   const [pogled, setPogled] = useState("seznam");
   const [aktivniId, setAktivniId] = useState(null);
   const [obrazec, setObrazec] = useState(prazenObrazec());
+  const [prilepiOdprto, setPrilepiOdprto] = useState(false);
+  const [prilepiBesedilo, setPrilepiBesedilo] = useState("");
   const [iskanje, setIskanje] = useState("");
   const [filterStatusi, setFilterStatusi] = useState([]);
   const [pokaziSamoRacune, setPokaziSamoRacune] = useState(false);
@@ -3451,6 +3538,23 @@ function DelovniNalogiGlavna() {
 
   function dodajPostavko() {
     setObrazec({ ...obrazec, postavke: [...obrazec.postavke, novaPostavka()] });
+  }
+
+  function vstaviPrilepljenoTabelo() {
+    const razclenjene = razclenjiTabeloPolic(prilepiBesedilo);
+    if (!razclenjene.length) return;
+    const nove = razclenjene.map((r) => {
+      const p = { ...novaPostavka(), ...r };
+      const izracunana = izracunajCenoPostavke(p, cenikPolice);
+      if (izracunana !== null) p.cena = String(izracunana);
+      return p;
+    });
+    // prazne vrstice na obrazcu se nadomestijo, izpolnjene ostanejo
+    const obstojece = obrazec.postavke.filter((p) => p.naziv || p.material || p.dolzina || p.sirina || p.debelina);
+    const vse = [...obstojece, ...nove];
+    setObrazec({ ...obrazec, postavke: vse, cena: vsotaPostavk(vse) });
+    setPrilepiBesedilo("");
+    setPrilepiOdprto(false);
   }
 
   function dodajVecPostavk(stevilo) {
@@ -6100,7 +6204,39 @@ function DelovniNalogiGlavna() {
                 >
                   <ListPlus size={14} /> Dodaj 20 vrstic
                 </button>
+                <button
+                  onClick={() => setPrilepiOdprto(!prilepiOdprto)}
+                  className="text-sm px-3 py-1.5 rounded-lg border border-amber-400 text-amber-800 bg-amber-50 hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+                >
+                  📋 Prilepi tabelo polic
+                </button>
               </div>
+              {prilepiOdprto && (
+                <div className="mt-3 border border-amber-300 bg-amber-50 rounded-lg p-3">
+                  <p className="text-xs text-amber-900 mb-2">
+                    Prilepi tabelo (stolpci: Naziv, Material, Dolžina, Širina, Debelina, Kos.). Vsaka vrstica postane ena postavka. Prepoznan je tudi prosti zapis, npr. »120 x 40 x 3, 2 kos, Rosa Beta«.
+                  </p>
+                  <textarea
+                    value={prilepiBesedilo}
+                    onChange={(e) => setPrilepiBesedilo(e.target.value)}
+                    rows={6}
+                    placeholder={"| Naziv | Material | Dolžina | Širina | Debelina | Kos. |\n| Polica 1 | Rosa Beta | 120 | 40 | 3 | 2 |"}
+                    className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  />
+                  <div className="flex items-center gap-3 mt-2">
+                    <button
+                      onClick={vstaviPrilepljenoTabelo}
+                      disabled={!razclenjiTabeloPolic(prilepiBesedilo).length}
+                      className="bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Vstavi {razclenjiTabeloPolic(prilepiBesedilo).length || ""} polic
+                    </button>
+                    <button onClick={() => { setPrilepiOdprto(false); setPrilepiBesedilo(""); }} className="text-sm text-stone-600 px-3 py-2">
+                      Prekliči
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-stone-200 pt-4 mt-4">
