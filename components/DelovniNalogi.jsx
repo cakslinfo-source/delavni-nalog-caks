@@ -19,7 +19,7 @@ const NESTING = (function () {
   const EPS = 1e-6;
 
   const PRIVZETE_NASTAVITVE = { kerfMM: 3.3, rob: 0, zasuk: true, uporabiPlosce: true };
-
+a
   const ZNACKA_OPOMB = "🧩 Iz skladišča:";
 
   function st(v) {
@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-06-b · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-06-c · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -3111,6 +3111,7 @@ function DelovniNalogiGlavna() {
   const [prilepiOdprto, setPrilepiOdprto] = useState(false);
   const [prilepiBesedilo, setPrilepiBesedilo] = useState("");
   const [poslusam, setPoslusam] = useState(false);
+  const [samoMere, setSamoMere] = useState(false);
   const narekRef = useRef(false);
   const prepoznavaRef = useRef(null);
 
@@ -3126,6 +3127,7 @@ function DelovniNalogiGlavna() {
       alert("Ta brskalnik ne podpira narekovanja. Uporabi Chrome (računalnik, Android) ali Safari (iPhone).");
       return;
     }
+    setSamoMere(true);
     const rec = new SR();
     rec.lang = "sl-SI";
     rec.continuous = true;
@@ -3700,11 +3702,32 @@ function DelovniNalogiGlavna() {
     setObrazec({ ...obrazec, postavke: [...obrazec.postavke, novaPostavka()] });
   }
 
+  function nastaviVsemDebelino(v) {
+    const novePostavke = obrazec.postavke.map((p) => {
+      const q = { ...p, debelina: v };
+      const c = izracunajCenoPostavke(q, cenikPolice);
+      if (c !== null) q.cena = String(c);
+      return q;
+    });
+    setObrazec({ ...obrazec, postavke: novePostavke, cena: vsotaPostavk(novePostavke) });
+  }
+
   function vstaviPrilepljenoTabelo() {
     const razclenjene = razclenjiTabeloPolic(prilepiBesedilo);
     if (!razclenjene.length) return;
+    const izpolnjene = obrazec.postavke.filter((p) => p.naziv || p.material || p.dolzina || p.sirina || p.debelina);
+    // pri narekovanju samo mer: material in debelino prevzamejo od že vnesenih polic (če so vse enake)
+    const skupno = (polje) => {
+      const v = [...new Set(izpolnjene.map((p) => p[polje]).filter(Boolean))];
+      return v.length === 1 ? v[0] : "";
+    };
     const nove = razclenjene.map((r) => {
-      const p = { ...novaPostavka(), ...r, material: uskladiMaterial(r.material, cenikPolice) };
+      const p = {
+        ...novaPostavka(),
+        ...r,
+        material: samoMere ? skupno("material") : uskladiMaterial(r.material, cenikPolice),
+        debelina: samoMere ? skupno("debelina") : r.debelina,
+      };
       const izracunana = izracunajCenoPostavke(p, cenikPolice);
       if (izracunana !== null) p.cena = String(izracunana);
       return p;
@@ -6047,10 +6070,13 @@ function DelovniNalogiGlavna() {
                   value=""
                   onChange={(e) => {
                     if (!e.target.value) return;
-                    setObrazec({
-                      ...obrazec,
-                      postavke: obrazec.postavke.map((p) => ({ ...p, material: e.target.value })),
+                    const novePostavke = obrazec.postavke.map((p) => {
+                      const q = { ...p, material: e.target.value };
+                      const c = izracunajCenoPostavke(q, cenikPolice);
+                      if (c !== null) q.cena = String(c);
+                      return q;
                     });
+                    setObrazec({ ...obrazec, postavke: novePostavke, cena: vsotaPostavk(novePostavke) });
                     setRocniMaterial({});
                   }}
                 >
@@ -6077,19 +6103,13 @@ function DelovniNalogiGlavna() {
                       e.preventDefault();
                       const v = e.target.value;
                       if (!v) return;
-                      setObrazec({
-                        ...obrazec,
-                        postavke: obrazec.postavke.map((p) => ({ ...p, debelina: v })),
-                      });
+                      nastaviVsemDebelino(v);
                     }
                   }}
                   onBlur={(e) => {
                     const v = e.target.value;
                     if (!v) return;
-                    setObrazec({
-                      ...obrazec,
-                      postavke: obrazec.postavke.map((p) => ({ ...p, debelina: v })),
-                    });
+                    nastaviVsemDebelino(v);
                   }}
                 />
                 <span className="text-[11px] text-stone-400">Vpiši in pritisni Enter ali klikni stran — po potrebi lahko debelino pri posameznem kosu spodaj še vedno spremeniš.</span>
@@ -6377,6 +6397,10 @@ function DelovniNalogiGlavna() {
                   <p className="text-xs text-amber-900 mb-2">
                     Prilepi tabelo (stolpci: Naziv, Material, Dolžina, Širina, Debelina, Kos.) ali narekuj. Vsaka vrstica postane ena postavka.
                   </p>
+                  <label className="flex items-center gap-2 text-xs text-amber-900 mb-2">
+                    <input type="checkbox" checked={samoMere} onChange={(e) => setSamoMere(e.target.checked)} />
+                    Samo dolžina in širina (+ kosi): material in debelino nastavim v programu
+                  </label>
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     <button
                       onClick={poslusam ? ustaviNarekovanje : zacniNarekovanje}
@@ -6385,7 +6409,7 @@ function DelovniNalogiGlavna() {
                       {poslusam ? "⏹ Ustavi narekovanje" : "🎤 Narekuj police"}
                     </button>
                     <span className="text-xs text-amber-900">
-                      Reci: »dolžina krat širina krat debelina, dva kosa, material«. Za naslednjo polico reci »naslednja« ali naredi premor.
+                      Reci: »dolžina krat širina« in po želji »dva kosa«, npr. »sto dvajset krat štirideset, dva kosa«. Za naslednjo polico reci »naslednja« ali naredi premor.
                     </span>
                   </div>
                   <textarea
@@ -6402,7 +6426,7 @@ function DelovniNalogiGlavna() {
                         <div className="font-medium text-stone-600 mb-1">Predogled ({pred.length}):</div>
                         {pred.map((r, i) => (
                           <div key={i} className={!r.dolzina || !r.sirina ? "text-red-600" : "text-stone-700"}>
-                            {i + 1}. {r.dolzina || "?"} × {r.sirina || "?"} × {r.debelina || "?"} cm · {r.kolicina} kos · {uskladiMaterial(r.material, cenikPolice) || "material ni izbran"}
+                            {i + 1}. {r.dolzina || "?"} × {r.sirina || "?"}{samoMere ? "" : ` × ${r.debelina || "?"}`} cm · {r.kolicina} kos{samoMere ? "" : ` · ${uskladiMaterial(r.material, cenikPolice) || "material ni izbran"}`}
                             {r.naziv ? ` · ${r.naziv}` : ""}
                           </div>
                         ))}
