@@ -19,7 +19,7 @@ const NESTING = (function () {
   const EPS = 1e-6;
 
   const PRIVZETE_NASTAVITVE = { kerfMM: 3.3, rob: 0, zasuk: true, uporabiPlosce: true };
-a
+
   const ZNACKA_OPOMB = "🧩 Iz skladišča:";
 
   function st(v) {
@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-06-c · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-07-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -1698,6 +1698,17 @@ function razclenjiTabeloPolic(besedilo) {
         debelina: cistoStevilo(p.debelina),
         kolicina: cistoStevilo(p.kolicina) || "1",
       });
+      return;
+    }
+    // hitri vnos: samo števila ločena s presledki (»120 40 2« = dolžina, širina, kosi; »120 40 3 2« = + debelina)
+    const stevila = v.match(/^\s*\d+(?:[.,]\d+)?(?:\s+\d+(?:[.,]\d+)?){1,3}\s*$/) ? v.trim().split(/\s+/) : null;
+    if (stevila) {
+      const [d, w, c, k] = stevila;
+      rezultat.push(
+        stevila.length === 4
+          ? { naziv: "", material: "", dolzina: d, sirina: w, debelina: c, kolicina: cistoStevilo(k) || "1" }
+          : { naziv: "", material: "", dolzina: d, sirina: w, debelina: "", kolicina: stevila.length === 3 ? cistoStevilo(c) || "1" : "1" }
+      );
       return;
     }
     // prosti zapis
@@ -3111,7 +3122,11 @@ function DelovniNalogiGlavna() {
   const [prilepiOdprto, setPrilepiOdprto] = useState(false);
   const [prilepiBesedilo, setPrilepiBesedilo] = useState("");
   const [poslusam, setPoslusam] = useState(false);
-  const [samoMere, setSamoMere] = useState(false);
+  const [samoMere, setSamoMere] = useState(true);
+  const [govorPodprt, setGovorPodprt] = useState(false);
+  useEffect(() => {
+    setGovorPodprt(typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition));
+  }, []);
   const narekRef = useRef(false);
   const prepoznavaRef = useRef(null);
 
@@ -6395,28 +6410,30 @@ function DelovniNalogiGlavna() {
               {prilepiOdprto && (
                 <div className="mt-3 border border-amber-300 bg-amber-50 rounded-lg p-3">
                   <p className="text-xs text-amber-900 mb-2">
-                    Prilepi tabelo (stolpci: Naziv, Material, Dolžina, Širina, Debelina, Kos.) ali narekuj. Vsaka vrstica postane ena postavka.
+                    <b>Hitri vnos:</b> v vsako vrstico napiši <b>dolžino, širino in kose</b>, ločeno s presledkom, npr. <span className="font-mono">120 40 2</span> (brez kosov = 1 kos). Material in debelino nastaviš spodaj v obrazcu. Prilepiš lahko tudi tabelo.
                   </p>
                   <label className="flex items-center gap-2 text-xs text-amber-900 mb-2">
                     <input type="checkbox" checked={samoMere} onChange={(e) => setSamoMere(e.target.checked)} />
                     Samo dolžina in širina (+ kosi): material in debelino nastavim v programu
                   </label>
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <button
+                    {govorPodprt && <button
                       onClick={poslusam ? ustaviNarekovanje : zacniNarekovanje}
                       className={`text-sm font-medium px-4 py-2 rounded-lg text-white transition-colors ${poslusam ? "bg-red-600 hover:bg-red-500 animate-pulse" : "bg-stone-800 hover:bg-stone-700"}`}
                     >
                       {poslusam ? "⏹ Ustavi narekovanje" : "🎤 Narekuj police"}
-                    </button>
+                    </button>}
                     <span className="text-xs text-amber-900">
-                      Reci: »dolžina krat širina« in po želji »dva kosa«, npr. »sto dvajset krat štirideset, dva kosa«. Za naslednjo polico reci »naslednja« ali naredi premor.
+                      {govorPodprt
+                        ? "Reci: »dolžina krat širina« in po želji »dva kosa«. Za naslednjo polico reci »naslednja« ali naredi premor."
+                        : "Narekovanje v tem brskalniku ni na voljo."}
                     </span>
                   </div>
                   <textarea
                     value={prilepiBesedilo}
                     onChange={(e) => setPrilepiBesedilo(e.target.value)}
-                    rows={6}
-                    placeholder={"| Naziv | Material | Dolžina | Širina | Debelina | Kos. |\n| Polica 1 | Rosa Beta | 120 | 40 | 3 | 2 |"}
+                    rows={8}
+                    placeholder={"120 40 2\n95,5 30 1\n80 25 4"}
                     className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                   />
                   {(() => {
