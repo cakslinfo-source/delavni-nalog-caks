@@ -34,8 +34,37 @@ function prazenArtikel() {
     enota: "kos",
     opozorilnaKolicina: "",
     opombe: "",
+    slika: "",
   };
 }
+
+// Pomanjša sliko (največ 1000 px) in jo vrne kot JPEG data URL (nekaj 100 KB)
+function pomanjsajSliko(datoteka) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(datoteka);
+    const img = new Image();
+    img.onload = () => {
+      const najvecja = 1000;
+      const razmerje = Math.min(1, najvecja / Math.max(img.width, img.height));
+      const platno = document.createElement("canvas");
+      platno.width = Math.max(1, Math.round(img.width * razmerje));
+      platno.height = Math.max(1, Math.round(img.height * razmerje));
+      const ctx = platno.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, platno.width, platno.height);
+      ctx.drawImage(img, 0, 0, platno.width, platno.height);
+      URL.revokeObjectURL(url);
+      resolve(platno.toDataURL("image/jpeg", 0.78));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Slike ni mogoče prebrati."));
+    };
+    img.src = url;
+  });
+}
+
+const slikaUrl = (kljuc) => `/api/skladisce-slika?kljuc=${encodeURIComponent(kljuc)}`;
 
 function prenesiVarnostnoKopijoSkladisce(artikli) {
   const danes = new Date().toISOString().slice(0, 10);
@@ -95,6 +124,10 @@ export default function Skladisce() {
   const [iskanje, setIskanje] = useState("");
   const [admin, setAdmin] = useState(false);
   const [novaKategorijaVnos, setNovaKategorijaVnos] = useState(false);
+  const [novaSlika, setNovaSlika] = useState(null); // izbrana, a še neshranjena slika (data URL)
+  const [odstraniSliko, setOdstraniSliko] = useState(false);
+  const [shranjujem, setShranjujem] = useState(false);
+  const [povecanaSlika, setPovecanaSlika] = useState("");
 
   useEffect(() => {
     fetch("/api/skladisce", { cache: "no-store" })
@@ -280,7 +313,7 @@ export default function Skladisce() {
               return (
                 <div
                   key={a.id}
-                  onClick={() => { setNovaKategorijaVnos(false); setObrazec({ ...a, _urejanje: true }); setPogled("obrazec"); }}
+                  onClick={() => { setNovaKategorijaVnos(false); setNovaSlika(null); setOdstraniSliko(false); setObrazec({ ...a, _urejanje: true }); setPogled("obrazec"); }}
                   className={`bg-white rounded-xl p-3 shadow-sm cursor-pointer border-2 ${nizka ? "border-red-400" : "border-transparent"}`}
                 >
                   <div className="flex justify-between items-start gap-2">
@@ -318,6 +351,15 @@ export default function Skladisce() {
                     <div className="text-xs text-red-600 font-medium mt-1">⚠️ Zaloga pri koncu — naroči</div>
                   )}
                   {a.opombe && <div className="text-xs text-gray-400 mt-1">{a.opombe}</div>}
+                  {a.slika && (
+                    <img
+                      src={slikaUrl(a.slika)}
+                      alt={a.naziv}
+                      loading="lazy"
+                      onClick={(e) => { e.stopPropagation(); setPovecanaSlika(slikaUrl(a.slika)); }}
+                      className="mt-2 w-full max-h-48 object-contain rounded-lg bg-gray-50 border border-gray-100"
+                    />
+                  )}
                 </div>
               );
             })}
@@ -419,6 +461,46 @@ export default function Skladisce() {
                 onChange={(e) => setObrazec({ ...obrazec, opombe: e.target.value })}
               />
             </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Slika artikla</label>
+              {(novaSlika || (obrazec.slika && !odstraniSliko)) && (
+                <img
+                  src={novaSlika || slikaUrl(obrazec.slika)}
+                  alt="Slika artikla"
+                  className="w-full max-h-56 object-contain rounded-lg bg-gray-50 border border-gray-200 mb-2"
+                />
+              )}
+              <div className="flex flex-wrap gap-2">
+                <label className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white cursor-pointer">
+                  📷 {novaSlika || (obrazec.slika && !odstraniSliko) ? "Zamenjaj sliko" : "Dodaj sliko"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const d = e.target.files && e.target.files[0];
+                      e.target.value = "";
+                      if (!d) return;
+                      try {
+                        setNovaSlika(await pomanjsajSliko(d));
+                        setOdstraniSliko(false);
+                      } catch (err) {
+                        alert("Slike ni bilo mogoče prebrati. Poskusi drugo sliko.");
+                      }
+                    }}
+                  />
+                </label>
+                {(novaSlika || (obrazec.slika && !odstraniSliko)) && (
+                  <button
+                    type="button"
+                    onClick={() => { setNovaSlika(null); setOdstraniSliko(true); }}
+                    className="text-sm px-3 py-2 rounded-lg border border-red-200 text-red-600 bg-white"
+                  >
+                    Odstrani sliko
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -429,21 +511,48 @@ export default function Skladisce() {
               Prekliči
             </button>
             <button
+              disabled={shranjujem}
               onClick={async () => {
                 if (!obrazec.naziv.trim()) {
                   alert("Vnesi naziv artikla.");
                   return;
                 }
                 const { _urejanje, ...cist } = obrazec;
+                const staraSlika = cist.slika || "";
+                setShranjujem(true);
+                if (novaSlika) {
+                  const kljuc = `${cist.id}-${Date.now().toString(36)}`;
+                  try {
+                    const res = await fetch("/api/skladisce-slika", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ kljuc, podatki: novaSlika }),
+                    });
+                    if (!res.ok) throw new Error("napaka");
+                    cist.slika = kljuc;
+                  } catch (err) {
+                    alert("Slike ni bilo mogoče shraniti. Artikel ni shranjen — poskusi znova.");
+                    setShranjujem(false);
+                    return;
+                  }
+                } else if (odstraniSliko) {
+                  cist.slika = "";
+                }
                 if (_urejanje) {
                   await posodobiArtikle((os) => os.map((x) => (x.id === cist.id ? cist : x)));
                 } else {
                   await posodobiArtikle((os) => [cist, ...os]);
                 }
+                if (staraSlika && staraSlika !== cist.slika) {
+                  fetch(`/api/skladisce-slika?kljuc=${encodeURIComponent(staraSlika)}`, { method: "DELETE" }).catch(() => {});
+                }
+                setShranjujem(false);
+                setNovaSlika(null);
+                setOdstraniSliko(false);
                 setObrazec(null);
                 setPogled("seznam");
               }}
-              className="flex-1 bg-red-600 text-white rounded-xl py-3 font-semibold"
+              className="flex-1 bg-red-600 text-white rounded-xl py-3 font-semibold disabled:opacity-60"
             >
               Shrani
             </button>
@@ -455,6 +564,9 @@ export default function Skladisce() {
                 if (!vprasajPin()) return;
                 if (!confirm(`Res izbrišem artikel "${obrazec.naziv}"?`)) return;
                 await posodobiArtikle((os) => os.filter((x) => x.id !== obrazec.id));
+                if (obrazec.slika) {
+                  fetch(`/api/skladisce-slika?kljuc=${encodeURIComponent(obrazec.slika)}`, { method: "DELETE" }).catch(() => {});
+                }
                 setObrazec(null);
                 setPogled("seznam");
               }}
@@ -494,9 +606,18 @@ export default function Skladisce() {
         </div>
       )}
 
+      {povecanaSlika && (
+        <div
+          onClick={() => setPovecanaSlika("")}
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3"
+        >
+          <img src={povecanaSlika} alt="Slika artikla" className="max-w-full max-h-full object-contain rounded-lg" />
+        </div>
+      )}
+
       {pogled === "seznam" && (
         <button
-          onClick={() => { setNovaKategorijaVnos(false); setObrazec(prazenArtikel()); setPogled("obrazec"); }}
+          onClick={() => { setNovaKategorijaVnos(false); setNovaSlika(null); setOdstraniSliko(false); setObrazec(prazenArtikel()); setPogled("obrazec"); }}
           className="fixed bottom-6 right-6 bg-red-600 text-white rounded-full w-14 h-14 text-3xl shadow-lg flex items-center justify-center"
         >
           +
