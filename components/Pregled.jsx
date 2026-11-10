@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import PregledPlosca from "./PregledPlosca";
+import PregledRezanje from "./PregledRezanje";
 
 const STOLPCI = [
   { id: "sprejeto", naziv: "Sprejeto", barva: "#78716c" },
@@ -57,7 +58,7 @@ export default function Pregled() {
   useEffect(() => {
     try {
       const n = localStorage.getItem("pregled-nacin");
-      if (n === "plosca" || n === "tabla") setNacin(n);
+      if (n === "plosca" || n === "tabla" || n === "rezanje") setNacin(n);
     } catch (e) {}
   }, []);
   function izberiNacin(n) {
@@ -90,6 +91,14 @@ export default function Pregled() {
           stolpec: mapPoliceStatus(n.status),
           datum: n.datumVnosa || n.datum,
           ponudba: n.vrsta === "ponudba",
+          kosi: (n.postavke || [])
+            .filter((p) => p && (p.dolzina || p.sirina || p.sirinaLevo || p.sirinaDesno))
+            .map((p) => ({
+              material: (p.material || "").trim(),
+              dolzina: p.dolzina,
+              sirina: p.poseven ? Math.max(parseFloat(String(p.sirinaDesno).replace(",", ".")) || 0, parseFloat(String(p.sirinaLevo).replace(",", ".")) || 0) : p.sirina,
+              kolicina: p.kolicina,
+            })),
           placano: (n.placano || "Ne") === "Da" || n.racun === "poslan",
           ...zneski((Number(String(n.cena).replace(",", ".")) || 0) * (1 - (parseFloat(String(n.popustSkupaj).replace(",", ".")) || 0) / 100), "neto"),
         })),
@@ -107,6 +116,9 @@ export default function Pregled() {
             datum: p.datum,
             ponudba: p.vrsta === "ponudba",
             placano: !!p.placano,
+            kosi: (p.kosi || [])
+              .filter((k) => k && (k.dolzina || k.sirina))
+              .map((k) => ({ material: matPodatki ? matPodatki.naziv : "", dolzina: k.dolzina, sirina: k.sirina, kolicina: 1 })),
             ...zneski(Number(p.ponudbenaCena) || 0, "bruto"),
           };
         }),
@@ -122,6 +134,9 @@ export default function Pregled() {
           datum: s.datum,
           ponudba: s.vrsta === "ponudba",
           placano: s.placano === "Da",
+          kosi: (s.komponente || [])
+            .filter((k) => k && (k.dolzina || k.sirina))
+            .map((k) => ({ material: (s.material || "").trim(), dolzina: k.dolzina, sirina: k.sirina, kolicina: k.kolicina })),
           ...zneski(Number(String(s.cena).replace(",", ".")) || 0, "neto"),
         })),
       ];
@@ -157,8 +172,8 @@ export default function Pregled() {
     }));
 
   return (
-    <div className={nacin === "plosca" ? "min-h-screen bg-stone-100 text-stone-900 p-4 sm:p-5 flex flex-col" : "h-screen bg-stone-950 text-white p-4 sm:p-5 flex flex-col overflow-hidden"} style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <div className={`flex items-center justify-between mb-3 shrink-0 gap-4 ${nacin === "plosca" ? "bg-stone-950 text-white rounded-2xl px-4 py-3" : ""}`}>
+    <div className={nacin !== "tabla" ? "min-h-screen bg-stone-100 text-stone-900 p-4 sm:p-5 flex flex-col" : "h-screen bg-stone-950 text-white p-4 sm:p-5 flex flex-col overflow-hidden"} style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <div className={`flex items-center justify-between mb-3 shrink-0 gap-4 ${nacin !== "tabla" ? "bg-stone-950 text-white rounded-2xl px-4 py-3" : ""}`}>
         <div className="min-w-0">
           <div className="font-bold text-2xl tracking-tight">
             ČAKŠ <span className="text-red-500">· Pregled proizvodnje</span>
@@ -197,12 +212,19 @@ export default function Pregled() {
 
         <div className="text-right shrink-0">
           <div className="flex gap-1.5 justify-end mb-1.5 flex-wrap">
-            <button
-              onClick={() => izberiNacin(nacin === "tabla" ? "plosca" : "tabla")}
-              className="text-[10px] bg-red-600 hover:bg-red-500 px-2 py-1 rounded text-white font-semibold transition-colors"
-            >
-              {nacin === "tabla" ? "📊 Nadzorna plošča" : "🗂 Tabla naročil"}
-            </button>
+            {[
+              { id: "tabla", naziv: "🗂 Tabla naročil" },
+              { id: "plosca", naziv: "📊 Nadzorna plošča" },
+              { id: "rezanje", naziv: "📏 Rezanje skupaj" },
+            ].map((z) => (
+              <button
+                key={z.id}
+                onClick={() => izberiNacin(z.id)}
+                className={`text-[10px] px-2 py-1 rounded font-semibold transition-colors ${nacin === z.id ? "bg-red-600 text-white" : "bg-stone-800 hover:bg-stone-700 text-stone-300"}`}
+              >
+                {z.naziv}
+              </button>
+            ))}
             <a href="/" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Police</a>
             <a href="/pulti" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Pulti</a>
             <a href="/spomeniki" className="text-[10px] bg-stone-800 hover:bg-stone-700 px-2 py-1 rounded text-stone-300 transition-colors">Spomeniki</a>
@@ -224,6 +246,8 @@ export default function Pregled() {
         <div className="text-center text-stone-500 py-24 text-lg flex-1">Nalagam …</div>
       ) : nacin === "plosca" ? (
         <PregledPlosca postavke={postavke} />
+      ) : nacin === "rezanje" ? (
+        <PregledRezanje postavke={postavke} />
       ) : (
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 min-h-0">
           {STOLPCI.map((stolpec) => {

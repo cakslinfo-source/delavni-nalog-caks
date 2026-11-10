@@ -27,8 +27,9 @@ function Kpi({ naziv, vrednost, enota, opomba }) {
 // Seštevek vseh kosov: m², tekoči metri (dolžine) in dolžina rezov (obseg) po materialu in po mesecu.
 export default function PregledRezanje({ postavke }) {
   const [moduli, setModuli] = useState(["Police", "Pulti", "Spomenik"]);
-  const [samoIzdelano, setSamoIzdelano] = useState(false);
+  const [samoIzdelano, setSamoIzdelano] = useState(true);
 
+  const zastarel = postavke.length > 0 && postavke.every((x) => !("kosi" in x));
   const r = useMemo(() => {
     const narocila = postavke.filter((x) => !x.ponudba);
     const izbrana = narocila.filter((x) => moduli.includes(x.modul) && (!samoIzdelano || x.stolpec !== "sprejeto"));
@@ -88,10 +89,15 @@ export default function PregledRezanje({ postavke }) {
         <span className="mx-1 text-stone-300">|</span>
         <label className="flex items-center gap-2 text-xs text-stone-700 cursor-pointer">
           <input type="checkbox" checked={samoIzdelano} onChange={(e) => setSamoIzdelano(e.target.checked)} />
-          Samo naročila, ki so že v izdelavi ali dlje (brez »Sprejeto«)
+          Samo že razrezano: naročila v izdelavi ali dlje (brez »Sprejeto«)
         </label>
       </div>
 
+      {zastarel && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm">
+          Podatki o merah kosov se ne naložijo, ker na GitHubu še ni nove datoteke <b>components/Pregled.jsx</b>. Naloži jo (iz mape Rezanje-skupaj) in počakaj 1–2 minuti.
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi naziv="Skupaj površina" vrednost={f2(r.skupaj.m2)} enota="m²" opomba={`${r.skupaj.kosov} kosov · ${r.skupaj.naloga} naročil`} />
         <Kpi naziv="Skupaj tekoči metri" vrednost={f2(r.skupaj.m)} enota="m" opomba="vsota dolžin vseh kosov" />
