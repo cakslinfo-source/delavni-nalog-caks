@@ -1,42 +1,86 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { PieChart, Pie, Cell, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const st = (v) => {
   const x = parseFloat(String(v ?? "").replace(",", "."));
   return isNaN(x) ? 0 : x;
 };
 const eur = (x) => (Number(x) || 0).toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+const eur0 = (x) => (Number(x) || 0).toLocaleString("sl-SI", { maximumFractionDigits: 0 }) + " €";
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
+const BARVE_OSEB = ["#f43f5e", "#f59e0b", "#10b981", "#0ea5e9", "#8b5cf6", "#ec4899", "#14b8a6"];
 
-function Kartica({ naslov, children }) {
+// Števec, ki se ob prikazu "preleti" do končne vrednosti.
+function Stevec({ vrednost, oblika = eur0, trajanje = 900 }) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    let raf;
+    const t0 = performance.now();
+    const cilj = Number(vrednost) || 0;
+    const korak = (t) => {
+      const k = Math.min(1, (t - t0) / trajanje);
+      setV(cilj * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) raf = requestAnimationFrame(korak);
+    };
+    raf = requestAnimationFrame(korak);
+    return () => cancelAnimationFrame(raf);
+  }, [vrednost, trajanje]);
+  return <>{oblika(v)}</>;
+}
+
+function Kartica({ naslov, podnaslov, ikona, children, razred = "" }) {
   return (
-    <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-4">
-      <div className="text-sm font-semibold text-stone-800 mb-2">{naslov}</div>
+    <div className={`bg-white/90 backdrop-blur rounded-3xl border border-stone-200/70 shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-5 ${razred}`}>
+      <div className="flex items-center gap-2 mb-3">
+        {ikona && <span className="text-lg">{ikona}</span>}
+        <div>
+          <div className="text-sm font-semibold text-stone-800 leading-tight">{naslov}</div>
+          {podnaslov && <div className="text-[11px] text-stone-400">{podnaslov}</div>}
+        </div>
+      </div>
       {children}
     </div>
   );
 }
 
-function Vodoravni({ podatki, barva, enota }) {
+function Cip({ ikona, naziv, vrednost, opomba, barva }) {
   return (
-    <div style={{ width: "100%", height: Math.max(120, podatki.length * 34) }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={podatki} layout="vertical" margin={{ top: 4, right: 30, left: 4, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" horizontal={false} />
-          <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
-          <YAxis type="category" dataKey="ime" width={80} tick={{ fontSize: 12 }} />
-          <Tooltip formatter={(v) => [`${v} naročil`, enota]} />
-          <Bar dataKey="stevilo" radius={[0, 4, 4, 0]} fill={barva} label={{ position: "right", fontSize: 11 }} />
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="rounded-2xl p-4 text-white shadow-md" style={{ background: barva }}>
+      <div className="text-xs opacity-80 flex items-center gap-1.5"><span>{ikona}</span>{naziv}</div>
+      <div className="text-2xl font-bold tabular-nums mt-1"><Stevec vrednost={vrednost} /></div>
+      {opomba && <div className="text-[11px] opacity-75 mt-0.5">{opomba}</div>}
     </div>
   );
 }
 
-// Statistika vrednosti naročil (enako kot na prvi strani Polic): samo za admina.
-export default function PregledVrednost({ nalogi, vrednostPultiSpomeniki }) {
+function Lestvica({ podatki, enota }) {
+  const max = Math.max(1, ...podatki.map((x) => x.stevilo));
+  return (
+    <div className="space-y-2.5">
+      {podatki.map((x, i) => (
+        <div key={x.ime} className="flex items-center gap-3">
+          <div className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white font-bold text-sm shadow" style={{ background: BARVE_OSEB[i % BARVE_OSEB.length] }}>
+            {String(x.ime).trim().charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline justify-between text-sm">
+              <span className="font-medium text-stone-800 truncate">{i === 0 ? "🏆 " : ""}{x.ime}</span>
+              <span className="text-stone-500 tabular-nums text-xs">{x.stevilo} {enota}</span>
+            </div>
+            <div className="h-2 rounded-full bg-stone-100 overflow-hidden mt-1">
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${(x.stevilo / max) * 100}%`, background: BARVE_OSEB[i % BARVE_OSEB.length] }} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Statistika vrednosti naročil: samo za admina.
+export default function PregledVrednost({ nalogi, postavke = [], vrednostPultiSpomeniki }) {
   const [admin, setAdmin] = useState(false);
   useEffect(() => {
     const preberi = () => {
@@ -75,81 +119,156 @@ export default function PregledVrednost({ nalogi, vrednostPultiSpomeniki }) {
       });
       return Object.entries(g).map(([ime, stevilo]) => ({ ime, stevilo })).sort((a, b) => b.stevilo - a.stevilo);
     };
+    // denar iz vseh modulov (iz Pregleda)
+    const nar = postavke.filter((x) => !x.ponudba);
+    const aktivna = nar.filter((x) => x.stolpec !== "prevzeto");
+    const neplacana = nar.filter((x) => !x.placano && x.cena > 0);
+    const poStrankah = {};
+    nar.forEach((x) => {
+      const ime = (x.stranka || "").trim();
+      if (!ime || !x.neto) return;
+      poStrankah[ime] = (poStrankah[ime] || 0) + x.neto;
+    });
+    const top = Object.entries(poStrankah).map(([ime, vsota]) => ({ ime, vsota })).sort((a, b) => b.vsota - a.vsota).slice(0, 6);
     return {
       skupaj, placano, racun, neplacano: skupaj - placano - racun, meseci,
       oddal: steti("oddal"), prevzel: steti("izvajalec"),
+      neplNeto: neplacana.reduce((s, x) => s + x.neto, 0),
+      neplBruto: neplacana.reduce((s, x) => s + x.bruto, 0),
+      neplSt: neplacana.length,
+      aktNeto: aktivna.reduce((s, x) => s + (x.neto || 0), 0),
+      aktBruto: aktivna.reduce((s, x) => s + (x.bruto || 0), 0),
+      aktSt: aktivna.length,
+      top,
     };
-  }, [nalogi]);
+  }, [nalogi, postavke]);
 
   if (!admin) {
     return (
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 text-sm text-stone-600">
-        Vrednosti naročil so vidne samo, ko je odklenjen admin način. Odkleni ga v modulu Police in se vrni na to stran.
+      <div className="bg-white rounded-3xl border border-stone-200 shadow-sm p-8 text-center">
+        <div className="text-4xl mb-2">🔒</div>
+        <div className="text-sm text-stone-600">Vrednosti naročil so vidne samo, ko je odklenjen admin način. Odkleni ga v modulu Police in se vrni na to stran.</div>
       </div>
     );
   }
 
-  const placila = [
-    { naziv: "Skupaj", vsota: r.skupaj, barva: "#7f1d1d" },
+  const skupajVse = r.skupaj + (vrednostPultiSpomeniki || 0);
+  const deleziPlacil = [
     { naziv: "Plačano", vsota: r.placano, barva: "#10b981" },
-    { naziv: "Račun poslan", vsota: r.racun, barva: "#38bdf8" },
-    { naziv: "Neplačano", vsota: r.neplacano, barva: "#facc15" },
+    { naziv: "Račun poslan", vsota: r.racun, barva: "#0ea5e9" },
+    { naziv: "Neplačano", vsota: Math.max(0, r.neplacano), barva: "#f59e0b" },
   ];
-  const tip = (v) => [eur(v), "Vsota"];
+  const odstPlacano = r.skupaj ? Math.round((r.placano / r.skupaj) * 100) : 0;
+  const maxTop = Math.max(1, ...r.top.map((x) => x.vsota));
+  const tip = { borderRadius: 12, border: "none", boxShadow: "0 8px 30px rgba(0,0,0,0.15)" };
 
   return (
-    <div className="space-y-4 mt-1 flex-1">
-      <div className="bg-stone-950 text-white rounded-2xl px-5 py-4">
-        <div className="text-xs uppercase text-stone-400">Skupna vrednost vseh naročil</div>
-        <div className="text-3xl font-bold mt-1">{eur(r.skupaj + (vrednostPultiSpomeniki || 0))}</div>
-        <div className="text-xs text-stone-400 mt-1">
-          Police: {eur(r.skupaj)} · Pulti + Spomeniki: {eur(vrednostPultiSpomeniki)}
+    <div className="space-y-5 mt-1 flex-1">
+      {/* hero */}
+      <div className="relative overflow-hidden rounded-3xl text-white px-6 py-6 shadow-xl" style={{ background: "linear-gradient(135deg,#1c1917 0%,#7f1d1d 55%,#dc2626 100%)" }}>
+        <div className="absolute -right-10 -top-10 w-56 h-56 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute right-24 bottom-[-60px] w-40 h-40 rounded-full bg-amber-400/20 blur-2xl" />
+        <div className="relative">
+          <div className="text-xs uppercase tracking-widest text-white/70">💶 Skupna vrednost vseh naročil</div>
+          <div className="text-4xl sm:text-5xl font-extrabold mt-2 tabular-nums"><Stevec vrednost={skupajVse} oblika={eur} trajanje={1200} /></div>
+          <div className="flex flex-wrap gap-2 mt-4 text-xs">
+            <span className="bg-white/15 rounded-full px-3 py-1">📋 Police {eur0(r.skupaj)}</span>
+            <span className="bg-white/15 rounded-full px-3 py-1">🪨 Pulti + 🪦 Spomeniki {eur0(vrednostPultiSpomeniki)}</span>
+          </div>
         </div>
       </div>
 
-      <Kartica naslov="Police — plačano / račun poslan / neplačano">
-        <div style={{ width: "100%", height: 200 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={placila} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
-              <XAxis dataKey="naziv" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={tip} />
-              <Bar dataKey="vsota" radius={[4, 4, 0, 0]}>
-                {placila.map((e) => <Cell key={e.naziv} fill={e.barva} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </Kartica>
+      {/* štiri številke */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Cip ikona="⏳" naziv="Neplačano (neto)" vrednost={r.neplNeto} opomba={`${r.neplSt} naročil`} barva="linear-gradient(135deg,#f59e0b,#ea580c)" />
+        <Cip ikona="🧾" naziv="Neplačano (bruto)" vrednost={r.neplBruto} opomba="z 22 % DDV" barva="linear-gradient(135deg,#fb7185,#e11d48)" />
+        <Cip ikona="🔨" naziv="Vrednost aktivnih (neto)" vrednost={r.aktNeto} opomba={`${r.aktSt} aktivnih naročil`} barva="linear-gradient(135deg,#38bdf8,#2563eb)" />
+        <Cip ikona="📦" naziv="Vrednost aktivnih (bruto)" vrednost={r.aktBruto} opomba="z 22 % DDV" barva="linear-gradient(135deg,#a78bfa,#7c3aed)" />
+      </div>
 
-      <Kartica naslov="Vrednost naročil po mesecih (Police, zadnjih 12)">
-        {r.meseci.length === 0 ? (
-          <p className="text-sm text-stone-400">Ni dovolj podatkov za prikaz.</p>
-        ) : (
-          <div style={{ width: "100%", height: 220 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* obroč plačil */}
+        <Kartica ikona="🍩" naslov="Kako je s plačili" podnaslov="Police">
+          <div className="relative mx-auto" style={{ width: 210, height: 210 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={r.meseci} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
-                <XAxis dataKey="naziv" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={tip} />
-                <Bar dataKey="vsota" radius={[4, 4, 0, 0]} fill="#dc2626" />
-              </BarChart>
+              <PieChart>
+                <Pie data={deleziPlacil} dataKey="vsota" innerRadius={68} outerRadius={98} paddingAngle={3} cornerRadius={8} stroke="none">
+                  {deleziPlacil.map((e) => <Cell key={e.naziv} fill={e.barva} />)}
+                </Pie>
+                <Tooltip contentStyle={tip} formatter={(v, n) => [eur(v), n]} />
+              </PieChart>
             </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <div className="text-3xl font-extrabold text-stone-800 tabular-nums">{odstPlacano} %</div>
+              <div className="text-[11px] text-stone-400">plačano</div>
+            </div>
           </div>
-        )}
-      </Kartica>
+          <div className="space-y-1.5 mt-2">
+            {deleziPlacil.map((e) => (
+              <div key={e.naziv} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 text-stone-600"><span className="w-2.5 h-2.5 rounded-full" style={{ background: e.barva }} />{e.naziv}</span>
+                <span className="font-semibold text-stone-800 tabular-nums">{eur0(e.vsota)}</span>
+              </div>
+            ))}
+          </div>
+        </Kartica>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* po mesecih */}
+        <Kartica ikona="📈" naslov="Vrednost naročil po mesecih" podnaslov="Police, zadnjih 12 mesecev" razred="lg:col-span-2">
+          {r.meseci.length === 0 ? (
+            <p className="text-sm text-stone-400">Ni dovolj podatkov za prikaz.</p>
+          ) : (
+            <div style={{ width: "100%", height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={r.meseci} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gradVrednost" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#dc2626" stopOpacity={0.55} />
+                      <stop offset="100%" stopColor="#dc2626" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 6" stroke="#e7e5e4" vertical={false} />
+                  <XAxis dataKey="naziv" tick={{ fontSize: 11, fill: "#a8a29e" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#a8a29e" }} axisLine={false} tickLine={false} width={48} />
+                  <Tooltip contentStyle={tip} formatter={(v) => [eur(v), "Vrednost"]} />
+                  <Area type="monotone" dataKey="vsota" stroke="#dc2626" strokeWidth={3} fill="url(#gradVrednost)" dot={{ r: 4, fill: "#fff", stroke: "#dc2626", strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Kartica>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* top stranke */}
+        <Kartica ikona="⭐" naslov="Največje stranke" podnaslov="vsi moduli, vrednost brez DDV">
+          {r.top.length === 0 ? (
+            <p className="text-sm text-stone-400">Ni podatkov.</p>
+          ) : (
+            <div className="space-y-3">
+              {r.top.map((x, i) => (
+                <div key={x.ime}>
+                  <div className="flex items-baseline justify-between text-sm">
+                    <span className="font-medium text-stone-800 truncate">{["🥇", "🥈", "🥉"][i] || `${i + 1}.`} {x.ime}</span>
+                    <span className="font-semibold text-stone-700 tabular-nums text-xs">{eur0(x.vsota)}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-stone-100 overflow-hidden mt-1">
+                    <div className="h-full rounded-full" style={{ width: `${(x.vsota / maxTop) * 100}%`, background: "linear-gradient(90deg,#f59e0b,#dc2626)" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Kartica>
+
         {r.oddal.length > 0 && (
-          <Kartica naslov="Kdo je oddal naročila">
-            <Vodoravni podatki={r.oddal} barva="#dc2626" enota="Oddal" />
+          <Kartica ikona="📝" naslov="Kdo je oddal naročila">
+            <Lestvica podatki={r.oddal} enota="naročil" />
           </Kartica>
         )}
         {r.prevzel.length > 0 && (
-          <Kartica naslov="Kdo je prevzel naročila">
-            <Vodoravni podatki={r.prevzel} barva="#0ea5e9" enota="Prevzel" />
+          <Kartica ikona="🔧" naslov="Kdo je prevzel naročila">
+            <Lestvica podatki={r.prevzel} enota="naročil" />
           </Kartica>
         )}
       </div>

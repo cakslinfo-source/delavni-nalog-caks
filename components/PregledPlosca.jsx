@@ -256,14 +256,6 @@ export default function PregledPlosca({ postavke }) {
         <Kpi naziv="Zamujena" vrednost={p.zamujena.length} barva={p.zamujena.length ? BARVA.slabo : BARVA.ok} opomba={p.brezRoka.length ? `${p.brezRoka.length} brez roka` : "vsi imajo rok"} />
         <Kpi naziv="Odprte ponudbe" vrednost={p.ponudbe.filter((x) => x.stolpec !== "prevzeto").length} barva="#db2777" opomba="še niso delovni nalog" />
       </div>
-      {admin && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Kpi naziv="Neplačano (neto)" vrednost={eur(p.neplNeto)} barva={BARVA.slabo} opomba={`${p.neplacana.length} naročil`} />
-          <Kpi naziv="Neplačano (bruto)" vrednost={eur(p.neplBruto)} barva={BARVA.slabo} opomba="z 22 % DDV" />
-          <Kpi naziv="Vrednost aktivnih (neto)" vrednost={eur(p.aktNeto)} />
-          <Kpi naziv="Vrednost aktivnih (bruto)" vrednost={eur(p.aktBruto)} opomba="z 22 % DDV" />
-        </div>
-      )}
 
       {/* vrstica grafov 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
