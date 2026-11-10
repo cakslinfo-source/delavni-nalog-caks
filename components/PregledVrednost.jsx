@@ -80,8 +80,31 @@ function Lestvica({ podatki, enota }) {
 }
 
 // Statistika vrednosti naročil: samo za admina.
-export default function PregledVrednost({ nalogi, postavke = [], vrednostPultiSpomeniki }) {
+function statusModula(status) {
+  const s = String(status || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (/prevz|zakljuc|dostav|namesc/.test(s)) return "prevzeto";
+  return "drugo";
+}
+
+export default function PregledVrednost() {
   const [admin, setAdmin] = useState(false);
+  const [nalogi, setNalogi] = useState([]);
+  const [pulti, setPulti] = useState([]);
+  const [spomeniki, setSpomeniki] = useState([]);
+  useEffect(() => {
+    let konec = false;
+    const nalozi = async () => {
+      const dobi = (u) => fetch(u, { cache: "no-store" }).then((r) => r.json()).catch(() => []);
+      const [a, b, c] = await Promise.all([dobi("/api/nalogi"), dobi("/api/pulti"), dobi("/api/spomeniki")]);
+      if (konec) return;
+      setNalogi(Array.isArray(a) ? a : []);
+      setPulti(Array.isArray(b) ? b : []);
+      setSpomeniki(Array.isArray(c) ? c : []);
+    };
+    nalozi();
+    const t = setInterval(nalozi, 60000);
+    return () => { konec = true; clearInterval(t); };
+  }, []);
   useEffect(() => {
     const preberi = () => {
       try { setAdmin(localStorage.getItem("admin-odklenjen") === "da"); } catch (e) {}
@@ -119,17 +142,35 @@ export default function PregledVrednost({ nalogi, postavke = [], vrednostPultiSp
       });
       return Object.entries(g).map(([ime, stevilo]) => ({ ime, stevilo })).sort((a, b) => b.stevilo - a.stevilo);
     };
-    // denar iz vseh modulov (iz Pregleda)
-    const nar = postavke.filter((x) => !x.ponudba);
-    const aktivna = nar.filter((x) => x.stolpec !== "prevzeto");
-    const neplacana = nar.filter((x) => !x.placano && x.cena > 0);
+    // denar iz vseh modulov: Police (cena = neto), Pulti (ponudbena cena = bruto), Spomeniki (cena = neto)
+    const zapisi = [
+      ...nalogi.filter(jeBrezPonudbe).map((x) => {
+        const neto = st(x.cena);
+        const placano = (x.placano || "Ne") === "Da";
+        const racun = x.racun === "poslan" || x.racun === "poslati";
+        return { stranka: x.stranka, neto, bruto: neto * 1.22, aktivno: statusModula(x.status) !== "prevzeto", neplacano: !placano && !racun };
+      }),
+      ...pulti.filter(jeBrezPonudbe).map((x) => {
+        const bruto = st(x.ponudbenaCena);
+        return { stranka: x.stranka && x.stranka.ime, neto: bruto / 1.22, bruto, aktivno: statusModula(x.status) !== "prevzeto", neplacano: !x.placano };
+      }),
+      ...spomeniki.filter(jeBrezPonudbe).map((x) => {
+        const neto = st(x.cena);
+        return { stranka: x.stranka && x.stranka.ime, neto, bruto: neto * 1.22, aktivno: statusModula(x.status) !== "prevzeto", neplacano: x.placano !== "Da" };
+      }),
+    ];
+    const aktivna = zapisi.filter((x) => x.aktivno);
+    const neplacana = zapisi.filter((x) => x.neplacano && x.neto > 0);
     const poStrankah = {};
-    nar.forEach((x) => {
-      const ime = (x.stranka || "").trim();
+    zapisi.forEach((x) => {
+      const ime = String(x.stranka || "").trim();
       if (!ime || !x.neto) return;
       poStrankah[ime] = (poStrankah[ime] || 0) + x.neto;
     });
     const top = Object.entries(poStrankah).map(([ime, vsota]) => ({ ime, vsota })).sort((a, b) => b.vsota - a.vsota).slice(0, 6);
+    const vrednostPultiSpomeniki =
+      pulti.filter(jeBrezPonudbe).reduce((v, x) => v + st(x.ponudbenaCena), 0) +
+      spomeniki.filter(jeBrezPonudbe).reduce((v, x) => v + st(x.cena), 0);
     return {
       skupaj, placano, racun, neplacano: skupaj - placano - racun, meseci,
       oddal: steti("oddal"), prevzel: steti("izvajalec"),
@@ -139,9 +180,9 @@ export default function PregledVrednost({ nalogi, postavke = [], vrednostPultiSp
       aktNeto: aktivna.reduce((s, x) => s + (x.neto || 0), 0),
       aktBruto: aktivna.reduce((s, x) => s + (x.bruto || 0), 0),
       aktSt: aktivna.length,
-      top,
+      top, vrednostPultiSpomeniki,
     };
-  }, [nalogi, postavke]);
+  }, [nalogi, pulti, spomeniki]);
 
   if (!admin) {
     return (
@@ -152,6 +193,7 @@ export default function PregledVrednost({ nalogi, postavke = [], vrednostPultiSp
     );
   }
 
+  const vrednostPultiSpomeniki = r.vrednostPultiSpomeniki;
   const skupajVse = r.skupaj + (vrednostPultiSpomeniki || 0);
   const deleziPlacil = [
     { naziv: "Plačano", vsota: r.placano, barva: "#10b981" },

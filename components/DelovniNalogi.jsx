@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-10-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-10-b · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -4574,127 +4574,6 @@ function DelovniNalogiGlavna() {
             )}
             {pripravljenoVBrskalniku && adminOdklenjen && nalogi.length > 0 && (
               <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-xs font-medium text-stone-400 uppercase mb-1 flex items-center gap-1.5">
-                      <Unlock size={12} /> Skupna vrednost vseh naročil
-                    </p>
-                    <p className="text-2xl font-bold text-white">{(skupnaVrednostVseh + vrednostPultiSpomeniki).toFixed(2)} €</p>
-                    <p className="text-[11px] text-stone-500 mt-0.5">
-                      Police: {skupnaVrednostVseh.toFixed(2)} € · Pulti + Spomeniki: {vrednostPultiSpomeniki.toFixed(2)} €
-                    </p>
-                  </div>
-                </div>
-
-                <div className="border-t border-stone-700 pt-3">
-                  {(() => {
-                    const skupajVse = nalogi.filter(jeBrezPonudbe).reduce((v, n) => {
-                      const c = parseFloat(String(n.cena).replace(",", "."));
-                      return v + (isNaN(c) ? 0 : c);
-                    }, 0);
-                    const skupajPlacano = nalogi.filter(jeBrezPonudbe).reduce((v, n) => {
-                      if ((n.placano || "Ne") !== "Da") return v;
-                      const c = parseFloat(String(n.cena).replace(",", "."));
-                      return v + (isNaN(c) ? 0 : c);
-                    }, 0);
-                    const skupajRacunPoslan = nalogi.filter(jeBrezPonudbe).reduce((v, n) => {
-                      if ((n.placano || "Ne") === "Da") return v;
-                      if (n.racun !== "poslan" && n.racun !== "poslati") return v;
-                      const c = parseFloat(String(n.cena).replace(",", "."));
-                      return v + (isNaN(c) ? 0 : c);
-                    }, 0);
-                    const skupajNeplacano = skupajVse - skupajPlacano - skupajRacunPoslan;
-                    const podatkiPlacil = [
-                      { naziv: "Skupaj", vsota: skupajVse, barva: "#7f1d1d" },
-                      { naziv: "Plačano", vsota: skupajPlacano, barva: "#10b981" },
-                      { naziv: "Račun poslan", vsota: skupajRacunPoslan, barva: "#38bdf8" },
-                      { naziv: "Neplačano", vsota: skupajNeplacano, barva: "#facc15" },
-                    ];
-                    return (
-                      <div style={{ width: "100%", height: 120 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={podatkiPlacil} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#44403c" vertical={false} />
-                            <XAxis dataKey="naziv" tick={{ fill: "#a8a29e", fontSize: 11 }} />
-                            <YAxis tick={{ fill: "#a8a29e", fontSize: 10 }} />
-                            <Tooltip
-                              contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
-                              labelStyle={{ color: "#fff" }}
-                              formatter={(value) => [`${value.toFixed(2)} €`, "Vsota"]}
-                            />
-                            <Bar dataKey="vsota" radius={[4, 4, 0, 0]}>
-                              {podatkiPlacil.map((entry) => (
-                                <Cell key={entry.naziv} fill={entry.barva} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div className="border-t border-stone-700 pt-3 mt-3">
-                  <p className="text-xs font-medium text-stone-400 uppercase mb-2">Vrednost naročil po mesecih</p>
-                  {(() => {
-                    const vsotePoMesecu = {};
-                    nalogi.filter(jeBrezPonudbe).forEach((n) => {
-                      const c = parseFloat(String(n.cena).replace(",", "."));
-                      if (!n.datumVnosa || isNaN(c)) return;
-                      const kljuc = n.datumVnosa.slice(0, 7);
-                      vsotePoMesecu[kljuc] = (vsotePoMesecu[kljuc] || 0) + c;
-                    });
-                    const podatkiMesecev = Object.entries(vsotePoMesecu)
-                      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-                      .slice(-12)
-                      .map(([kljuc, vsota]) => ({
-                        naziv: new Date(kljuc + "-01").toLocaleDateString("sl-SI", { month: "short", year: "2-digit" }),
-                        vsota,
-                      }));
-                    if (podatkiMesecev.length === 0) {
-                      return <p className="text-xs text-stone-500">Ni dovolj podatkov za prikaz.</p>;
-                    }
-                    return (
-                      <div style={{ width: "100%", height: 160 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={podatkiMesecev} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#44403c" vertical={false} />
-                            <XAxis dataKey="naziv" tick={{ fill: "#a8a29e", fontSize: 10 }} />
-                            <YAxis tick={{ fill: "#a8a29e", fontSize: 10 }} />
-                            <Tooltip
-                              contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
-                              labelStyle={{ color: "#fff" }}
-                              formatter={(value) => [`${value.toFixed(2)} €`, "Vsota"]}
-                            />
-                            <Bar dataKey="vsota" radius={[4, 4, 0, 0]} fill="#dc2626" />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {podatkiOddal.length > 0 && (
-                  <div className="border-t border-stone-700 pt-3 mt-3">
-                    <p className="text-xs font-medium text-stone-400 uppercase mb-2">Kdo je oddal naročila</p>
-                    <div style={{ width: "100%", height: Math.max(120, podatkiOddal.length * 34) }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={podatkiOddal} layout="vertical" margin={{ top: 4, right: 24, left: 4, bottom: 4 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#44403c" horizontal={false} />
-                          <XAxis type="number" allowDecimals={false} tick={{ fill: "#a8a29e", fontSize: 10 }} />
-                          <YAxis type="category" dataKey="ime" width={70} tick={{ fill: "#d6d3d1", fontSize: 12 }} />
-                          <Tooltip
-                            contentStyle={{ background: "#1c1917", border: "1px solid #44403c", borderRadius: 8 }}
-                            labelStyle={{ color: "#fff" }}
-                            formatter={(value) => [`${value} naročil`, "Oddal"]}
-                          />
-                          <Bar dataKey="stevilo" radius={[0, 4, 4, 0]} fill="#dc2626" label={{ position: "right", fill: "#d6d3d1", fontSize: 11 }} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
-
                 {podatkiPrevzel.length > 0 && (
                   <div className="border-t border-stone-700 pt-3 mt-3">
                     <p className="text-xs font-medium text-stone-400 uppercase mb-2">Kdo je prevzel naročila</p>

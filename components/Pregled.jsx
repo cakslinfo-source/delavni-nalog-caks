@@ -257,7 +257,7 @@ export default function Pregled() {
       ) : nacin === "plosca" ? (
         <PregledPlosca postavke={postavke} />
       ) : nacin === "vrednost" ? (
-        <PregledVrednost nalogi={policeSurovo} vrednostPultiSpomeniki={vrednostPS} />
+        <PregledVrednost />
       ) : nacin === "rezanje" ? (
         <PregledRezanje postavke={postavke} />
       ) : (
