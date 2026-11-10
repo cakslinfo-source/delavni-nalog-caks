@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import PregledRezanje from "./PregledRezanje";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
@@ -76,6 +77,7 @@ const tooltipStil = { borderRadius: 10, border: "1px solid #e7e5e4", fontSize: 1
 
 export default function PregledPlosca({ postavke }) {
   const [obdobje, setObdobje] = useState(90);
+  const [pogled, setPogled] = useState("pregled");
   const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
@@ -213,6 +215,21 @@ export default function PregledPlosca({ postavke }) {
 
   return (
     <div className="space-y-4">
+      <div className="inline-flex rounded-lg border border-stone-200 bg-white p-0.5">
+        {[["pregled", "📊 Pregled"], ["rezanje", "📏 Rezanje skupaj"]].map(([id, naziv]) => (
+          <button
+            key={id}
+            onClick={() => setPogled(id)}
+            className={`px-3 py-1.5 text-xs rounded-md transition-colors ${pogled === id ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-100"}`}
+          >
+            {naziv}
+          </button>
+        ))}
+      </div>
+      {pogled === "rezanje" ? (
+        <PregledRezanje postavke={postavke} />
+      ) : (
+      <>
       {/* obdobje */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="text-xs text-stone-500">
@@ -423,6 +440,8 @@ export default function PregledPlosca({ postavke }) {
             <div className="text-xs text-stone-500 mt-2">in še {p.zamujena.length - 12} drugih (prikazanih je 12 najstarejših)</div>
           )}
         </Kartica>
+      )}
+      </>
       )}
     </div>
   );
