@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-07-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-10-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -1745,10 +1745,11 @@ function normalizirajNarek(besedilo) {
   };
   const zetoni = String(besedilo || "")
     .replace(/[,;]+/g, " , ")
-    .split(/\s+/)
+    .replace(/\n/g, " \n ")
+    .split(/[ \t\r]+/)
     .filter(Boolean)
     .flatMap((t) => {
-      if (t === ",") return [t];
+      if (t === "," || t === "\n") return [t];
       const b = bn(t).replace(/[^a-z0-9]/g, "");
       const r = /^\d+$/.test(b) ? null : razdeli(b);
       return r ? r : [t];
@@ -3122,60 +3123,74 @@ function DelovniNalogiGlavna() {
   const [prilepiOdprto, setPrilepiOdprto] = useState(false);
   const [prilepiBesedilo, setPrilepiBesedilo] = useState("");
   const [poslusam, setPoslusam] = useState(false);
+  const [obdelujem, setObdelujem] = useState(false);
   const [samoMere, setSamoMere] = useState(true);
   const [govorPodprt, setGovorPodprt] = useState(false);
   useEffect(() => {
-    setGovorPodprt(typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition));
+    setGovorPodprt(typeof navigator !== "undefined" && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && typeof MediaRecorder !== "undefined");
   }, []);
-  const narekRef = useRef(false);
-  const prepoznavaRef = useRef(null);
+  const snemalnikRef = useRef(null);
+  const tokRef = useRef(null);
+  const posnetkiRef = useRef([]);
+  const casovnikSnemanjaRef = useRef(null);
 
+  // Snemanje: tapni za začetek, tapni za konec. Posnetek se pošlje na strežnik (prepoznava govora).
   function ustaviNarekovanje() {
-    narekRef.current = false;
+    if (casovnikSnemanjaRef.current) { clearTimeout(casovnikSnemanjaRef.current); casovnikSnemanjaRef.current = null; }
+    try { if (snemalnikRef.current && snemalnikRef.current.state !== "inactive") snemalnikRef.current.stop(); } catch (e) {}
     setPoslusam(false);
-    try { prepoznavaRef.current && prepoznavaRef.current.stop(); } catch (e) {}
   }
 
-  function zacniNarekovanje() {
-    const SR = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
-    if (!SR) {
-      alert("Ta brskalnik ne podpira narekovanja. Uporabi Chrome (računalnik, Android) ali Safari (iPhone).");
+  async function zacniNarekovanje() {
+    if (!govorPodprt) {
+      alert("Ta brskalnik ne podpira snemanja zvoka.");
       return;
     }
-    setSamoMere(true);
-    const rec = new SR();
-    rec.lang = "sl-SI";
-    rec.continuous = true;
-    rec.interimResults = false;
-    rec.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          const t = normalizirajNarek(e.results[i][0].transcript);
-          if (t) setPrilepiBesedilo((prej) => (prej ? prej.replace(/\s+$/, "") + "\n" : "") + t);
-        }
-      }
-    };
-    rec.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        alert("Mikrofon ni dovoljen. V brskalniku dovoli uporabo mikrofona za to stran.");
-        ustaviNarekovanje();
-      }
-    };
-    rec.onend = () => {
-      if (narekRef.current) {
-        try { rec.start(); } catch (e) { ustaviNarekovanje(); }
-      } else {
-        setPoslusam(false);
-      }
-    };
-    prepoznavaRef.current = rec;
-    narekRef.current = true;
+    let tok;
     try {
-      rec.start();
-      setPoslusam(true);
+      tok = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-      ustaviNarekovanje();
+      alert("Mikrofon ni dovoljen. Ko brskalnik vpraša, izberi Dovoli (v Firefoxu: »Dovoli« in po potrebi »Zapomni si to odločitev«).");
+      return;
     }
+    const oblike = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", "audio/ogg"];
+    const oblika = oblike.find((m) => MediaRecorder.isTypeSupported(m)) || "";
+    const snemalnik = new MediaRecorder(tok, oblika ? { mimeType: oblika } : undefined);
+    posnetkiRef.current = [];
+    snemalnik.ondataavailable = (e) => { if (e.data && e.data.size) posnetkiRef.current.push(e.data); };
+    snemalnik.onstop = async () => {
+      tok.getTracks().forEach((t) => t.stop());
+      const tip = snemalnik.mimeType || oblika || "audio/webm";
+      const blob = new Blob(posnetkiRef.current, { type: tip });
+      if (blob.size < 2000) { setPoslusam(false); return; }
+      setObdelujem(true);
+      try {
+        const koncnica = tip.includes("mp4") ? "mp4" : tip.includes("ogg") ? "ogg" : "webm";
+        const fd = new FormData();
+        fd.append("audio", blob, `govor.${koncnica}`);
+        const res = await fetch("/api/govor", { method: "POST", body: fd });
+        const odg = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(`Prepoznava govora ni uspela: ${odg.napaka || res.status}`);
+        } else if (odg.besedilo) {
+          // konec stavka = nova polica
+          const t = normalizirajNarek(String(odg.besedilo).replace(/([.!?])\s+/g, "$1\n").replace(/[.!?]+$/gm, ""));
+          if (t) setPrilepiBesedilo((prej) => (prej ? prej.replace(/\s+$/, "") + "\n" : "") + t);
+        } else {
+          alert("Nič nisem slišal. Poskusi znova, bliže mikrofonu.");
+        }
+      } catch (e) {
+        alert("Napaka pri pošiljanju posnetka. Preveri povezavo.");
+      }
+      setObdelujem(false);
+    };
+    snemalnikRef.current = snemalnik;
+    tokRef.current = tok;
+    setSamoMere(true);
+    snemalnik.start();
+    setPoslusam(true);
+    // varovalka: največ 90 sekund naenkrat
+    casovnikSnemanjaRef.current = setTimeout(ustaviNarekovanje, 90000);
   }
   const [iskanje, setIskanje] = useState("");
   const [filterStatusi, setFilterStatusi] = useState([]);
@@ -6419,14 +6434,17 @@ function DelovniNalogiGlavna() {
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     {govorPodprt && <button
                       onClick={poslusam ? ustaviNarekovanje : zacniNarekovanje}
-                      className={`text-sm font-medium px-4 py-2 rounded-lg text-white transition-colors ${poslusam ? "bg-red-600 hover:bg-red-500 animate-pulse" : "bg-stone-800 hover:bg-stone-700"}`}
+                      disabled={obdelujem}
+                      className={`text-sm font-medium px-4 py-2 rounded-lg text-white transition-colors disabled:opacity-60 ${poslusam ? "bg-red-600 hover:bg-red-500 animate-pulse" : "bg-stone-800 hover:bg-stone-700"}`}
                     >
-                      {poslusam ? "⏹ Ustavi narekovanje" : "🎤 Narekuj police"}
+                      {obdelujem ? "⏳ Obdelujem …" : poslusam ? "⏹ Konec snemanja" : "🎤 Narekuj police"}
                     </button>}
                     <span className="text-xs text-amber-900">
                       {govorPodprt
-                        ? "Reci: »dolžina krat širina« in po želji »dva kosa«. Za naslednjo polico reci »naslednja« ali naredi premor."
-                        : "Narekovanje v tem brskalniku ni na voljo."}
+                        ? poslusam
+                          ? "Snemam … reci police, na koncu tapni »Konec snemanja«."
+                          : "Tapni, reci vse police (dolžina krat širina, kosi; po vsaki polici premor ali »naslednja«), nato tapni konec."
+                        : "Snemanje v tem brskalniku ni na voljo."}
                     </span>
                   </div>
                   <textarea
@@ -7206,8 +7224,22 @@ function DelovniNalogiGlavna() {
                       >
                         Kopiraj
                       </button>
+                      <a
+                        href={ponudbaSMS(aktivniNalog)}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-3 py-2 rounded-lg text-center"
+                      >
+                        📱 Pošlji SMS
+                      </a>
+                      <a
+                        href={`https://wa.me/${((aktivniNalog.telefon || "").replace(/[^0-9]/g, "").replace(/^00/, "").replace(/^0/, "386"))}?text=${encodeURIComponent(besediloPonudbe(aktivniNalog))}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-green-700 hover:bg-green-600 text-white text-sm px-3 py-2 rounded-lg text-center"
+                      >
+                        WhatsApp
+                      </a>
                     </div>
-                    <p className="text-xs text-stone-400">Gumba »Pošlji e-mail« in »Pošlji SMS« zgoraj zdaj v sporočilo vstavita tudi to povezavo.</p>
+                    <p className="text-xs text-stone-400">SMS se odpre v aplikaciji za sporočila na telefonu (na računalniku uporabi WhatsApp ali Kopiraj). Gumba »Pošlji e-mail« in »Pošlji SMS« zgoraj zdaj v sporočilo vstavita tudi to povezavo.</p>
                   </div>
                 ) : adminOdklenjen ? (
                   <button
