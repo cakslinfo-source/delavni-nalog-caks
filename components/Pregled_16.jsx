@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import PregledPlosca from "./PregledPlosca";
 import PregledRezanje from "./PregledRezanje";
+import PregledVrednost from "./PregledVrednost";
 
 const STOLPCI = [
   { id: "sprejeto", naziv: "Sprejeto", barva: "#78716c" },
@@ -58,7 +59,7 @@ export default function Pregled() {
   useEffect(() => {
     try {
       const n = localStorage.getItem("pregled-nacin");
-      if (n === "plosca" || n === "tabla" || n === "rezanje") setNacin(n);
+      if (n === "plosca" || n === "tabla" || n === "rezanje" || n === "vrednost") setNacin(n);
     } catch (e) {}
   }, []);
   function izberiNacin(n) {
@@ -66,6 +67,8 @@ export default function Pregled() {
     try { localStorage.setItem("pregled-nacin", n); } catch (e) {}
   }
   const [postavke, setPostavke] = useState([]);
+  const [policeSurovo, setPoliceSurovo] = useState([]);
+  const [vrednostPS, setVrednostPS] = useState(0);
   const [nalaganje, setNalaganje] = useState(true);
   const [uraOsvezitve, setUraOsvezitve] = useState(null);
   const [zdaj, setZdaj] = useState(new Date());
@@ -142,6 +145,12 @@ export default function Pregled() {
       ];
 
       setPostavke(vse);
+      const sv = (v) => { const x = parseFloat(String(v ?? "").replace(",", ".")); return isNaN(x) ? 0 : x; };
+      setPoliceSurovo(Array.isArray(nalogiRes) ? nalogiRes : []);
+      setVrednostPS(
+        (Array.isArray(pultiRes) ? pultiRes : []).filter((p) => p.vrsta !== "ponudba").reduce((v, p) => v + sv(p.ponudbenaCena), 0) +
+        (Array.isArray(spomenikiRes) ? spomenikiRes : []).filter((x) => x.vrsta !== "ponudba").reduce((v, x) => v + sv(x.cena), 0)
+      );
       setUraOsvezitve(new Date());
     } catch (e) {
       // tiho — ohrani prejšnje podatke na zaslonu
@@ -216,6 +225,7 @@ export default function Pregled() {
               { id: "tabla", naziv: "🗂 Tabla naročil" },
               { id: "plosca", naziv: "📊 Nadzorna plošča" },
               { id: "rezanje", naziv: "📏 Rezanje skupaj" },
+              { id: "vrednost", naziv: "💶 Vrednost naročil" },
             ].map((z) => (
               <button
                 key={z.id}
@@ -246,6 +256,8 @@ export default function Pregled() {
         <div className="text-center text-stone-500 py-24 text-lg flex-1">Nalagam …</div>
       ) : nacin === "plosca" ? (
         <PregledPlosca postavke={postavke} />
+      ) : nacin === "vrednost" ? (
+        <PregledVrednost />
       ) : nacin === "rezanje" ? (
         <PregledRezanje postavke={postavke} />
       ) : (
