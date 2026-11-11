@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-11-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-11-b · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -3843,6 +3843,9 @@ function DelovniNalogiGlavna() {
           id: `${Date.now()}`,
           stevilka: `${praznoStevilo(predpona)}${String(stevilkaIndex).padStart(3, "0")}`,
           datumVnosa: new Date().toISOString(),
+          ...(obrazec.vrsta === "ponudba"
+            ? { podpisToken: Array.from(crypto.getRandomValues(new Uint8Array(16))).map((b) => b.toString(16).padStart(2, "0")).join("") }
+            : {}),
         };
         novId = novNalog.id;
         return [novNalog, ...os];
@@ -7060,7 +7063,7 @@ function DelovniNalogiGlavna() {
               </div>
             )}
 
-            {adminOdklenjen && aktivniNalog.vrsta === "ponudba" && (aktivniNalog.email || aktivniNalog.telefon) && (
+            {adminOdklenjen && aktivniNalog.vrsta === "ponudba" && (
               <div className="mt-4 bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span className="text-sm text-stone-600">Pošlji ponudbo stranki v predogled:</span>
                 <div className="flex flex-wrap gap-2 shrink-0">
@@ -7072,14 +7075,12 @@ function DelovniNalogiGlavna() {
                       Pošlji e-mail
                     </a>
                   )}
-                  {aktivniNalog.telefon && (
-                    <a
-                      href={ponudbaSMS(aktivniNalog)}
-                      className="bg-stone-800 hover:bg-stone-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
-                    >
-                      Pošlji SMS
-                    </a>
-                  )}
+                  <a
+                    href={ponudbaSMS(aktivniNalog)}
+                    className="bg-stone-800 hover:bg-stone-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+                  >
+                    Pošlji SMS{aktivniNalog.telefon ? "" : " (vpiši številko)"}
+                  </a>
                 </div>
               </div>
             )}
