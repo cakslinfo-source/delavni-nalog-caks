@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-11-b · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-11-c · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2203,7 +2203,12 @@ function besediloPonudbe(nalog) {
     `Pozdravljeni ${nalog.stranka},\n\n` +
     `pošiljamo vam ponudbo ${nalog.stevilka || ""} za: ${nalog.opis || ""}.\n` +
     objektVrstica(nalog) +
-    `\nSkupna vrednost: ${netoPoPopustu.toFixed(2)} € (z DDV: ${bruto.toFixed(2)} €).\n` +
+    `\n` +
+    (popust > 0
+      ? `Polna cena: ${neto.toFixed(2)} € brez DDV (${(neto * 1.22).toFixed(2)} € z DDV)\n` +
+        `Popust ${popust} %\n` +
+        `Cena s popustom: ${netoPoPopustu.toFixed(2)} € brez DDV (${bruto.toFixed(2)} € z DDV)\n`
+      : `Cena: ${netoPoPopustu.toFixed(2)} € brez DDV (${bruto.toFixed(2)} € z DDV)\n`) +
     (veljavnost ? `${veljavnost}\n\n` : "\n") +
     (nalog.podpisToken
       ? `Ponudbo si lahko ogledate in jo preko spleta podpišete na tej povezavi:\nhttps://delavni-nalog-caks.vercel.app/ponudba/${nalog.podpisToken}\n\n`
@@ -2286,10 +2291,15 @@ function zgradiPonudboHTML(nalog) {
       : "") +
     (nalog.cena
       ? `<div style="margin-top:12px;text-align:right;border-top:2px solid #e7e5e4;padding-top:8px;">` +
-        `<div>Skupna cena brez DDV: <b>${eur(neto)}</b></div>` +
-        (popust > 0 ? `<div>Cena po popustu (${popust} %): <b>${eur(netoPoPopustu)}</b></div>` : "") +
-        `<div style="color:#57534e;">DDV 22 %: ${eur(bruto - netoPoPopustu)}</div>` +
-        `<div style="font-size:16px;font-weight:700;margin-top:3px;">Skupaj z DDV: ${eur(bruto)}</div></div>`
+        (popust > 0
+          ? `<div>Polna cena brez DDV (neto): <b>${eur(neto)}</b></div>` +
+            `<div>Polna cena z DDV (bruto): <b>${eur(neto * 1.22)}</b></div>` +
+            `<div style="color:#b45309;margin-top:3px;">Popust ${popust} %</div>` +
+            `<div style="margin-top:3px;">Cena s popustom brez DDV (neto): <b>${eur(netoPoPopustu)}</b></div>` +
+            `<div style="font-size:16px;font-weight:700;margin-top:3px;">Cena s popustom z DDV (bruto): ${eur(bruto)}</div></div>`
+          : `<div>Cena brez DDV (neto): <b>${eur(neto)}</b></div>` +
+            `<div style="color:#57534e;">DDV 22 %: ${eur(bruto - netoPoPopustu)}</div>` +
+            `<div style="font-size:16px;font-weight:700;margin-top:3px;">Skupaj z DDV (bruto): ${eur(bruto)}</div></div>`)
       : "") +
     (nalog.opombe ? `<p style="margin-top:12px;"><span style="color:#78716c;font-size:11px;">OPOMBE </span>${esc(nalog.opombe)}</p>` : "") +
     `<div style="margin-top:16px;font-size:11.5px;color:#44403c;"><b>Pogoji</b><ol style="margin:4px 0 0 18px;padding:0;">` +
@@ -7080,6 +7090,14 @@ function DelovniNalogiGlavna() {
                     className="bg-stone-800 hover:bg-stone-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
                   >
                     Pošlji SMS{aktivniNalog.telefon ? "" : " (vpiši številko)"}
+                  </a>
+                  <a
+                    href={`https://wa.me/${((aktivniNalog.telefon || "").replace(/[^0-9]/g, "").replace(/^00/, "").replace(/^0/, "386"))}?text=${encodeURIComponent(besediloPonudbe(aktivniNalog))}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-green-700 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+                  >
+                    Pošlji WhatsApp
                   </a>
                 </div>
               </div>
