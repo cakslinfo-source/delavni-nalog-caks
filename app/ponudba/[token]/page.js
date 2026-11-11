@@ -197,11 +197,21 @@ export default function PodpisPonudbe({ params }) {
 
         {p.neto > 0 && (
           <div className="mt-4 bg-stone-50 border border-stone-200 rounded-lg p-3 text-sm">
-            {p.popust > 0 && <div className="flex justify-between"><span>Cena brez DDV</span><span>{fmt(p.neto)}</span></div>}
-            {p.popust > 0 && <div className="flex justify-between text-stone-600"><span>Popust {p.popust} %</span><span>−{fmt(p.neto - p.netoPoPopustu)}</span></div>}
-            <div className="flex justify-between"><span>Skupaj brez DDV</span><span className="font-semibold">{fmt(p.netoPoPopustu)}</span></div>
-            <div className="flex justify-between text-stone-600"><span>DDV 22 %</span><span>{fmt(p.bruto - p.netoPoPopustu)}</span></div>
-            <div className="flex justify-between text-base font-bold border-t border-stone-300 mt-1 pt-1"><span>Skupaj z DDV</span><span>{fmt(p.bruto)}</span></div>
+            {p.popust > 0 ? (
+              <>
+                <div className="flex justify-between"><span>Polna cena brez DDV (neto)</span><span>{fmt(p.neto)}</span></div>
+                <div className="flex justify-between"><span>Polna cena z DDV (bruto)</span><span>{fmt(p.neto * 1.22)}</span></div>
+                <div className="flex justify-between text-amber-700 mt-1"><span>Popust {p.popust} %</span><span>−{fmt(p.neto - p.netoPoPopustu)}</span></div>
+                <div className="flex justify-between mt-1"><span>Cena s popustom brez DDV (neto)</span><span className="font-semibold">{fmt(p.netoPoPopustu)}</span></div>
+                <div className="flex justify-between text-base font-bold border-t border-stone-300 mt-1 pt-1"><span>Cena s popustom z DDV (bruto)</span><span>{fmt(p.bruto)}</span></div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between"><span>Cena brez DDV (neto)</span><span className="font-semibold">{fmt(p.netoPoPopustu)}</span></div>
+                <div className="flex justify-between text-stone-600"><span>DDV 22 %</span><span>{fmt(p.bruto - p.netoPoPopustu)}</span></div>
+                <div className="flex justify-between text-base font-bold border-t border-stone-300 mt-1 pt-1"><span>Skupaj z DDV (bruto)</span><span>{fmt(p.bruto)}</span></div>
+              </>
+            )}
           </div>
         )}
 
