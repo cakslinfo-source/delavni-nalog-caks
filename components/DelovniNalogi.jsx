@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-10-b · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-11-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -4044,12 +4044,16 @@ function DelovniNalogiGlavna() {
       nizZaPrikaz(n.stranka).toLowerCase().includes(iskano) ||
       nizZaPrikaz(n.opis).toLowerCase().includes(iskano) ||
       nizZaPrikaz(n.stevilka).toLowerCase().includes(iskano);
-    const ujemaStatus = filterStatusi.length === 0 || filterStatusi.includes(n.status);
+    // Ponudba živi v zavihku "Ponudbe"; ko postane delovni nalog, se pokaže pod svojim stanjem.
+    const ujemaStatus =
+      filterStatusi.length === 0 ||
+      (n.vrsta === "ponudba" ? filterStatusi.includes("Ponudbe") : filterStatusi.includes(n.status));
     const ujemaRacun = !pokaziSamoRacune || n.racun === "poslati";
     return ujemaIskanje && ujemaStatus && ujemaRacun;
   });
 
   const steviloZaPoslatiRacun = nalogi.filter((n) => n.racun === "poslati").length;
+  const steviloPonudbVseh = [...nalogi, ...pultiZaSeznam, ...spomenikiZaSeznam].filter((n) => n.vrsta === "ponudba").length;
 
 
   const skupajM2Obrazec = obrazec.postavke.reduce((vsota, p) => vsota + m2Postavke(p), 0);
@@ -4863,6 +4867,20 @@ function DelovniNalogiGlavna() {
                   {s}
                 </button>
               ))}
+              <button
+                onClick={() =>
+                  setFilterStatusi((prej) =>
+                    prej.includes("Ponudbe") ? prej.filter((x) => x !== "Ponudbe") : [...prej, "Ponudbe"]
+                  )
+                }
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  filterStatusi.includes("Ponudbe")
+                    ? "bg-pink-200 text-pink-900 border-pink-500 font-medium ring-1 ring-inset ring-current"
+                    : "bg-white text-pink-700 border-pink-300 hover:border-pink-500"
+                }`}
+              >
+                Ponudbe ({steviloPonudbVseh})
+              </button>
               {steviloZaPoslatiRacun > 0 && (
                 <button
                   onClick={() => setPokaziSamoRacune((v) => !v)}
