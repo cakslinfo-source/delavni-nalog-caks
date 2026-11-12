@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { prenesiPDF } from "../lib/pdf-ponudba";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const MESECI = ["januar", "februar", "marec", "april", "maj", "junij", "julij", "avgust", "september", "oktober", "november", "december"];
@@ -68,6 +69,42 @@ export default function PregledRezanje({ postavke }) {
     return { materiali, meseci, skupaj };
   }, [postavke, moduli, samoIzdelano]);
 
+  const [delam, setDelam] = useState(false);
+  async function prenesi() {
+    const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const th = "text-align:right;padding:5px 8px 7px;border-bottom:2px solid #44403c;font-size:11px;color:#57534e;";
+    const td = "text-align:right;padding:5px 8px;border-bottom:1px solid #e7e5e4;";
+    const tabela = (prvi, vrstice) =>
+      `<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>` +
+      `<th style="${th}text-align:left;">${prvi}</th><th style="${th}">Kosov</th><th style="${th}">m²</th><th style="${th}">Tekoči m</th><th style="${th}">Dolžina rezov m</th></tr></thead><tbody>` +
+      vrstice
+        .map((x) => `<tr><td style="${td}text-align:left;${x.krepko ? "font-weight:700;" : ""}">${esc(x.naziv)}</td><td style="${td}${x.krepko ? "font-weight:700;" : ""}">${x.kosov}</td><td style="${td}font-weight:700;">${f2(x.m2)}</td><td style="${td}${x.krepko ? "font-weight:700;" : ""}">${f2(x.m)}</td><td style="${td}${x.krepko ? "font-weight:700;" : ""}">${f2(x.rez)}</td></tr>`)
+        .join("") +
+      `</tbody></table>`;
+    const skupajVrstica = { naziv: "SKUPAJ", ...r.skupaj, krepko: true };
+    const danes = new Date();
+    const html =
+      `<div style="width:794px;box-sizing:border-box;padding:36px 40px;font-family:Arial,Helvetica,sans-serif;color:#1c1917;">` +
+      `<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #dc2626;padding-bottom:8px;">` +
+      `<div><div style="font-size:20px;font-weight:700;line-height:1.3;">Rezanje skupaj</div><div style="font-size:12px;color:#57534e;margin-top:3px;">Kamnoseštvo Čakš · vsi meseci skupaj</div></div>` +
+      `<div style="font-size:11px;color:#57534e;text-align:right;">Izpis: ${danes.toLocaleDateString("sl-SI")} ${danes.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" })}</div></div>` +
+      `<p style="font-size:11px;color:#57534e;margin:8px 0 14px;">Moduli: ${esc(moduli.join(", ") || "—")} · ${samoIzdelano ? "samo že razrezano (brez »Sprejeto«)" : "vsa naročila"} · brez ponudb</p>` +
+      `<table style="width:100%;border-collapse:separate;border-spacing:8px 0;margin:0 -8px 16px;"><tr>` +
+      [["Površina", f2(r.skupaj.m2) + " m²"], ["Tekoči metri", f2(r.skupaj.m) + " m"], ["Dolžina rezov", f2(r.skupaj.rez) + " m"], ["Kosov / naročil", r.skupaj.kosov + " / " + r.skupaj.naloga]]
+        .map(([n, v]) => `<td style="border:1px solid #d6d3d1;border-radius:8px;padding:8px 10px;"><div style="font-size:10px;color:#78716c;">${n}</div><div style="font-size:17px;font-weight:700;">${v}</div></td>`)
+        .join("") +
+      `</tr></table>` +
+      `<div style="font-size:14px;font-weight:700;margin-bottom:4px;">Po materialu</div>` +
+      tabela("Material", [...r.materiali, skupajVrstica]) +
+      `<div style="font-size:14px;font-weight:700;margin:18px 0 4px;">Po mesecih</div>` +
+      tabela("Mesec", [...r.meseci.map((m) => ({ ...m, naziv: m.naziv.charAt(0).toUpperCase() + m.naziv.slice(1) })), skupajVrstica]) +
+      `<p style="font-size:10px;color:#78716c;margin-top:14px;">m² = dolžina × širina × količina (pri poševnih policah večja širina). Tekoči m = vsota dolžin kosov. Dolžina rezov = obseg kosov, 2 × (dolžina + širina). Mesec je po datumu naročila.</p>` +
+      `</div>`;
+    setDelam(true);
+    await prenesiPDF(html, `rezanje-skupaj-${danes.toISOString().slice(0, 10)}.pdf`);
+    setDelam(false);
+  }
+
   function preklopi(m) {
     setModuli((t) => (t.includes(m) ? t.filter((x) => x !== m) : [...t, m]));
   }
@@ -91,6 +128,13 @@ export default function PregledRezanje({ postavke }) {
           <input type="checkbox" checked={samoIzdelano} onChange={(e) => setSamoIzdelano(e.target.checked)} />
           Samo že razrezano: naročila v izdelavi ali dlje (brez »Sprejeto«)
         </label>
+        <button
+          onClick={prenesi}
+          disabled={delam}
+          className="ml-auto text-sm bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white font-medium px-4 py-2 rounded-lg"
+        >
+          {delam ? "Pripravljam PDF…" : "⬇ Prenesi PDF"}
+        </button>
       </div>
 
       {zastarel && (
