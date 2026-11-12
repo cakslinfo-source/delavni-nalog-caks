@@ -904,6 +904,12 @@ export default function Pulti() {
             };
             shraniNaloge(nalogi.map((x) => (x.id === nal.id ? posodobljen : x)));
           }}
+          pretvoriVPonudbo={(nal) => {
+            const opozorilo = nal.placano ? "\n\nOPOZORILO: ta nalog je označen kot plačan." : "";
+            if (!confirm(`Delovni nalog ${nal.stevilka} spremenim nazaj v ponudbo? Dobi novo številko ponudbe in se ne šteje več med delovne naloge.${opozorilo}`)) return;
+            const posodobljen = { ...nal, vrsta: "ponudba", stevilka: novaStevilka("ponudba"), status: "sprejeto" };
+            shraniNaloge(nalogi.map((x) => (x.id === nal.id ? posodobljen : x)));
+          }}
           oznaciObvestilo={(nal, vrsta) => {
             const polje = vrsta === "email" ? "obvestiloEmailPoslano" : "obvestiloSmsPoslano";
             shraniNaloge(nalogi.map((x) => (x.id === nal.id ? { ...x, [polje]: new Date().toISOString() } : x)));
@@ -982,7 +988,9 @@ export default function Pulti() {
 
 function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
   const filtrirani =
-    filter.length === 0 ? nalogi : nalogi.filter((x) => filter.includes(x.status));
+    filter.length === 0
+      ? nalogi
+      : nalogi.filter((x) => (x.vrsta === "ponudba" ? filter.includes("ponudbe") : filter.includes(x.status)));
 
   return (
     <div className="p-3">
@@ -998,7 +1006,7 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
           Vsi
         </button>
         {STATUSI.map((s) => {
-          const st = nalogi.filter((x) => x.status === s.id).length;
+          const st = nalogi.filter((x) => x.vrsta !== "ponudba" && x.status === s.id).length;
           const aktiven = filter.includes(s.id);
           return (
             <button
@@ -1016,6 +1024,16 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
             </button>
           );
         })}
+        <button
+          onClick={() => setFilter(filter.includes("ponudbe") ? filter.filter((x) => x !== "ponudbe") : [...filter, "ponudbe"])}
+          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+            filter.includes("ponudbe")
+              ? "bg-pink-200 text-pink-900 border-pink-500 font-medium ring-1 ring-inset ring-current"
+              : "bg-white text-pink-700 border-pink-300 hover:border-pink-500"
+          }`}
+        >
+          Ponudbe <span className="opacity-60">({nalogi.filter((x) => x.vrsta === "ponudba").length})</span>
+        </button>
       </div>
 
       {filtrirani.length === 0 && (
@@ -1602,7 +1620,7 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
 
 // ===================== PODROBNOSTI =====================
 
-function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, natisniDelovniList, odpriDobavnico, odpriPrevzem, pretvoriVNarocilo, oznaciObvestilo }) {
+function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlacano, izbrisi, natisni, natisniDelovniList, odpriDobavnico, odpriPrevzem, pretvoriVNarocilo, pretvoriVPonudbo, oznaciObvestilo }) {
   const [kdoOpravil, setKdoOpravil] = useState("");
   if (!nalog)
     return (
@@ -1635,6 +1653,18 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
             className="w-full bg-blue-600 text-white rounded-lg py-2.5 text-sm font-semibold"
           >
             Pretvori v delovni nalog
+          </button>
+        </div>
+      )}
+
+      {nalog.vrsta !== "ponudba" && pretvoriVPonudbo && (
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 flex items-center justify-between gap-3">
+          <div className="text-sm text-stone-600">Ta nalog lahko spremeniš nazaj v ponudbo.</div>
+          <button
+            onClick={() => pretvoriVPonudbo(nalog)}
+            className="bg-stone-700 text-white rounded-lg px-4 py-2 text-sm font-medium shrink-0"
+          >
+            Spremeni v ponudbo
           </button>
         </div>
       )}
