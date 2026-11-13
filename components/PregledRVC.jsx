@@ -140,24 +140,8 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa, nacin
           <input type="checkbox" checked={samoIzdelano} onChange={(e) => setSamoIzdelano(e.target.checked)} />
           Samo že izdelano: naročila v izdelavi ali dlje (brez »Sprejeto«)
         </label>
-        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-stone-200">
-          <span className="text-sm text-stone-700">Plače in režija:</span>
-          <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
-            {[["mesec", "Dejanski mesečni znesek"], ["m2", "Po razrezanih m² (čas × urna postavka)"]].map(([id, naziv]) => (
-              <button
-                key={id}
-                onClick={() => setNacinPlac(id)}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${nacinPlac === id ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-100"}`}
-              >
-                {naziv}
-              </button>
-            ))}
-          </div>
-        </div>
         <div className="text-[11px] text-stone-400 mt-1.5">
-          {nacinPlac === "mesec"
-            ? "Vsak mesec se odštejejo celotne plače in celotna režija, kot ju vpišeš v »Stroški in materiali«."
-            : "Plače in režija se računajo samo za čas, ki ga po tvojih minutah na m² porabite za razrezane kose."}
+          Vsak mesec se odštejejo celotne plače in celotna režija, kot ju vpišeš v »Stroški in materiali«.
         </div>
       </div>
 
@@ -285,7 +269,7 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa, nacin
 
       <p className="text-xs text-stone-400 pb-4">
         To je ocena, ne računovodski izid. Prihodek = dejanske cene naročil brez DDV (Police po popustu, Pulti ponudbena cena brez DDV), razporejene po datumu naročila.
-        Material = razrezani m² × nabavna cena × odpad. Elektrika in potrošni material = razrezani m² × tvoj strošek na m². Plače in režija: ali dejanski mesečni znesek ali po razrezanih m², kot izbereš zgoraj. Spomeniki, dostava in montaža niso všteti; režija je všteta samo prek ur izdelave.
+        Material = razrezani m² × nabavna cena × odpad. Elektrika in potrošni material = razrezani m² × tvoj strošek na m². Plače in režija = dejanski mesečni znesek, ki ga vpišeš. Spomeniki, dostava in montaža niso všteti; režija je všteta samo prek ur izdelave.
       </p>
     </div>
   );
