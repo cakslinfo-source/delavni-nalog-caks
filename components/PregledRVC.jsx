@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const st = (v) => {
   const x = parseFloat(String(v ?? "").replace(",", "."));
@@ -26,6 +27,12 @@ function razdalja(a, b) {
   }
   return prej[n];
 }
+
+const MESECI_IMENA = ["januar", "februar", "marec", "april", "maj", "junij", "julij", "avgust", "september", "oktober", "november", "december"];
+const jeZeVDelu = (status) => {
+  const x = String(status || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return /prevz|zakljuc|dostav|namesc|pripravl|montaz|izdel|razrez|brus|izrez|obdel|polir/.test(x);
+};
 
 const PRIVZETI_STROSKI = {
   delavec: "",
@@ -112,6 +119,122 @@ function Ostanek({ naziv, prodaja, material, izdelava }) {
   );
 }
 
+function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
+  const f2 = (x) => (Number(x) || 0).toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const s = meseci.reduce(
+    (v, m) => ({ prihodek: v.prihodek + m.prihodek, m2: v.m2 + m.m2, m2Brez: v.m2Brez + m.m2Brez, material: v.material + m.material, izdelava: v.izdelava + m.izdelava, ostane: v.ostane + m.ostane, narocil: v.narocil + m.narocil }),
+    { prihodek: 0, m2: 0, m2Brez: 0, material: 0, izdelava: 0, ostane: 0, narocil: 0 }
+  );
+  const odst = (o, p) => (p ? `${((o / p) * 100).toFixed(0)} %` : "—");
+  const barva = (x) => (x >= 0 ? "text-emerald-700" : "text-red-600");
+  const c = "px-3 py-2 text-right tabular-nums whitespace-nowrap";
+  const povprecje = meseci.filter((m) => m.kljuc !== "brez").length ? s.ostane / meseci.filter((m) => m.kljuc !== "brez").length : 0;
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm px-4 py-3">
+        <label className="flex items-center gap-2 text-sm text-stone-700 cursor-pointer">
+          <input type="checkbox" checked={samoIzdelano} onChange={(e) => setSamoIzdelano(e.target.checked)} />
+          Samo že izdelano: naročila v izdelavi ali dlje (brez »Sprejeto«)
+        </label>
+      </div>
+
+      {brezVnosa && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm">
+          Stroški izdelave še niso vpisani, zato je »ostane« prevelik. Vpiši jih v zavihku »Stroški in materiali«.
+        </div>
+      )}
+      {s.m2Brez > 0.005 && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm">
+          Za <b>{f2(s.m2Brez)} m²</b> od {f2(s.m2)} m² ni vpisane nabavne cene materiala (ali materiala ni v ceniku), zato je strošek materiala tam štet kot 0 in je »ostane« prevelik. Dopolni nabavne cene v zavihku »Stroški in materiali«.
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          ["Prihodek (brez DDV)", eur(s.prihodek), `${s.narocil} naročil`, "text-stone-900"],
+          ["Material", eur(s.material), `${f2(s.m2)} m²`, "text-stone-900"],
+          ["Izdelava", eur(s.izdelava), "delo, elektrika, potrošni, režija", "text-stone-900"],
+          ["Ostane skupaj", eur(s.ostane), `${odst(s.ostane, s.prihodek)} prihodka · povprečno ${eur(povprecje)} na mesec`, barva(s.ostane)],
+        ].map(([naziv, vrednost, opomba, razred]) => (
+          <div key={naziv} className="bg-white rounded-2xl border border-stone-200 shadow-sm px-4 py-3">
+            <div className="text-xs text-stone-500">{naziv}</div>
+            <div className={`text-2xl font-bold tabular-nums mt-0.5 ${razred}`}>{vrednost}</div>
+            <div className="text-xs text-stone-400 mt-0.5">{opomba}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-3xl border border-stone-200 shadow-sm p-5">
+        <div className="text-sm font-semibold text-stone-800 mb-2">📅 Koliko ostane po mesecih</div>
+        {meseci.length === 0 ? (
+          <div className="text-sm text-stone-400 py-6 text-center">Ni naročil za prikaz.</div>
+        ) : (
+          <>
+            <div style={{ width: "100%", height: 240 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={meseci.map((m) => ({ ...m, ostane: Math.round(m.ostane * 100) / 100 }))} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 6" stroke="#e7e5e4" vertical={false} />
+                  <XAxis dataKey="kratko" tick={{ fontSize: 11, fill: "#a8a29e" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#a8a29e" }} axisLine={false} tickLine={false} width={56} />
+                  <Tooltip formatter={(v) => [eur(v), "Ostane"]} labelFormatter={(l, p) => (p && p[0] ? p[0].payload.naziv : l)} />
+                  <Bar dataKey="ostane" radius={[6, 6, 0, 0]}>
+                    {meseci.map((m) => <Cell key={m.kljuc} fill={m.ostane >= 0 ? "#10b981" : "#dc2626"} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="overflow-x-auto mt-3">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-stone-500 border-b border-stone-200">
+                    <th className="px-3 py-2 text-left font-medium">Mesec</th>
+                    <th className="px-3 py-2 text-right font-medium">Naročil</th>
+                    <th className="px-3 py-2 text-right font-medium">m²</th>
+                    <th className="px-3 py-2 text-right font-medium">Prihodek</th>
+                    <th className="px-3 py-2 text-right font-medium">Material</th>
+                    <th className="px-3 py-2 text-right font-medium">Izdelava</th>
+                    <th className="px-3 py-2 text-right font-medium">Ostane</th>
+                    <th className="px-3 py-2 text-right font-medium">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {meseci.map((m) => (
+                    <tr key={m.kljuc} className="border-b border-stone-100">
+                      <td className="px-3 py-2 capitalize">{m.naziv}{m.m2Brez > 0.005 ? <span title="Del m² nima nabavne cene" className="text-amber-600"> ⚠</span> : null}</td>
+                      <td className={c}>{m.narocil}</td>
+                      <td className={c}>{f2(m.m2)}</td>
+                      <td className={c}>{eur(m.prihodek)}</td>
+                      <td className={c}>{eur(m.material)}</td>
+                      <td className={c}>{eur(m.izdelava)}</td>
+                      <td className={`${c} font-bold ${barva(m.ostane)}`}>{eur(m.ostane)}</td>
+                      <td className={`${c} ${barva(m.ostane)}`}>{odst(m.ostane, m.prihodek)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-stone-50 font-bold">
+                    <td className="px-3 py-2">SKUPAJ</td>
+                    <td className={c}>{s.narocil}</td>
+                    <td className={c}>{f2(s.m2)}</td>
+                    <td className={c}>{eur(s.prihodek)}</td>
+                    <td className={c}>{eur(s.material)}</td>
+                    <td className={c}>{eur(s.izdelava)}</td>
+                    <td className={`${c} ${barva(s.ostane)}`}>{eur(s.ostane)}</td>
+                    <td className={`${c} ${barva(s.ostane)}`}>{odst(s.ostane, s.prihodek)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+
+      <p className="text-xs text-stone-400 pb-4">
+        To je ocena, ne računovodski izid. Prihodek = dejanske cene naročil brez DDV (Police po popustu, Pulti ponudbena cena brez DDV), razporejene po datumu naročila.
+        Material = razrezani m² × nabavna cena × odpad. Izdelava = razrezani m² × strošek izdelave na m². Spomeniki, dostava in montaža niso všteti; režija je všteta samo prek ur izdelave.
+      </p>
+    </div>
+  );
+}
+
 export default function PregledRVC() {
   const [admin, setAdmin] = useState(false);
   const [nalaganje, setNalaganje] = useState(true);
@@ -121,6 +244,10 @@ export default function PregledRVC() {
   const [stroski, setStroski] = useState(PRIVZETI_STROSKI);
   const [stanje, setStanje] = useState("");
   const [iskanje, setIskanje] = useState("");
+  const [pogled, setPogled] = useState("materiali");
+  const [nalogi, setNalogi] = useState([]);
+  const [pulti, setPulti] = useState([]);
+  const [samoIzdelano, setSamoIzdelano] = useState(true);
   const nalozeno = useRef(false);
   const casovnik = useRef(null);
 
@@ -136,7 +263,9 @@ export default function PregledRVC() {
   useEffect(() => {
     (async () => {
       const dobi = (u) => fetch(u, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-      const [a, b, c] = await Promise.all([dobi("/api/cenik-police"), dobi("/api/cenik-pulti"), dobi("/api/cenik-rvc")]);
+      const [a, b, c, d, e] = await Promise.all([dobi("/api/cenik-police"), dobi("/api/cenik-pulti"), dobi("/api/cenik-rvc"), dobi("/api/nalogi"), dobi("/api/pulti")]);
+      setNalogi(Array.isArray(d) ? d : []);
+      setPulti(Array.isArray(e) ? e : []);
       setCenikPolice(a && typeof a === "object" && !a.napaka && Object.keys(a).length > 0 ? a : PRIVZETI_CENIK_POLICE);
       setCenikPulti(b && Array.isArray(b.materiali) ? b : null);
       if (c && typeof c === "object" && !c.napaka) {
@@ -220,6 +349,72 @@ export default function PregledRVC() {
     return { fiksniMesec, rezijaUra, police: zaVrsto("police"), pulti: zaVrsto("pulti"), odpad: st(stroski.odpad) };
   }, [stroski]);
 
+  // DOBIČEK PO MESECIH: iz dejanskih naročil (prihodek) in vpisanih stroškov (material + izdelava na m²)
+  const meseci = useMemo(() => {
+    const kljuci = materiali.map((m) => m.kljuc);
+    const predpomnilnik = {};
+    const najdi = (ime) => {
+      const k = kljucMat(ime);
+      if (!k) return null;
+      if (k in predpomnilnik) return predpomnilnik[k];
+      let r = kljuci.includes(k) ? k : null;
+      if (!r && k.length >= 8) r = kljuci.find((o) => o.length >= 8 && razdalja(o, k) <= 2) || null;
+      predpomnilnik[k] = r;
+      return r;
+    };
+    const cenaNabave = (ime, debelina) => {
+      const k = najdi(ime);
+      const n = k ? nabava[k] || {} : {};
+      return st(st(debelina) >= 2.5 ? n.c3 : n.c2);
+    };
+    const po = {};
+    const mesec = (datum) => {
+      const d = datum ? new Date(datum) : null;
+      const k = d && !isNaN(d.getTime()) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "brez";
+      return (po[k] = po[k] || { kljuc: k, prihodek: 0, m2: 0, m2Brez: 0, material: 0, izdelava: 0, narocil: 0 });
+    };
+    const dodajKos = (o, m2, ime, debelina, vrsta) => {
+      if (!m2) return;
+      const nab = cenaNabave(ime, debelina);
+      o.m2 += m2;
+      if (!nab) o.m2Brez += m2;
+      o.material += m2 * nab * (1 + izr.odpad / 100);
+      o.izdelava += m2 * izr[vrsta].skupaj;
+    };
+    nalogi.forEach((n) => {
+      if (n.vrsta === "ponudba" || (samoIzdelano && !jeZeVDelu(n.status))) return;
+      const o = mesec(n.datumVnosa || n.datum);
+      o.narocil += 1;
+      o.prihodek += st(n.cena) * (1 - st(n.popustSkupaj) / 100);
+      (n.postavke || []).forEach((p) => {
+        const sirina = p.poseven ? Math.max(st(p.sirinaDesno), st(p.sirinaLevo)) : st(p.sirina);
+        dodajKos(o, (st(p.dolzina) * sirina / 10000) * (st(p.kolicina) || 1), p.material, p.debelina, "police");
+      });
+    });
+    pulti.forEach((n) => {
+      if (n.vrsta === "ponudba" || (samoIzdelano && !jeZeVDelu(n.status))) return;
+      const o = mesec(n.datum);
+      o.narocil += 1;
+      o.prihodek += st(n.ponudbenaCena) / 1.22;
+      const mat = ((cenikPulti && cenikPulti.materiali) || []).find((x) => x.id === n.materialId);
+      (n.kosi || []).forEach((k) => {
+        dodajKos(o, st(k.dolzina) * st(k.sirina) / 10000, mat ? mat.naziv : "", k.debelina || n.debelina || 2, "pulti");
+      });
+    });
+    return Object.values(po)
+      .sort((a, b) => (a.kljuc < b.kljuc ? -1 : 1))
+      .map((o) => {
+        const ostane = o.prihodek - o.material - o.izdelava;
+        let naziv = "Brez datuma", kratko = "—";
+        if (o.kljuc !== "brez") {
+          const [l, m] = o.kljuc.split("-");
+          naziv = `${MESECI_IMENA[parseInt(m, 10) - 1]} ${l}`;
+          kratko = `${MESECI_IMENA[parseInt(m, 10) - 1].slice(0, 3)} ${l.slice(2)}`;
+        }
+        return { ...o, ostane, naziv, kratko };
+      });
+  }, [nalogi, pulti, materiali, nabava, izr, cenikPulti, samoIzdelano]);
+
   if (!admin) {
     return (
       <div className="bg-white rounded-3xl border border-stone-200 shadow-sm p-8 text-center">
@@ -265,6 +460,22 @@ export default function PregledRVC() {
         </div>
       </div>
 
+      <div className="inline-flex rounded-xl border border-stone-200 bg-white p-1">
+        {[["materiali", "🧮 Stroški in materiali"], ["meseci", "📅 Dobiček na mesec"]].map(([id, naziv]) => (
+          <button
+            key={id}
+            onClick={() => setPogled(id)}
+            className={`px-4 py-2 text-sm rounded-lg transition-colors ${pogled === id ? "bg-stone-900 text-white font-medium" : "text-stone-600 hover:bg-stone-100"}`}
+          >
+            {naziv}
+          </button>
+        ))}
+      </div>
+
+      {pogled === "meseci" ? (
+        <DobicekMeseci meseci={meseci} samoIzdelano={samoIzdelano} setSamoIzdelano={setSamoIzdelano} brezVnosa={brezVnosa} />
+      ) : (
+      <>
       {brezVnosa && (
         <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm">
           Stroški še niso vpisani. Najprej spodaj v »Stroški« vpiši urno postavko delavca in čase izdelave, potem pri materialih nabavne cene.
@@ -381,6 +592,8 @@ export default function PregledRVC() {
         Izračun na 1 m²: prodajna cena − nabavna cena (povečana za odpad) = RVC. RVC − strošek izdelave (delo + elektrika + potrošni material + režija) = ostane.
         Prodajna cena polic je preračunana iz cenika na tekoči meter. Popusti strankam, storitve (izrezi, luknje), dostava in montaža tukaj niso všteti.
       </p>
+      </>
+      )}
     </div>
   );
 }
