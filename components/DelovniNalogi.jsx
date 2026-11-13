@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-13-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-13-b · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -4729,7 +4729,7 @@ function DelovniNalogiGlavna() {
                   onClick={() => setPogled("ceniki")}
                   className="mt-2 w-full text-sm text-center px-3 py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 transition-colors"
                 >
-                  💰 Ceniki (Police + Pulti) →
+                  💰 Ceniki (Police + Pulti + material po m²) →
                 </button>
 
                 <div className="border-t border-stone-700 pt-3 mt-3">
@@ -8474,6 +8474,155 @@ function TiskPonudbe({ nalog, onZapri }) {
   );
 }
 
+// ---------- Cenik: material po m² (debeline 2, 3, 6, 8 cm) ----------
+const DEBELINE_M2 = [
+  { polje: "c2", naziv: "2 cm" },
+  { polje: "c3", naziv: "3 cm" },
+  { polje: "c6", naziv: "6 cm" },
+  { polje: "c8", naziv: "8 cm" },
+];
+const kljucImena = (ime) =>
+  String(ime || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+function razdaljaImen(a, b) {
+  let prej = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const zdaj = [i];
+    for (let j = 1; j <= b.length; j++) zdaj[j] = Math.min(prej[j] + 1, zdaj[j - 1] + 1, prej[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prej = zdaj;
+  }
+  return prej[b.length];
+}
+// Začetni cenik po m² iz obstoječih prodajnih cen: Pulti (€/m²) ali Police (zadnji širinski razred, preračunan na m²).
+function zacetniCenikM2(cenikPolice, pultiCenik) {
+  const seznam = [];
+  // podobna imena (drugačen zapis istega kamna) združimo samo med različnima cenikoma
+  const najdi = (ime, podobno) => {
+    const k = kljucImena(ime);
+    return seznam.find((x) => x.kljuc === k || (podobno && k.length >= 8 && x.kljuc.length >= 8 && razdaljaImen(x.kljuc, k) <= 2));
+  };
+  const zaokrozi = (x) => (x > 0 ? String(Math.round(x * 100) / 100).replace(".", ",") : "");
+  Object.values(cenikPolice || {}).forEach((sk) => {
+    if (!sk || !Array.isArray(sk.materiali) || !Array.isArray(sk.brackets) || !sk.brackets.length) return;
+    const zadnji = sk.brackets[sk.brackets.length - 1];
+    const faktor = (parseFloat(String(zadnji.max).replace(",", ".")) || 100) / 100;
+    sk.materiali.forEach((ime) => {
+      if (!ime || najdi(ime)) return;
+      seznam.push({
+        id: kljucImena(ime), kljuc: kljucImena(ime), naziv: ime,
+        c2: zaokrozi((parseFloat(String(zadnji.cena2).replace(",", ".")) || 0) / faktor),
+        c3: zaokrozi((parseFloat(String(zadnji.cena3).replace(",", ".")) || 0) / faktor),
+        c6: "", c8: "", vir: "Police",
+      });
+    });
+  });
+  ((pultiCenik && pultiCenik.materiali) || []).forEach((m) => {
+    if (m.tip === "plosca" || (m.enota && m.enota !== "m2")) return;
+    const c2 = zaokrozi(parseFloat(String(m.cena2cm).replace(",", ".")) || 0);
+    const c3 = zaokrozi(parseFloat(String(m.cena3cm).replace(",", ".")) || 0);
+    const obstojec = najdi(m.naziv, true);
+    // Pulti imajo ceno neposredno na m², zato imajo prednost pred preračunom iz polic
+    if (obstojec) Object.assign(obstojec, { c2: c2 || obstojec.c2, c3: c3 || obstojec.c3, vir: "Pulti" });
+    else seznam.push({ id: kljucImena(m.naziv), kljuc: kljucImena(m.naziv), naziv: m.naziv, c2, c3, c6: "", c8: "", vir: "Pulti" });
+  });
+  return { materiali: seznam.sort((a, b) => a.naziv.localeCompare(b.naziv, "sl")).map(({ kljuc, ...ostalo }) => ostalo) };
+}
+
+function CenikM2({ cenikPolice, pultiCenik }) {
+  const [c, setC] = useState(null);
+  const [shranjujem, setShranjujem] = useState(false);
+  const [iskanje, setIskanje] = useState("");
+  useEffect(() => {
+    fetch("/api/cenik-m2", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setC(d && Array.isArray(d.materiali) && d.materiali.length ? d : zacetniCenikM2(cenikPolice, pultiCenik)))
+      .catch(() => setC(zacetniCenikM2(cenikPolice, pultiCenik)));
+  }, []);
+  if (!c) return <p className="text-sm text-stone-500 p-3">Nalagam …</p>;
+  const inp = "border border-stone-300 rounded-lg px-2 py-1.5 text-sm";
+  const posodobi = (i, polje, v) => setC({ ...c, materiali: c.materiali.map((m, j) => (j === i ? { ...m, [polje]: v } : m)) });
+  return (
+    <div className="space-y-3">
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
+        Prodajne cene materiala na m² (brez DDV). Cene za 2 cm in 3 cm so prenesene iz obstoječih cenikov — kjer je material v ceniku Pultov, je vzeta cena Pultov (že na m²), sicer cena Polic, preračunana iz tekočega metra pri širini 100 cm. Za 6 cm in 8 cm vpiši cene sam.
+      </div>
+      <input value={iskanje} onChange={(e) => setIskanje(e.target.value)} placeholder="Išči material…" className={`${inp} w-full`} />
+      <div className="bg-white border border-stone-200 rounded-xl p-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-stone-400 text-left">
+              <th className="pb-1">Material</th>
+              {DEBELINE_M2.map((d) => <th key={d.polje} className="pb-1">€/m² {d.naziv}</th>)}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {c.materiali.map((m, i) =>
+              m.naziv.toLowerCase().includes(iskanje.toLowerCase()) || !m.naziv ? (
+                <tr key={m.id || i}>
+                  <td className="pr-1 py-0.5">
+                    <input className={`${inp} w-full min-w-[140px]`} value={m.naziv} onChange={(e) => posodobi(i, "naziv", e.target.value)} />
+                    {m.vir && <div className="text-[10px] text-stone-400 pl-1">iz cenika {m.vir}</div>}
+                  </td>
+                  {DEBELINE_M2.map((d) => (
+                    <td key={d.polje} className="pr-1 py-0.5">
+                      <input className={`${inp} w-20 text-right`} inputMode="decimal" value={m[d.polje] || ""} onChange={(e) => posodobi(i, d.polje, e.target.value.replace(/[^0-9.,]/g, ""))} />
+                    </td>
+                  ))}
+                  <td>
+                    <button onClick={() => { if (confirm(`Odstranim ${m.naziv || "ta material"} iz cenika po m²?`)) setC({ ...c, materiali: c.materiali.filter((_, j) => j !== i) }); }} className="text-red-600 px-1">×</button>
+                  </td>
+                </tr>
+              ) : null
+            )}
+          </tbody>
+        </table>
+        <button
+          onClick={() => setC({ ...c, materiali: [...c.materiali, { id: `m${Date.now()}`, naziv: "", c2: "", c3: "", c6: "", c8: "" }] })}
+          className="text-xs text-red-600 mt-2"
+        >
+          + Dodaj material
+        </button>
+      </div>
+      <button
+        onClick={() => {
+          if (!confirm("Ponovno prenesem cene za 2 cm in 3 cm iz cenikov Polic in Pultov? Vpisane cene za 6 cm in 8 cm ostanejo. Za trajno shranitev nato klikni »Shrani cenik po m²«.")) return;
+          const sveze = zacetniCenikM2(cenikPolice, pultiCenik).materiali;
+          const ostali = c.materiali.filter((m) => !sveze.some((x) => kljucImena(x.naziv) === kljucImena(m.naziv)));
+          setC({
+            ...c,
+            materiali: [
+              ...sveze.map((x) => {
+                const star = c.materiali.find((m) => kljucImena(m.naziv) === kljucImena(x.naziv)) || {};
+                return { ...x, c6: star.c6 || "", c8: star.c8 || "" };
+              }),
+              ...ostali,
+            ],
+          });
+        }}
+        className="w-full border border-amber-400 bg-amber-50 text-amber-700 rounded-xl py-2.5 text-sm font-medium"
+      >
+        ↺ Ponovno prenesi cene 2 cm in 3 cm iz cenikov Polic in Pultov
+      </button>
+      <button
+        onClick={async () => {
+          setShranjujem(true);
+          try {
+            const res = await fetch("/api/cenik-m2", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
+            alert(res.ok ? "Cenik po m² shranjen." : "Cenika ni bilo mogoče shraniti (ni pravice ali ni povezave).");
+          } catch (e) {
+            alert("Napaka pri shranjevanju. Preveri povezavo.");
+          }
+          setShranjujem(false);
+        }}
+        disabled={shranjujem}
+        className="w-full bg-red-600 text-white rounded-xl py-3 font-semibold disabled:opacity-60"
+      >
+        {shranjujem ? "Shranjujem …" : "Shrani cenik po m²"}
+      </button>
+    </div>
+  );
+}
+
 function CenikiAdmin({ cenikPolice, pultiCenik, shraniCenikPolice, shraniCenikPulti, nazaj, natisni }) {
   const [cPolice, setCPolice] = useState(() => JSON.parse(JSON.stringify(cenikPolice)));
   const [cPulti, setCPulti] = useState(() => (pultiCenik ? JSON.parse(JSON.stringify(pultiCenik)) : { materiali: [], storitve: [] }));
@@ -8552,13 +8701,19 @@ function CenikiAdmin({ cenikPolice, pultiCenik, shraniCenikPolice, shraniCenikPu
         >
           Pulti
         </button>
+        <button
+          onClick={() => setZavihek("m2")}
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold ${zavihek === "m2" ? "bg-stone-800 text-white" : "bg-stone-100 text-stone-600"}`}
+        >
+          Material po m²
+        </button>
       </div>
 
       <button
         onClick={natisni}
         className="w-full mb-4 bg-white border border-stone-300 text-stone-700 rounded-lg py-2.5 text-sm font-medium flex items-center justify-center gap-2"
       >
-        <Printer size={15} /> Natisni oba cenika (PDF)
+        <Printer size={15} /> Natisni cenike (PDF)
       </button>
 
       {zavihek === "police" && (
@@ -8631,6 +8786,8 @@ function CenikiAdmin({ cenikPolice, pultiCenik, shraniCenikPolice, shraniCenikPu
         </div>
       )}
 
+      {zavihek === "m2" && <CenikM2 cenikPolice={cenikPolice} pultiCenik={pultiCenik} />}
+
       {zavihek === "pulti" && (
         <div className="space-y-3">
           <div className="bg-white border border-stone-200 rounded-xl p-3">
@@ -8679,6 +8836,17 @@ function CenikiAdmin({ cenikPolice, pultiCenik, shraniCenikPolice, shraniCenikPu
 
 function TiskCenikov({ cenikPolice, pultiCenik, nazaj }) {
   const danes = new Date().toLocaleDateString("sl-SI");
+  const [cenikM2, setCenikM2] = useState(null);
+  useEffect(() => {
+    fetch("/api/cenik-m2", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setCenikM2(d && Array.isArray(d.materiali) && d.materiali.length ? d : zacetniCenikM2(cenikPolice, pultiCenik)))
+      .catch(() => setCenikM2(zacetniCenikM2(cenikPolice, pultiCenik)));
+  }, []);
+  const eurM2 = (v) => {
+    const x = parseFloat(String(v ?? "").replace(",", "."));
+    return x > 0 ? eur(x) : "—";
+  };
   return (
     <div className="p-3 space-y-3">
       <style>{`
@@ -8768,6 +8936,28 @@ function TiskCenikov({ cenikPolice, pultiCenik, nazaj }) {
                   <tr key={s.id} className="border-b border-stone-100">
                     <td className="py-1">{s.naziv}</td>
                     <td className="py-1">{eur(s.cena)}/{s.enota}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {cenikM2 && cenikM2.materiali.length > 0 && (
+          <>
+            <h3 className="carved text-base uppercase text-stone-700 mb-2 mt-6 pt-4 border-t border-stone-200">Material — cena na m² (€/m², brez DDV)</h3>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="text-left text-xs uppercase text-stone-400 border-b border-stone-200">
+                  <th className="py-1">Material</th>
+                  {DEBELINE_M2.map((d) => <th key={d.polje} className="py-1">{d.naziv}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {cenikM2.materiali.filter((m) => m.naziv).map((m) => (
+                  <tr key={m.id || m.naziv} className="border-b border-stone-100">
+                    <td className="py-1">{m.naziv}</td>
+                    {DEBELINE_M2.map((d) => <td key={d.polje} className="py-1">{eurM2(m[d.polje])}</td>)}
                   </tr>
                 ))}
               </tbody>
