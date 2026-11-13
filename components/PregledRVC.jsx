@@ -123,8 +123,14 @@ function Ostanek({ naziv, prodaja, material, izdelava }) {
   );
 }
 
-function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa, nacinPlac, setNacinPlac, placeMesec }) {
+function DobicekMeseci({ meseci, manjkajo = [], nabava = {}, nastaviNabavo, samoIzdelano, setSamoIzdelano, brezVnosa, nacinPlac, setNacinPlac, placeMesec }) {
   const f2 = (x) => (Number(x) || 0).toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // vrstice brez nabavne cene ostanejo na seznamu tudi med tipkanjem (da polje ne izgine sredi vnosa)
+  const videne = useRef({});
+  manjkajo.forEach((x) => { videne.current[x.id] = x; });
+  const seznamManjkajocih = Object.values(videne.current)
+    .map((x) => ({ ...x, reseno: !manjkajo.some((y) => y.id === x.id) }))
+    .sort((a, b) => b.m2 - a.m2);
   const s = meseci.reduce(
     (v, m) => ({ prihodek: v.prihodek + m.prihodek, m2: v.m2 + m.m2, m2Brez: v.m2Brez + m.m2Brez, material: v.material + m.material, delo: v.delo + m.delo, elektrika: v.elektrika + m.elektrika, potrosni: v.potrosni + m.potrosni, rezija: v.rezija + m.rezija, izdelava: v.izdelava + m.izdelava, ostane: v.ostane + m.ostane, narocil: v.narocil + m.narocil }),
     { prihodek: 0, m2: 0, m2Brez: 0, material: 0, delo: 0, elektrika: 0, potrosni: 0, rezija: 0, izdelava: 0, ostane: 0, narocil: 0 }
@@ -156,9 +162,24 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa, nacin
           Stroški izdelave še niso vpisani, zato je »ostane« prevelik. Vpiši jih v zavihku »Stroški in materiali«.
         </div>
       )}
-      {s.m2Brez > 0.005 && (
+      {seznamManjkajocih.length > 0 && (
         <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm">
-          Za <b>{f2(s.m2Brez)} m²</b> od {f2(s.m2)} m² ni vpisane nabavne cene materiala (ali materiala ni v ceniku), zato je strošek materiala tam štet kot 0 in je »ostane« prevelik. Dopolni nabavne cene v zavihku »Stroški in materiali«.
+          {s.m2Brez > 0.005 ? (
+            <>Za <b>{f2(s.m2Brez)} m²</b> od {f2(s.m2)} m² ni vpisane nabavne cene materiala, zato je strošek materiala tam štet kot 0 in je »ostane« prevelik. Spodaj so našteti vsi taki materiali — vpiši nabavno ceno kar tukaj.</>
+          ) : (
+            <>✓ Vsi materiali imajo zdaj nabavno ceno.</>
+          )}
+          <div className="mt-3 bg-white rounded-xl border border-amber-200 divide-y divide-amber-100 max-h-80 overflow-y-auto">
+            {seznamManjkajocih.map((x) => (
+              <div key={x.id} className="flex items-center justify-between gap-3 px-3 py-2 text-stone-800">
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{x.naziv} · {x.polje === "c3" ? "3 cm" : "2 cm"}</div>
+                  <div className="text-[11px] text-stone-500">{x.reseno ? "✓ vpisano" : `${f2(x.m2)} m² brez nabavne cene`}</div>
+                </div>
+                <Polje vrednost={(nabava[x.kljuc] || {})[x.polje]} onChange={(v) => nastaviNabavo(x.kljuc, x.polje, v, x.naziv)} enota="€/m²" sirina="w-24" />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -408,10 +429,20 @@ export default function PregledRVC() {
       predpomnilnik[k] = r;
       return r;
     };
-    const cenaNabave = (ime, debelina) => {
-      const k = najdi(ime);
-      const n = k ? nabava[k] || {} : {};
-      return st(st(debelina) >= 2.5 ? n.c3 : n.c2);
+    // material, ki ga ni v ceniku, dobi svoj ključ iz imena — tako mu lahko vseeno vpišeš nabavno ceno
+    const kljucZa = (ime) => najdi(ime) || kljucMat(ime) || "brezmateriala";
+    const manjkajo = {};
+    const cenaNabave = (ime, debelina, m2) => {
+      const k = kljucZa(ime);
+      const polje = st(debelina) >= 2.5 ? "c3" : "c2";
+      const cena = st((nabava[k] || {})[polje]);
+      if (!cena) {
+        const id = `${k}|${polje}`;
+        const obstojeci = materiali.find((x) => x.kljuc === k);
+        manjkajo[id] = manjkajo[id] || { id, kljuc: k, polje, naziv: obstojeci ? obstojeci.naziv : String(ime || "").trim() || "Brez vpisanega materiala", m2: 0 };
+        manjkajo[id].m2 += m2;
+      }
+      return cena;
     };
     const po = {};
     const mesec = (datum) => {
@@ -421,7 +452,7 @@ export default function PregledRVC() {
     };
     const dodajKos = (o, m2, ime, debelina, vrsta) => {
       if (!m2) return;
-      const nab = cenaNabave(ime, debelina);
+      const nab = cenaNabave(ime, debelina, m2);
       o.m2 += m2;
       if (!nab) o.m2Brez += m2;
       o.material += m2 * nab * (1 + izr.odpad / 100);
@@ -450,7 +481,7 @@ export default function PregledRVC() {
         dodajKos(o, st(k.dolzina) * st(k.sirina) / 10000, mat ? mat.naziv : "", k.debelina || n.debelina || 2, "pulti");
       });
     });
-    return Object.values(po)
+    const vrstice = Object.values(po)
       .sort((a, b) => (a.kljuc < b.kljuc ? -1 : 1))
       .map((o0) => {
         let o = o0;
@@ -468,6 +499,7 @@ export default function PregledRVC() {
         }
         return { ...o, izdelava, ostane, naziv, kratko };
       });
+    return { vrstice, manjkajo: Object.values(manjkajo).sort((a, b) => b.m2 - a.m2) };
   }, [nalogi, pulti, materiali, nabava, izr, cenikPulti, samoIzdelano, nacinPlac, stroski.placeMesec]);
 
   if (!admin) {
@@ -484,9 +516,13 @@ export default function PregledRVC() {
   const nastaviVrstico = (seznam, i, polje, v) =>
     setStroski((s) => ({ ...s, [seznam]: s[seznam].map((x, j) => (j === i ? { ...x, [polje]: v } : x)) }));
   const odstrani = (seznam, i) => setStroski((s) => ({ ...s, [seznam]: s[seznam].filter((_, j) => j !== i) }));
-  const nastaviNabavo = (k, polje, v) => setNabava((n) => ({ ...n, [k]: { ...(n[k] || {}), [polje]: v } }));
+  const nastaviNabavo = (k, polje, v, naziv) => setNabava((n) => ({ ...n, [k]: { ...(n[k] || {}), [polje]: v, ...(naziv ? { naziv } : {}) } }));
 
-  const prikazani = materiali.filter((m) => m.naziv.toLowerCase().includes(iskanje.toLowerCase()));
+  // materiali iz naročil, ki jih ni v nobenem ceniku, a imajo vpisano nabavno ceno
+  const dodatni = Object.entries(nabava)
+    .filter(([k, v]) => v && v.naziv && !materiali.some((m) => m.kljuc === k))
+    .map(([k, v]) => ({ kljuc: k, naziv: v.naziv, dodatni: true }));
+  const prikazani = [...materiali, ...dodatni].filter((m) => m.naziv.toLowerCase().includes(iskanje.toLowerCase()));
   const brezVnosa = !st(stroski.delavec) && izr.police.minVse === 0 && izr.pulti.minVse === 0;
   const povzetek = (naziv, x) => (
     <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
@@ -528,7 +564,7 @@ export default function PregledRVC() {
       </div>
 
       {pogled === "meseci" ? (
-        <DobicekMeseci meseci={meseci} samoIzdelano={samoIzdelano} setSamoIzdelano={setSamoIzdelano} brezVnosa={brezVnosa} nacinPlac={nacinPlac} setNacinPlac={setNacinPlac} placeMesec={st(stroski.placeMesec)} />
+        <DobicekMeseci meseci={meseci.vrstice} manjkajo={meseci.manjkajo} nabava={nabava} nastaviNabavo={nastaviNabavo} samoIzdelano={samoIzdelano} setSamoIzdelano={setSamoIzdelano} brezVnosa={brezVnosa} nacinPlac={nacinPlac} setNacinPlac={setNacinPlac} placeMesec={st(stroski.placeMesec)} />
       ) : (
       <>
       {brezVnosa && (
@@ -648,7 +684,7 @@ export default function PregledRVC() {
             const n = nabava[m.kljuc] || {};
             return (
               <div key={m.kljuc} className="bg-white rounded-3xl border border-stone-200 shadow-sm p-4">
-                <div className="font-semibold text-stone-900 mb-2">🪨 {m.naziv}</div>
+                <div className="font-semibold text-stone-900 mb-2">🪨 {m.naziv}{m.dodatni && <span className="ml-2 text-[10px] font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">ni v ceniku</span>}</div>
                 <div className="grid grid-cols-2 gap-3">
                   {[["2 cm", "c2"], ["3 cm", "c3"]].map(([oznaka, polje]) => {
                     const nab = st(n[polje]);
