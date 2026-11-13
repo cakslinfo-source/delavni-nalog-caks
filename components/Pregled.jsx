@@ -5,6 +5,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import PregledPlosca from "./PregledPlosca";
 import PregledRezanje from "./PregledRezanje";
 import PregledVrednost from "./PregledVrednost";
+import PregledRVC from "./PregledRVC";
 
 const STOLPCI = [
   { id: "sprejeto", naziv: "Sprejeto", barva: "#78716c" },
@@ -59,7 +60,7 @@ export default function Pregled() {
   useEffect(() => {
     try {
       const n = localStorage.getItem("pregled-nacin");
-      if (n === "plosca" || n === "tabla" || n === "rezanje" || n === "vrednost") setNacin(n);
+      if (n === "plosca" || n === "tabla" || n === "rezanje" || n === "vrednost" || n === "rvc") setNacin(n);
     } catch (e) {}
   }, []);
   function izberiNacin(n) {
@@ -226,6 +227,7 @@ export default function Pregled() {
               { id: "plosca", naziv: "📊 Nadzorna plošča" },
               { id: "rezanje", naziv: "📏 Rezanje skupaj" },
               { id: "vrednost", naziv: "💶 Vrednost naročil" },
+              { id: "rvc", naziv: "💰 RVC" },
             ].map((z) => (
               <button
                 key={z.id}
@@ -256,6 +258,8 @@ export default function Pregled() {
         <div className="text-center text-stone-500 py-24 text-lg flex-1">Nalagam …</div>
       ) : nacin === "plosca" ? (
         <PregledPlosca postavke={postavke} />
+      ) : nacin === "rvc" ? (
+        <PregledRVC />
       ) : nacin === "vrednost" ? (
         <PregledVrednost />
       ) : nacin === "rezanje" ? (
