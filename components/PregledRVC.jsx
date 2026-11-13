@@ -41,6 +41,9 @@ const PRIVZETI_STROSKI = {
   potrosni: "",
   odpad: "",
   ure: "",
+  stDelavcev: "",
+  urNaDelavca: "",
+  izkoristek: "",
   fiksni: [
     { naziv: "Najemnina / kredit za prostor", znesek: "" },
     { naziv: "Amortizacija in leasing strojev", znesek: "" },
@@ -389,8 +392,13 @@ export default function PregledRVC() {
   // stroški izdelave na m²
   const izr = useMemo(() => {
     const fiksniMesec = (stroski.fiksni || []).reduce((v, x) => v + st(x.znesek), 0);
-    const ure = st(stroski.ure);
+    // produktivne ure = število delavcev × ur na delavca × izkoriščenost; (staro ročno polje velja le, če delavci niso vpisani)
+    const stDelavcev = st(stroski.stDelavcev);
+    const urNaDelavca = st(stroski.urNaDelavca) || 168;
+    const izkoristek = st(stroski.izkoristek) || 100;
+    const ure = stDelavcev > 0 ? stDelavcev * urNaDelavca * (izkoristek / 100) : st(stroski.ure);
     const rezijaUra = ure > 0 ? fiksniMesec / ure : 0;
+    const placaUra = ure > 0 ? st(stroski.placeMesec) / ure : 0;
     const zaVrsto = (polje) => {
       const minVse = (stroski.faze || []).reduce((v, f) => v + st(f[polje]), 0);
       const minStroj = (stroski.faze || []).filter((f) => f.stroj).reduce((v, f) => v + st(f[polje]), 0);
@@ -400,7 +408,7 @@ export default function PregledRVC() {
       const potrosni = st(stroski.potrosni);
       return { minVse, minStroj, delo, elektrika, rezija, potrosni, skupaj: delo + elektrika + rezija + potrosni };
     };
-    return { fiksniMesec, rezijaUra, police: zaVrsto("police"), pulti: zaVrsto("pulti"), odpad: st(stroski.odpad) };
+    return { fiksniMesec, rezijaUra, ure, stDelavcev, urNaDelavca, izkoristek, placaUra, police: zaVrsto("police"), pulti: zaVrsto("pulti"), odpad: st(stroski.odpad) };
   }, [stroski]);
 
   // DOBIČEK PO MESECIH: iz dejanskih naročil (prihodek) in vpisanih stroškov (material + izdelava na m²)
@@ -601,11 +609,35 @@ export default function PregledRVC() {
               </div>
             ))}
             <button onClick={() => setStroski((s) => ({ ...s, fiksni: [...s.fiksni, { naziv: "", znesek: "" }] }))} className="text-xs text-red-700 font-medium mt-1">+ Dodaj strošek</button>
-            <div className="flex items-center justify-between gap-2 text-sm pt-2 border-t border-stone-200 mt-2">
-              <span>Produktivne ure na mesec<div className="text-[11px] text-stone-400">vse ure vseh delavcev v proizvodnji</div></span>
-              <Polje vrednost={stroski.ure} onChange={(v) => nastavi("ure", v)} enota="h" />
+            <div className="pt-2 border-t border-stone-200 mt-2 space-y-2 text-sm">
+              <div className="font-medium text-stone-700">Produktivne ure na mesec</div>
+              <div className="flex items-center justify-between gap-2">
+                <span>Število delavcev v proizvodnji</span>
+                <Polje vrednost={stroski.stDelavcev} onChange={(v) => nastavi("stDelavcev", v)} sirina="w-20" />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span>Ur na delavca na mesec<div className="text-[11px] text-stone-400">polni delovni čas je približno 168 h</div></span>
+                <Polje vrednost={stroski.urNaDelavca} onChange={(v) => nastavi("urNaDelavca", v)} enota="h" sirina="w-20" namig="168" />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span>Izkoriščenost<div className="text-[11px] text-stone-400">koliko časa res delajo na izdelkih (brez čiščenja, čakanja, premikov)</div></span>
+                <Polje vrednost={stroski.izkoristek} onChange={(v) => nastavi("izkoristek", v)} enota="%" sirina="w-20" namig="100" />
+              </div>
+              <div className="rounded-xl bg-stone-50 border border-stone-200 px-3 py-2 text-xs text-stone-600 space-y-0.5">
+                {izr.stDelavcev > 0 ? (
+                  <div>{izr.stDelavcev} × {izr.urNaDelavca} h × {izr.izkoristek} % = <b>{izr.ure.toFixed(0)} produktivnih ur</b> na mesec</div>
+                ) : (
+                  <div className="text-amber-700">Vpiši število delavcev, da se izračunajo produktivne ure.</div>
+                )}
+                <div>Fiksni stroški {eur(izr.fiksniMesec)} ÷ {izr.ure.toFixed(0)} h = režija <b>{eur(izr.rezijaUra)}</b> na uro dela</div>
+                {izr.placaUra > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>Mesečne plače ÷ {izr.ure.toFixed(0)} h = <b>{eur(izr.placaUra)}</b> na uro dela</span>
+                    <button onClick={() => nastavi("delavec", izr.placaUra.toFixed(2).replace(".", ","))} className="text-red-700 font-medium underline">uporabi kot urno postavko delavca</button>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="text-[11px] text-stone-500">Fiksni stroški: {eur(izr.fiksniMesec)} na mesec → režija <b>{eur(izr.rezijaUra)}</b> na uro dela.</div>
           </div>
         </Kartica>
       </div>
