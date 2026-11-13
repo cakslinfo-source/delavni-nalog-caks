@@ -132,8 +132,8 @@ function DobicekMeseci({ meseci, manjkajo = [], nabava = {}, nastaviNabavo, samo
     .map((x) => ({ ...x, reseno: !manjkajo.some((y) => y.id === x.id) }))
     .sort((a, b) => b.m2 - a.m2);
   const s = meseci.reduce(
-    (v, m) => ({ prihodek: v.prihodek + m.prihodek, m2: v.m2 + m.m2, m2Brez: v.m2Brez + m.m2Brez, material: v.material + m.material, delo: v.delo + m.delo, elektrika: v.elektrika + m.elektrika, potrosni: v.potrosni + m.potrosni, rezija: v.rezija + m.rezija, izdelava: v.izdelava + m.izdelava, ostane: v.ostane + m.ostane, narocil: v.narocil + m.narocil }),
-    { prihodek: 0, m2: 0, m2Brez: 0, material: 0, delo: 0, elektrika: 0, potrosni: 0, rezija: 0, izdelava: 0, ostane: 0, narocil: 0 }
+    (v, m) => ({ prihodek: v.prihodek + m.prihodek, m2: v.m2 + m.m2, m2Brez: v.m2Brez + m.m2Brez, m2Stranke: v.m2Stranke + m.m2Stranke, material: v.material + m.material, delo: v.delo + m.delo, elektrika: v.elektrika + m.elektrika, potrosni: v.potrosni + m.potrosni, rezija: v.rezija + m.rezija, izdelava: v.izdelava + m.izdelava, ostane: v.ostane + m.ostane, narocil: v.narocil + m.narocil }),
+    { prihodek: 0, m2: 0, m2Brez: 0, m2Stranke: 0, material: 0, delo: 0, elektrika: 0, potrosni: 0, rezija: 0, izdelava: 0, ostane: 0, narocil: 0 }
   );
   const odst = (o, p) => (p ? `${((o / p) * 100).toFixed(0)} %` : "—");
   const barva = (x) => (x >= 0 ? "text-emerald-700" : "text-red-600");
@@ -162,10 +162,16 @@ function DobicekMeseci({ meseci, manjkajo = [], nabava = {}, nastaviNabavo, samo
           Stroški izdelave še niso vpisani, zato je »ostane« prevelik. Vpiši jih v zavihku »Stroški in materiali«.
         </div>
       )}
+      {s.m2Stranke > 0.005 && (
+        <div className="bg-sky-50 border border-sky-200 text-sky-900 rounded-2xl px-4 py-2.5 text-sm">
+          🧱 <b>{f2(s.m2Stranke)} m²</b> je bilo iz materiala, ki ga je pripeljala stranka — tam je strošek materiala 0 €.
+        </div>
+      )}
+
       {seznamManjkajocih.length > 0 && (
         <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm">
           {s.m2Brez > 0.005 ? (
-            <>Za <b>{f2(s.m2Brez)} m²</b> od {f2(s.m2)} m² ni vpisane nabavne cene materiala, zato je strošek materiala tam štet kot 0 in je »ostane« prevelik. Spodaj so našteti vsi taki materiali — vpiši nabavno ceno kar tukaj.</>
+            <>Za <b>{f2(s.m2Brez)} m²</b> od {f2(s.m2)} m² ni vpisane nabavne cene materiala, zato je strošek materiala tam štet kot 0 in je »ostane« prevelik. Spodaj so našteti vsi taki materiali — vpiši nabavno ceno kar tukaj. Če je material pripeljala stranka, odpri nalog in obkljukaj »🧱 Stranka pripelje svoj material«.</>
           ) : (
             <>✓ Vsi materiali imajo zdaj nabavno ceno.</>
           )}
@@ -309,7 +315,7 @@ function DobicekMeseci({ meseci, manjkajo = [], nabava = {}, nastaviNabavo, samo
 
       <p className="text-xs text-stone-400 pb-4">
         To je ocena, ne računovodski izid. Prihodek = dejanske cene naročil brez DDV (Police po popustu, Pulti ponudbena cena brez DDV), razporejene po datumu naročila.
-        Material = razrezani m² × nabavna cena × odpad. Elektrika in potrošni material = razrezani m² × tvoj strošek na m². Plače in režija = dejanski mesečni znesek, ki ga vpišeš. Spomeniki, dostava in montaža niso všteti; režija je všteta samo prek ur izdelave.
+        Material = razrezani m² × nabavna cena × odpad (0 €, kjer je na nalogu označeno »Stranka pripelje svoj material« ali je v imenu materiala beseda »stranke«). Elektrika in potrošni material = razrezani m² × tvoj strošek na m². Plače in režija = dejanski mesečni znesek, ki ga vpišeš. Spomeniki, dostava in montaža niso všteti; režija je všteta samo prek ur izdelave.
       </p>
     </div>
   );
@@ -451,7 +457,9 @@ export default function PregledRVC() {
     // material, ki ga ni v ceniku, dobi svoj ključ iz imena — tako mu lahko vseeno vpišeš nabavno ceno
     const kljucZa = (ime) => najdi(ime) || kljucMat(ime) || "brezmateriala";
     const manjkajo = {};
-    const cenaNabave = (ime, debelina, m2, vir) => {
+    const cenaNabave = (ime, debelina, m2, vir, odStranke) => {
+      // material, ki ga pripelje stranka: strošek 0 in se ne šteje kot manjkajoča cena
+      if (odStranke || /strank/i.test(String(ime || ""))) return 0;
       const k = kljucZa(ime);
       const polje = st(debelina) >= 2.5 ? "c3" : "c2";
       const cena = st((nabava[k] || {})[polje]);
@@ -473,13 +481,15 @@ export default function PregledRVC() {
     const mesec = (datum) => {
       const d = datum ? new Date(datum) : null;
       const k = d && !isNaN(d.getTime()) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "brez";
-      return (po[k] = po[k] || { kljuc: k, prihodek: 0, m2: 0, m2Brez: 0, material: 0, delo: 0, elektrika: 0, potrosni: 0, rezija: 0, narocil: 0 });
+      return (po[k] = po[k] || { kljuc: k, prihodek: 0, m2: 0, m2Brez: 0, m2Stranke: 0, material: 0, delo: 0, elektrika: 0, potrosni: 0, rezija: 0, narocil: 0 });
     };
-    const dodajKos = (o, m2, ime, debelina, vrsta, vir) => {
+    const dodajKos = (o, m2, ime, debelina, vrsta, vir, odStranke) => {
       if (!m2) return;
-      const nab = cenaNabave(ime, debelina, m2, vir);
+      const jeStranke = !!odStranke || /strank/i.test(String(ime || ""));
+      const nab = cenaNabave(ime, debelina, m2, vir, jeStranke);
       o.m2 += m2;
-      if (!nab) o.m2Brez += m2;
+      if (jeStranke) o.m2Stranke += m2;
+      else if (!nab) o.m2Brez += m2;
       o.material += m2 * nab * (1 + izr.odpad / 100);
       o.delo += m2 * izr[vrsta].delo;
       o.elektrika += m2 * izr[vrsta].elektrika;
@@ -493,7 +503,7 @@ export default function PregledRVC() {
       o.prihodek += st(n.cena) * (1 - st(n.popustSkupaj) / 100);
       (n.postavke || []).forEach((p) => {
         const sirina = p.poseven ? Math.max(st(p.sirinaDesno), st(p.sirinaLevo)) : st(p.sirina);
-        dodajKos(o, (st(p.dolzina) * sirina / 10000) * (st(p.kolicina) || 1), p.material, p.debelina, "police", { povezava: `/?nalog=${n.id}`, stevilka: n.stevilka || "nalog", stranka: n.stranka || "" });
+        dodajKos(o, (st(p.dolzina) * sirina / 10000) * (st(p.kolicina) || 1), p.material, p.debelina, "police", { povezava: `/?nalog=${n.id}`, stevilka: n.stevilka || "nalog", stranka: n.stranka || "" }, n.materialStranke);
       });
     });
     pulti.forEach((n) => {
@@ -503,7 +513,7 @@ export default function PregledRVC() {
       o.prihodek += st(n.ponudbenaCena) / 1.22;
       const mat = ((cenikPulti && cenikPulti.materiali) || []).find((x) => x.id === n.materialId);
       (n.kosi || []).forEach((k) => {
-        dodajKos(o, st(k.dolzina) * st(k.sirina) / 10000, mat ? mat.naziv : "", k.debelina || n.debelina || 2, "pulti", { povezava: `/pulti?nalog=${n.id}`, stevilka: n.stevilka || "pult", stranka: (n.stranka && n.stranka.ime) || "" });
+        dodajKos(o, st(k.dolzina) * st(k.sirina) / 10000, mat ? mat.naziv : "", k.debelina || n.debelina || 2, "pulti", { povezava: `/pulti?nalog=${n.id}`, stevilka: n.stevilka || "pult", stranka: (n.stranka && n.stranka.ime) || "" }, n.materialStranke);
       });
     });
     const vrstice = Object.values(po)
