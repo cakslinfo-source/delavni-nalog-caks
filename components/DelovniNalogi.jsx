@@ -549,7 +549,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-11-c · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-13-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -6054,6 +6054,16 @@ function DelovniNalogiGlavna() {
                 />
                 <span className="text-[11px] text-stone-400">Vpiši in pritisni Enter ali klikni stran — po potrebi lahko debelino pri posameznem kosu spodaj še vedno spremeniš.</span>
               </div>
+
+              <label className={`flex items-center gap-2 mb-3 px-3 py-2 rounded-lg border text-sm cursor-pointer ${obrazec.materialStranke ? "bg-amber-50 border-amber-400 text-amber-900 font-medium" : "bg-white border-stone-300 text-stone-600"}`}>
+                <input
+                  type="checkbox"
+                  checked={!!obrazec.materialStranke}
+                  onChange={(e) => setObrazec({ ...obrazec, materialStranke: e.target.checked })}
+                />
+                🧱 Stranka pripelje svoj material
+                <span className="text-[11px] font-normal text-stone-400">(v RVC se material ne šteje kot strošek)</span>
+              </label>
 
               <div
                 className="hidden sm:grid gap-2 px-1 mb-1.5 text-xs font-medium text-stone-400 uppercase tracking-wide"

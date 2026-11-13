@@ -1259,6 +1259,15 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
           ))}
         </select>
 
+        <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer ${nal.materialStranke ? "bg-amber-50 border-amber-400 text-amber-900 font-medium" : "bg-white border-gray-300 text-gray-600"}`}>
+          <input
+            type="checkbox"
+            checked={!!nal.materialStranke}
+            onChange={(e) => setNal({ ...nal, materialStranke: e.target.checked })}
+          />
+          🧱 Stranka pripelje svoj material
+        </label>
+
         {material && material.tip === "m2" && (
           <div className="text-sm text-gray-600 space-y-0.5 bg-gray-50 rounded-lg p-2">
             <div>Debelina se izbere pri vsakem kosu posebej (spodaj).</div>
