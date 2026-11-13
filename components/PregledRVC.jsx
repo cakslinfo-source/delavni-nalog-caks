@@ -122,8 +122,8 @@ function Ostanek({ naziv, prodaja, material, izdelava }) {
 function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
   const f2 = (x) => (Number(x) || 0).toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const s = meseci.reduce(
-    (v, m) => ({ prihodek: v.prihodek + m.prihodek, m2: v.m2 + m.m2, m2Brez: v.m2Brez + m.m2Brez, material: v.material + m.material, izdelava: v.izdelava + m.izdelava, ostane: v.ostane + m.ostane, narocil: v.narocil + m.narocil }),
-    { prihodek: 0, m2: 0, m2Brez: 0, material: 0, izdelava: 0, ostane: 0, narocil: 0 }
+    (v, m) => ({ prihodek: v.prihodek + m.prihodek, m2: v.m2 + m.m2, m2Brez: v.m2Brez + m.m2Brez, material: v.material + m.material, delo: v.delo + m.delo, elektrika: v.elektrika + m.elektrika, potrosni: v.potrosni + m.potrosni, rezija: v.rezija + m.rezija, izdelava: v.izdelava + m.izdelava, ostane: v.ostane + m.ostane, narocil: v.narocil + m.narocil }),
+    { prihodek: 0, m2: 0, m2Brez: 0, material: 0, delo: 0, elektrika: 0, potrosni: 0, rezija: 0, izdelava: 0, ostane: 0, narocil: 0 }
   );
   const odst = (o, p) => (p ? `${((o / p) * 100).toFixed(0)} %` : "—");
   const barva = (x) => (x >= 0 ? "text-emerald-700" : "text-red-600");
@@ -149,12 +149,27 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {[
-          ["Prihodek (brez DDV)", eur(s.prihodek), `${s.narocil} naročil`, "text-stone-900"],
-          ["Material", eur(s.material), `${f2(s.m2)} m²`, "text-stone-900"],
-          ["Izdelava", eur(s.izdelava), "delo, elektrika, potrošni, režija", "text-stone-900"],
+          ["Prihodek (brez DDV)", eur(s.prihodek), `${s.narocil} naročil · ${f2(s.m2)} m²`, "text-stone-900"],
           ["Ostane skupaj", eur(s.ostane), `${odst(s.ostane, s.prihodek)} prihodka · povprečno ${eur(povprecje)} na mesec`, barva(s.ostane)],
+        ].map(([naziv, vrednost, opomba, razred]) => (
+          <div key={naziv} className="bg-white rounded-2xl border border-stone-200 shadow-sm px-4 py-3">
+            <div className="text-xs text-stone-500">{naziv}</div>
+            <div className={`text-3xl font-bold tabular-nums mt-0.5 ${razred}`}>{vrednost}</div>
+            <div className="text-xs text-stone-400 mt-0.5">{opomba}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Stroški — vsak posebej</div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {[
+          ["🪨 Material", eur(s.material), `${odst(s.material, s.prihodek)} prihodka`, "text-stone-900"],
+          ["👷 Plače (delo)", eur(s.delo), `${odst(s.delo, s.prihodek)} prihodka`, "text-stone-900"],
+          ["⚡ Elektrika", eur(s.elektrika), `${odst(s.elektrika, s.prihodek)} prihodka`, "text-stone-900"],
+          ["🧰 Potrošni material", eur(s.potrosni), `${odst(s.potrosni, s.prihodek)} prihodka`, "text-stone-900"],
+          ["🏭 Režija", eur(s.rezija), `${odst(s.rezija, s.prihodek)} prihodka`, "text-stone-900"],
         ].map(([naziv, vrednost, opomba, razred]) => (
           <div key={naziv} className="bg-white rounded-2xl border border-stone-200 shadow-sm px-4 py-3">
             <div className="text-xs text-stone-500">{naziv}</div>
@@ -192,7 +207,11 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
                     <th className="px-3 py-2 text-right font-medium">m²</th>
                     <th className="px-3 py-2 text-right font-medium">Prihodek</th>
                     <th className="px-3 py-2 text-right font-medium">Material</th>
-                    <th className="px-3 py-2 text-right font-medium">Izdelava</th>
+                    <th className="px-3 py-2 text-right font-medium">Plače</th>
+                    <th className="px-3 py-2 text-right font-medium">Elektrika</th>
+                    <th className="px-3 py-2 text-right font-medium">Potrošni mat.</th>
+                    <th className="px-3 py-2 text-right font-medium">Režija</th>
+                    <th className="px-3 py-2 text-right font-medium">Stroški skupaj</th>
                     <th className="px-3 py-2 text-right font-medium">Ostane</th>
                     <th className="px-3 py-2 text-right font-medium">%</th>
                   </tr>
@@ -205,7 +224,11 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
                       <td className={c}>{f2(m.m2)}</td>
                       <td className={c}>{eur(m.prihodek)}</td>
                       <td className={c}>{eur(m.material)}</td>
-                      <td className={c}>{eur(m.izdelava)}</td>
+                      <td className={c}>{eur(m.delo)}</td>
+                      <td className={c}>{eur(m.elektrika)}</td>
+                      <td className={c}>{eur(m.potrosni)}</td>
+                      <td className={c}>{eur(m.rezija)}</td>
+                      <td className={`${c} font-semibold`}>{eur(m.material + m.izdelava)}</td>
                       <td className={`${c} font-bold ${barva(m.ostane)}`}>{eur(m.ostane)}</td>
                       <td className={`${c} ${barva(m.ostane)}`}>{odst(m.ostane, m.prihodek)}</td>
                     </tr>
@@ -216,7 +239,11 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
                     <td className={c}>{f2(s.m2)}</td>
                     <td className={c}>{eur(s.prihodek)}</td>
                     <td className={c}>{eur(s.material)}</td>
-                    <td className={c}>{eur(s.izdelava)}</td>
+                    <td className={c}>{eur(s.delo)}</td>
+                    <td className={c}>{eur(s.elektrika)}</td>
+                    <td className={c}>{eur(s.potrosni)}</td>
+                    <td className={c}>{eur(s.rezija)}</td>
+                    <td className={c}>{eur(s.material + s.izdelava)}</td>
                     <td className={`${c} ${barva(s.ostane)}`}>{eur(s.ostane)}</td>
                     <td className={`${c} ${barva(s.ostane)}`}>{odst(s.ostane, s.prihodek)}</td>
                   </tr>
@@ -229,7 +256,7 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
 
       <p className="text-xs text-stone-400 pb-4">
         To je ocena, ne računovodski izid. Prihodek = dejanske cene naročil brez DDV (Police po popustu, Pulti ponudbena cena brez DDV), razporejene po datumu naročila.
-        Material = razrezani m² × nabavna cena × odpad. Izdelava = razrezani m² × strošek izdelave na m². Spomeniki, dostava in montaža niso všteti; režija je všteta samo prek ur izdelave.
+        Material = razrezani m² × nabavna cena × odpad. Plače, elektrika, potrošni material in režija = razrezani m² × tvoj strošek na m² (iz časov izdelave in urnih postavk). Spomeniki, dostava in montaža niso všteti; režija je všteta samo prek ur izdelave.
       </p>
     </div>
   );
@@ -371,7 +398,7 @@ export default function PregledRVC() {
     const mesec = (datum) => {
       const d = datum ? new Date(datum) : null;
       const k = d && !isNaN(d.getTime()) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "brez";
-      return (po[k] = po[k] || { kljuc: k, prihodek: 0, m2: 0, m2Brez: 0, material: 0, izdelava: 0, narocil: 0 });
+      return (po[k] = po[k] || { kljuc: k, prihodek: 0, m2: 0, m2Brez: 0, material: 0, delo: 0, elektrika: 0, potrosni: 0, rezija: 0, narocil: 0 });
     };
     const dodajKos = (o, m2, ime, debelina, vrsta) => {
       if (!m2) return;
@@ -379,7 +406,10 @@ export default function PregledRVC() {
       o.m2 += m2;
       if (!nab) o.m2Brez += m2;
       o.material += m2 * nab * (1 + izr.odpad / 100);
-      o.izdelava += m2 * izr[vrsta].skupaj;
+      o.delo += m2 * izr[vrsta].delo;
+      o.elektrika += m2 * izr[vrsta].elektrika;
+      o.potrosni += m2 * izr[vrsta].potrosni;
+      o.rezija += m2 * izr[vrsta].rezija;
     };
     nalogi.forEach((n) => {
       if (n.vrsta === "ponudba" || (samoIzdelano && !jeZeVDelu(n.status))) return;
@@ -404,14 +434,15 @@ export default function PregledRVC() {
     return Object.values(po)
       .sort((a, b) => (a.kljuc < b.kljuc ? -1 : 1))
       .map((o) => {
-        const ostane = o.prihodek - o.material - o.izdelava;
+        const izdelava = o.delo + o.elektrika + o.potrosni + o.rezija;
+        const ostane = o.prihodek - o.material - izdelava;
         let naziv = "Brez datuma", kratko = "—";
         if (o.kljuc !== "brez") {
           const [l, m] = o.kljuc.split("-");
           naziv = `${MESECI_IMENA[parseInt(m, 10) - 1]} ${l}`;
           kratko = `${MESECI_IMENA[parseInt(m, 10) - 1].slice(0, 3)} ${l.slice(2)}`;
         }
-        return { ...o, ostane, naziv, kratko };
+        return { ...o, izdelava, ostane, naziv, kratko };
       });
   }, [nalogi, pulti, materiali, nabava, izr, cenikPulti, samoIzdelano]);
 
