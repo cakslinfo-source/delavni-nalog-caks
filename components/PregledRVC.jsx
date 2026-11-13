@@ -171,12 +171,31 @@ function DobicekMeseci({ meseci, manjkajo = [], nabava = {}, nastaviNabavo, samo
           )}
           <div className="mt-3 bg-white rounded-xl border border-amber-200 divide-y divide-amber-100 max-h-80 overflow-y-auto">
             {seznamManjkajocih.map((x) => (
-              <div key={x.id} className="flex items-center justify-between gap-3 px-3 py-2 text-stone-800">
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{x.naziv} · {x.polje === "c3" ? "3 cm" : "2 cm"}</div>
-                  <div className="text-[11px] text-stone-500">{x.reseno ? "✓ vpisano" : `${f2(x.m2)} m² brez nabavne cene`}</div>
+              <div key={x.id} className="px-3 py-2 text-stone-800">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{x.naziv} · {x.polje === "c3" ? "3 cm" : "2 cm"}</div>
+                    <div className="text-[11px] text-stone-500">{x.reseno ? "✓ vpisano" : `${f2(x.m2)} m² brez nabavne cene`}</div>
+                  </div>
+                  <Polje vrednost={(nabava[x.kljuc] || {})[x.polje]} onChange={(v) => nastaviNabavo(x.kljuc, x.polje, v, x.naziv)} enota="€/m²" sirina="w-24" />
                 </div>
-                <Polje vrednost={(nabava[x.kljuc] || {})[x.polje]} onChange={(v) => nastaviNabavo(x.kljuc, x.polje, v, x.naziv)} enota="€/m²" sirina="w-24" />
+                {(x.nalogi || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    <span className="text-[11px] text-stone-500 py-1">Odpri nalog:</span>
+                    {x.nalogi.map((n) => (
+                      <a
+                        key={n.povezava}
+                        href={n.povezava}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Odpri ta delovni nalog v novem zavihku"
+                        className="text-[11px] bg-stone-100 hover:bg-red-600 hover:text-white border border-stone-300 rounded-full px-2.5 py-1 transition-colors"
+                      >
+                        {n.stevilka}{n.stranka ? ` · ${n.stranka}` : ""} ({f2(n.m2)} m²) ↗
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -432,7 +451,7 @@ export default function PregledRVC() {
     // material, ki ga ni v ceniku, dobi svoj ključ iz imena — tako mu lahko vseeno vpišeš nabavno ceno
     const kljucZa = (ime) => najdi(ime) || kljucMat(ime) || "brezmateriala";
     const manjkajo = {};
-    const cenaNabave = (ime, debelina, m2) => {
+    const cenaNabave = (ime, debelina, m2, vir) => {
       const k = kljucZa(ime);
       const polje = st(debelina) >= 2.5 ? "c3" : "c2";
       const cena = st((nabava[k] || {})[polje]);
@@ -441,6 +460,12 @@ export default function PregledRVC() {
         const obstojeci = materiali.find((x) => x.kljuc === k);
         manjkajo[id] = manjkajo[id] || { id, kljuc: k, polje, naziv: obstojeci ? obstojeci.naziv : String(ime || "").trim() || "Brez vpisanega materiala", m2: 0 };
         manjkajo[id].m2 += m2;
+        if (vir) {
+          const seznam = (manjkajo[id].nalogi = manjkajo[id].nalogi || []);
+          const ze = seznam.find((x) => x.povezava === vir.povezava);
+          if (ze) ze.m2 += m2;
+          else seznam.push({ ...vir, m2 });
+        }
       }
       return cena;
     };
@@ -450,9 +475,9 @@ export default function PregledRVC() {
       const k = d && !isNaN(d.getTime()) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "brez";
       return (po[k] = po[k] || { kljuc: k, prihodek: 0, m2: 0, m2Brez: 0, material: 0, delo: 0, elektrika: 0, potrosni: 0, rezija: 0, narocil: 0 });
     };
-    const dodajKos = (o, m2, ime, debelina, vrsta) => {
+    const dodajKos = (o, m2, ime, debelina, vrsta, vir) => {
       if (!m2) return;
-      const nab = cenaNabave(ime, debelina, m2);
+      const nab = cenaNabave(ime, debelina, m2, vir);
       o.m2 += m2;
       if (!nab) o.m2Brez += m2;
       o.material += m2 * nab * (1 + izr.odpad / 100);
@@ -468,7 +493,7 @@ export default function PregledRVC() {
       o.prihodek += st(n.cena) * (1 - st(n.popustSkupaj) / 100);
       (n.postavke || []).forEach((p) => {
         const sirina = p.poseven ? Math.max(st(p.sirinaDesno), st(p.sirinaLevo)) : st(p.sirina);
-        dodajKos(o, (st(p.dolzina) * sirina / 10000) * (st(p.kolicina) || 1), p.material, p.debelina, "police");
+        dodajKos(o, (st(p.dolzina) * sirina / 10000) * (st(p.kolicina) || 1), p.material, p.debelina, "police", { povezava: `/?nalog=${n.id}`, stevilka: n.stevilka || "nalog", stranka: n.stranka || "" });
       });
     });
     pulti.forEach((n) => {
@@ -478,7 +503,7 @@ export default function PregledRVC() {
       o.prihodek += st(n.ponudbenaCena) / 1.22;
       const mat = ((cenikPulti && cenikPulti.materiali) || []).find((x) => x.id === n.materialId);
       (n.kosi || []).forEach((k) => {
-        dodajKos(o, st(k.dolzina) * st(k.sirina) / 10000, mat ? mat.naziv : "", k.debelina || n.debelina || 2, "pulti");
+        dodajKos(o, st(k.dolzina) * st(k.sirina) / 10000, mat ? mat.naziv : "", k.debelina || n.debelina || 2, "pulti", { povezava: `/pulti?nalog=${n.id}`, stevilka: n.stevilka || "pult", stranka: (n.stranka && n.stranka.ime) || "" });
       });
     });
     const vrstice = Object.values(po)
