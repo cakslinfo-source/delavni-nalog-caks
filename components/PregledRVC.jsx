@@ -36,6 +36,7 @@ const jeZeVDelu = (status) => {
 
 const PRIVZETI_STROSKI = {
   delavec: "",
+  placeMesec: "",
   elektrika: "",
   potrosni: "",
   odpad: "",
@@ -119,7 +120,7 @@ function Ostanek({ naziv, prodaja, material, izdelava }) {
   );
 }
 
-function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
+function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa, nacinPlac, setNacinPlac, placeMesec }) {
   const f2 = (x) => (Number(x) || 0).toLocaleString("sl-SI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const s = meseci.reduce(
     (v, m) => ({ prihodek: v.prihodek + m.prihodek, m2: v.m2 + m.m2, m2Brez: v.m2Brez + m.m2Brez, material: v.material + m.material, delo: v.delo + m.delo, elektrika: v.elektrika + m.elektrika, potrosni: v.potrosni + m.potrosni, rezija: v.rezija + m.rezija, izdelava: v.izdelava + m.izdelava, ostane: v.ostane + m.ostane, narocil: v.narocil + m.narocil }),
@@ -136,7 +137,32 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
           <input type="checkbox" checked={samoIzdelano} onChange={(e) => setSamoIzdelano(e.target.checked)} />
           Samo že izdelano: naročila v izdelavi ali dlje (brez »Sprejeto«)
         </label>
+        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-stone-200">
+          <span className="text-sm text-stone-700">Plače in režija:</span>
+          <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+            {[["mesec", "Dejanski mesečni znesek"], ["m2", "Po razrezanih m² (čas × urna postavka)"]].map(([id, naziv]) => (
+              <button
+                key={id}
+                onClick={() => setNacinPlac(id)}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${nacinPlac === id ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-100"}`}
+              >
+                {naziv}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="text-[11px] text-stone-400 mt-1.5">
+          {nacinPlac === "mesec"
+            ? "Vsak mesec se odštejejo celotne plače in celotna režija, kot ju vpišeš v »Stroški in materiali«."
+            : "Plače in režija se računajo samo za čas, ki ga po tvojih minutah na m² porabite za razrezane kose."}
+        </div>
       </div>
+
+      {nacinPlac === "mesec" && !placeMesec && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm">
+          Mesečne plače še niso vpisane, zato so tukaj 0. V zavihku »Stroški in materiali« vpiši polje »Plače na mesec — vsi delavci«.
+        </div>
+      )}
 
       {brezVnosa && (
         <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm">
@@ -256,7 +282,7 @@ function DobicekMeseci({ meseci, samoIzdelano, setSamoIzdelano, brezVnosa }) {
 
       <p className="text-xs text-stone-400 pb-4">
         To je ocena, ne računovodski izid. Prihodek = dejanske cene naročil brez DDV (Police po popustu, Pulti ponudbena cena brez DDV), razporejene po datumu naročila.
-        Material = razrezani m² × nabavna cena × odpad. Plače, elektrika, potrošni material in režija = razrezani m² × tvoj strošek na m² (iz časov izdelave in urnih postavk). Spomeniki, dostava in montaža niso všteti; režija je všteta samo prek ur izdelave.
+        Material = razrezani m² × nabavna cena × odpad. Elektrika in potrošni material = razrezani m² × tvoj strošek na m². Plače in režija: ali dejanski mesečni znesek ali po razrezanih m², kot izbereš zgoraj. Spomeniki, dostava in montaža niso všteti; režija je všteta samo prek ur izdelave.
       </p>
     </div>
   );
@@ -275,6 +301,7 @@ export default function PregledRVC() {
   const [nalogi, setNalogi] = useState([]);
   const [pulti, setPulti] = useState([]);
   const [samoIzdelano, setSamoIzdelano] = useState(true);
+  const [nacinPlac, setNacinPlac] = useState("mesec");
   const nalozeno = useRef(false);
   const casovnik = useRef(null);
 
@@ -433,7 +460,12 @@ export default function PregledRVC() {
     });
     return Object.values(po)
       .sort((a, b) => (a.kljuc < b.kljuc ? -1 : 1))
-      .map((o) => {
+      .map((o0) => {
+        let o = o0;
+        if (nacinPlac === "mesec" && o.kljuc !== "brez") {
+          // dejanski mesečni stroški: plače in režija se plačajo v celoti, ne glede na to, koliko se razreže
+          o = { ...o, delo: st(stroski.placeMesec), rezija: izr.fiksniMesec };
+        }
         const izdelava = o.delo + o.elektrika + o.potrosni + o.rezija;
         const ostane = o.prihodek - o.material - izdelava;
         let naziv = "Brez datuma", kratko = "—";
@@ -444,7 +476,7 @@ export default function PregledRVC() {
         }
         return { ...o, izdelava, ostane, naziv, kratko };
       });
-  }, [nalogi, pulti, materiali, nabava, izr, cenikPulti, samoIzdelano]);
+  }, [nalogi, pulti, materiali, nabava, izr, cenikPulti, samoIzdelano, nacinPlac, stroski.placeMesec]);
 
   if (!admin) {
     return (
@@ -504,7 +536,7 @@ export default function PregledRVC() {
       </div>
 
       {pogled === "meseci" ? (
-        <DobicekMeseci meseci={meseci} samoIzdelano={samoIzdelano} setSamoIzdelano={setSamoIzdelano} brezVnosa={brezVnosa} />
+        <DobicekMeseci meseci={meseci} samoIzdelano={samoIzdelano} setSamoIzdelano={setSamoIzdelano} brezVnosa={brezVnosa} nacinPlac={nacinPlac} setNacinPlac={setNacinPlac} placeMesec={st(stroski.placeMesec)} />
       ) : (
       <>
       {brezVnosa && (
@@ -520,6 +552,10 @@ export default function PregledRVC() {
             <div className="flex items-center justify-between gap-2">
               <span>Delavec — celoten strošek na uro<div className="text-[11px] text-stone-400">bruto plača s prispevki, malica, prevoz, regres</div></span>
               <Polje vrednost={stroski.delavec} onChange={(v) => nastavi("delavec", v)} enota="€/h" />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span>Plače na mesec — vsi delavci<div className="text-[11px] text-stone-400">celoten mesečni strošek plač v proizvodnji; za »Dobiček na mesec«</div></span>
+              <Polje vrednost={stroski.placeMesec} onChange={(v) => nastavi("placeMesec", v)} enota="€/mes" />
             </div>
             <div className="flex items-center justify-between gap-2">
               <span>Elektrika — ko stroj dela<div className="text-[11px] text-stone-400">šteje se pri fazah, označenih kot »stroj«</div></span>
