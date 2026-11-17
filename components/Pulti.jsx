@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { prenesiPDF, posljiPDF } from "../lib/pdf-ponudba";
+import { prenesiPDF, posljiPDF, odpriVOutlooku } from "../lib/pdf-ponudba";
 
 // ===================== NASTAVITVE =====================
 
@@ -1930,6 +1930,20 @@ function Podrobnosti({ nalog, cenik, nazaj, uredi, spremeniStatus, preklopiPlaca
                 Pošlji e-mail
               </a>
             )}
+            <button
+              onClick={() =>
+                odpriVOutlooku({
+                  htmlVsebina: zgradiPonudboPultiHTML(nalog, cenik),
+                  imeDatoteke: imePDFPulti(nalog),
+                  na: nalog.stranka?.email || "",
+                  zadeva: `Ponudba ${nalog.stevilka || ""} — Kamnoseštvo Čakš`,
+                  besedilo: besediloPonudbePulti(nalog, izr).replace("Za vsa vprašanja", "Ponudbo najdete tudi v priponki (PDF).\n\nZa vsa vprašanja"),
+                })
+              }
+              className="bg-sky-700 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+            >
+              📧 Odpri v Outlooku (s PDF)
+            </button>
             {nalog.stranka?.email && (
               <button
                 onClick={() => posljiPonudboPultiSPDF(nalog, cenik, izr)}

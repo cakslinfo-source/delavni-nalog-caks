@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Fragment, Component } from "react";
 import { createPortal } from "react-dom";
+import { prenesiOsnutekEml } from "../lib/pdf-ponudba";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw, Save, Tag } from "lucide-react";
 
@@ -549,7 +550,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-13-b · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-17-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -2374,6 +2375,24 @@ async function prenesiPonudboPDF(nalog) {
     return true;
   } catch (e) {
     alert("PDF ponudbe ni bilo mogoče ustvariti: " + (e && e.message ? e.message : e));
+    return false;
+  }
+}
+
+// Pripravi osnutek za Outlook: novo sporočilo stranki s PDF ponudbe v priponki (pošlješ ga sam iz svojega Outlooka).
+async function odpriPonudboVOutlooku(nalog) {
+  try {
+    const pdf = await ustvariPonudboPDF(nalog);
+    prenesiOsnutekEml({
+      na: nalog.email || "",
+      zadeva: `Ponudba ${nalog.stevilka || ""} — Kamnoseštvo Čakš`,
+      besedilo: besediloPonudbe(nalog).replace("Za vsa vprašanja", "Ponudbo najdete tudi v priponki (PDF).\n\nZa vsa vprašanja"),
+      imeDatoteke: imePDFPonudbe(nalog),
+      pdfBase64: pdf.base64,
+    });
+    return true;
+  } catch (e) {
+    alert("Osnutka ni bilo mogoče pripraviti: " + (e && e.message ? e.message : e));
     return false;
   }
 }
@@ -7065,6 +7084,13 @@ function DelovniNalogiGlavna() {
               <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span className="text-sm text-amber-800">PDF ponudbe:</span>
                 <div className="flex flex-wrap gap-2 shrink-0">
+                  <button
+                    onClick={() => odpriPonudboVOutlooku(aktivniNalog)}
+                      title="Prenese osnutek e-pošte s PDF. Odpri preneseno datoteko in Outlook odpre novo sporočilo, pripravljeno za pošiljanje."
+                    className="bg-sky-700 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                  >
+                    📧 Odpri v Outlooku (s PDF)
+                  </button>
                   {aktivniNalog.email && (
                     <button
                       onClick={() => posljiPonudboSPDF(aktivniNalog)}
