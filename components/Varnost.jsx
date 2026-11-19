@@ -37,6 +37,7 @@ export default function Varnost({ zapri }) {
   const [potrditev, setPotrditev] = useState("");
   const [izbrisan, setIzbrisan] = useState(false);
   const [steviloKljucev, setSteviloKljucev] = useState(null);
+  const [skrit, setSkrit] = useState(false);
 
   async function osvezi() {
     try {
@@ -48,11 +49,32 @@ export default function Varnost({ zapri }) {
       const j = await r.json();
       setSteviloKljucev(j.kljuci.length);
       setIzbrisan(j.kljuci.includes("program-izbrisan"));
+      setSkrit(j.kljuci.includes("program-skrit"));
     } catch (e) {}
   }
   useEffect(() => {
     osvezi();
   }, []);
+
+  async function preklopiSkrit() {
+    setNapaka("");
+    const vklopi = !skrit;
+    if (vklopi && !window.confirm("Program SKRIJEM za vse? Vsi ostali (delavci, stranke, povezave za podpis in stanje naročila) bodo videli samo »stran ne obstaja«. Ti ostaneš prijavljen in program vidiš naprej. NE ODJAVI SE, dokler je program skrit.")) return;
+    setDelam(true);
+    try {
+      const r = await fetch("/api/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ akcija: "skrij", vklopi }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).napaka || r.status);
+      setSkrit(vklopi);
+      setStanje(vklopi ? "✓ Program je SKRIT. V nekaj sekundah ga nihče razen tebe ne more več odpreti." : "✓ Program je spet viden in deluje za vse.");
+    } catch (e) {
+      setNapaka("Ni uspelo: " + e.message);
+    }
+    setDelam(false);
+  }
 
   async function samoKopija() {
     setNapaka("");
@@ -143,6 +165,24 @@ export default function Varnost({ zapri }) {
             Program je trenutno IZBRISAN. Spodaj ga obnoviš iz datoteke s celotno kopijo.
           </div>
         )}
+
+        <div className={`rounded-xl border-2 p-4 space-y-2 ${skrit ? "bg-stone-900 border-stone-900 text-white" : "bg-white border-stone-800"}`}>
+          <h2 className="font-semibold">👻 Skrij program (podatki ostanejo)</h2>
+          <p className={`text-sm ${skrit ? "text-stone-300" : "text-stone-700"}`}>
+            Z enim klikom program postane nedosegljiv: kdorkoli odpre povezavo, vidi samo »DEPLOYMENT_NOT_FOUND«, kot da strani ni. Vidiš ga samo ti, ker si prijavljen kot admin. Ponovni klik ga spet odpre za vse.
+          </p>
+          <div className={`text-sm font-semibold ${skrit ? "text-red-400" : "text-emerald-700"}`}>
+            Stanje: {skrit ? "SKRIT — nihče drug ga ne vidi" : "viden — deluje za vse"}
+          </div>
+          <button disabled={delam} onClick={preklopiSkrit} className={`w-full rounded-lg py-3 font-bold disabled:opacity-50 ${skrit ? "bg-emerald-500 text-white" : "bg-stone-900 text-white"}`}>
+            {skrit ? "✅ Pokaži program vsem" : "👻 Skrij program za vse"}
+          </button>
+          {skrit && (
+            <p className="text-xs text-amber-300">
+              Ne odjavi se. Če se kljub temu odjaviš ali ti prijava poteče (po 7 dneh), program odkriješ v Vercelu: Storage → Upstash baza → Data Browser → izbriši ključ »program-skrit«.
+            </p>
+          )}
+        </div>
 
         <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-2">
           <h2 className="font-semibold">1. Celotna varnostna kopija</h2>
