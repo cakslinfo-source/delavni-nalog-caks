@@ -90,6 +90,29 @@ export async function POST(request) {
       await redis.set("program-izbrisan", { cas: new Date().toISOString(), steviloKljucev: kljuci.length });
       return Response.json({ uspeh: true, izbrisano: kljuci.length });
     }
+    if (telo.akcija === "ponastavi") {
+      // Ponastavitev na začetek: izbriše VSE (naročila, ponudbe, ceniki, material, skladišče, slike, kopije …),
+      // kot ob prvem zagonu. Ostanejo samo osebe s prijavami, da te ne vrže ven.
+      if (telo.potrditev !== "PONASTAVI") return Response.json({ napaka: "Manjka potrditev." }, { status: 400 });
+      const OHRANI = new Set([OSEBE]);
+      const kljuci = (await vsiKljuci()).filter((k) => !OHRANI.has(k));
+      let izbrisano = 0;
+      const zaBrisanje = [];
+      for (const k of kljuci) {
+        if (k.endsWith("-verzija")) {
+          // verzijo povečamo, da odprt star zavihek ne more shraniti starih podatkov nazaj
+          const v = Number((await redis.get(k)) || 0);
+          await redis.set(k, v + 1);
+        } else {
+          zaBrisanje.push(k);
+        }
+      }
+      for (let i = 0; i < zaBrisanje.length; i += 100) {
+        await redis.del(...zaBrisanje.slice(i, i + 100));
+        izbrisano += Math.min(100, zaBrisanje.length - i);
+      }
+      return Response.json({ uspeh: true, izbrisano });
+    }
     if (telo.akcija === "skrij") {
       if (telo.vklopi) await redis.set("program-skrit", { cas: new Date().toISOString() });
       else await redis.del("program-skrit");
