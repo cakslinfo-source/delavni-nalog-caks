@@ -20,6 +20,33 @@ async function preberiUporabnike(sveze) {
   return predpomnilnik.seznam;
 }
 
+// ---------- Skrit program (vklopi admin v Osebe → Varnost) ----------
+// Ko je vklopljen, se program za vse razen prijavljenega admina obnaša, kot da povezava ne obstaja.
+const NI_STRANI = "The deployment could not be found on Vercel.\n\nDEPLOYMENT_NOT_FOUND\n";
+let skritPredpomnilnik = { cas: 0, skrit: false };
+
+async function jeProgramSkrit() {
+  if (Date.now() - skritPredpomnilnik.cas < 5000) return skritPredpomnilnik.skrit;
+  try {
+    const r = await fetch(`${process.env.KV_REST_API_URL}/get/program-skrit`, {
+      headers: { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}` },
+      cache: "no-store",
+    });
+    const j = r.ok ? await r.json() : {};
+    skritPredpomnilnik = { cas: Date.now(), skrit: !!(j && j.result) };
+  } catch (e) {
+    skritPredpomnilnik = { cas: Date.now(), skrit: false };
+  }
+  return skritPredpomnilnik.skrit;
+}
+
+function niStrani() {
+  return new NextResponse(NI_STRANI, {
+    status: 404,
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },
+  });
+}
+
 function brezGlave(request) {
   const glave = new Headers(request.headers);
   glave.delete("x-caks-uporabnik");
@@ -29,6 +56,31 @@ function brezGlave(request) {
 export async function middleware(request) {
   const { pathname, search } = request.nextUrl;
   const metoda = request.method;
+
+  if (await jeProgramSkrit()) {
+    // zasilna prijava, ko je program skrit: /prijava?kljuc=<ZASILNI_KLJUC iz Vercela>
+    const zasilni = process.env.ZASILNI_KLJUC || "";
+    const kljucVPovezavi = request.nextUrl.searchParams.get("kljuc");
+    if (zasilni && pathname === "/prijava" && kljucVPovezavi === zasilni) {
+      const o = NextResponse.next({ request: { headers: brezGlave(request) } });
+      o.cookies.set("caks-zasilni", zasilni, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 3600 });
+      return o;
+    }
+    const zasilniOk = zasilni && request.cookies.get("caks-zasilni")?.value === zasilni;
+    if (zasilniOk && (pathname === "/prijava" || pathname === "/api/prijava")) {
+      return NextResponse.next({ request: { headers: brezGlave(request) } });
+    }
+    // naprej sme samo prijavljen admin
+    let jeAdminSkrit = false;
+    try {
+      const z = await preveriZeton(request.cookies.get("caks-seja")?.value);
+      if (z) {
+        const u = (await preberiUporabnike(false)).find((x) => x && x.ime === z.u);
+        jeAdminSkrit = !!(u && u.admin && u.aktiven !== false && (u.verzija || 0) === (z.v || 0));
+      }
+    } catch (e) {}
+    if (!jeAdminSkrit) return niStrani();
+  }
 
   const javno =
     pathname === "/prijava" ||
