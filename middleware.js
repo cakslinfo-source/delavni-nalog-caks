@@ -71,7 +71,7 @@ export async function middleware(request) {
   if (!uporabnik || uporabnik.aktiven === false || (uporabnik.verzija || 0) !== (zeton.v || 0)) return neprijavljen();
 
   // pravica admin je potrebna za upravljanje oseb
-  const jeAdminPot = pathname.startsWith("/uporabniki") || pathname.startsWith("/api/uporabniki") || pathname === "/api/backup";
+  const jeAdminPot = pathname.startsWith("/uporabniki") || pathname.startsWith("/api/uporabniki") || pathname === "/api/backup" || pathname.startsWith("/varnost") || pathname.startsWith("/api/varnost");
   let odlocitev = jeAdminPot ? (uporabnik.admin ? "ok" : "zavrni") : dostopDoPoti(pathname, metoda, uporabnik);
   if (jeAdminPot && uporabnik.admin) odlocitev = "ok";
 
