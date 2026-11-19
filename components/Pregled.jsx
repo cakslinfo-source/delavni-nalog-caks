@@ -8,6 +8,7 @@ import PregledVrednost from "./PregledVrednost";
 import PregledRVC from "./PregledRVC";
 
 const STOLPCI = [
+  { id: "ponudbe", naziv: "Ponudbe", barva: "#db2777" },
   { id: "sprejeto", naziv: "Sprejeto", barva: "#78716c" },
   { id: "izdelavi", naziv: "V izdelavi", barva: "#f97316" },
   { id: "pripravljeno", naziv: "Pripravljeno", barva: "#0ea5e9" },
@@ -265,9 +266,12 @@ export default function Pregled() {
       ) : nacin === "rezanje" ? (
         <PregledRezanje postavke={postavke} />
       ) : (
-        <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 min-h-0">
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 min-h-0">
           {STOLPCI.map((stolpec) => {
-            const postavkeStolpca = postavke.filter((p) => p.stolpec === stolpec.id);
+            // ponudbe so v svojem stolpcu; ko postane delovni nalog, gre pod svoje stanje
+            const postavkeStolpca = postavke.filter((p) =>
+              stolpec.id === "ponudbe" ? p.ponudba && p.stolpec !== "prevzeto" : !p.ponudba && p.stolpec === stolpec.id
+            );
             return (
               <div key={stolpec.id} className="bg-stone-900 rounded-2xl border border-stone-800 overflow-hidden flex flex-col min-h-0">
                 <div
