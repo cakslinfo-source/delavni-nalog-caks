@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Varnost from "../../components/Varnost";
 
 const PRAZNO = { ime: "", prikaz: "", geslo: "", moduli: [], adminFunkcije: false };
 
@@ -11,6 +12,7 @@ export default function Uporabniki() {
   const [sporocilo, setSporocilo] = useState("");
   const [napaka, setNapaka] = useState("");
   const [novoGeslo, setNovoGeslo] = useState({});
+  const [varnost, setVarnost] = useState(false);
 
   async function naloži() {
     const r = await fetch("/api/uporabniki", { cache: "no-store" });
@@ -80,8 +82,12 @@ export default function Uporabniki() {
         <div className="font-bold">
           ČAKŠ <span className="text-red-500">· Osebe in pravice</span>
         </div>
-        <a href="/" className="text-xs bg-stone-800 px-3 py-2 rounded-lg">← Nazaj v program</a>
+        <div className="flex gap-2">
+          <button onClick={() => setVarnost(!varnost)} className="text-xs bg-red-700 px-3 py-2 rounded-lg">{varnost ? "👥 Osebe" : "🚨 Varnost"}</button>
+          <a href="/" className="text-xs bg-stone-800 px-3 py-2 rounded-lg">← Nazaj v program</a>
+        </div>
       </div>
+      {varnost ? <Varnost zapri={() => setVarnost(false)} /> : (
       <div className="max-w-3xl mx-auto p-4 space-y-4">
         {napaka && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">{napaka}</div>}
         {sporocilo && <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg p-3 text-sm">{sporocilo}</div>}
@@ -141,6 +147,7 @@ export default function Uporabniki() {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }
