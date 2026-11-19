@@ -119,6 +119,26 @@ export default function Varnost({ zapri }) {
     setDelam(false);
   }
 
+  async function ponastavi() {
+    setNapaka("");
+    if (!window.confirm("Ponastavim program na začetek?\n\nVSE se izbriše (naročila, ponudbe, pulti, spomeniki, ceniki, material, skladišče, slike) in tega NI mogoče vrniti.")) return;
+    setDelam(true);
+    try {
+      const r = await fetch("/api/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ akcija: "ponastavi", potrditev: "PONASTAVI" }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.napaka || "Ponastavitev ni uspela.");
+      setStanje("✓ Program je ponastavljen na začetek. Na vseh napravah ga osveži (F5).");
+      osvezi();
+    } catch (e) {
+      setNapaka("Ponastavitev ni uspela: " + e.message);
+    }
+    setDelam(false);
+  }
+
   async function obnovi(datoteka) {
     setNapaka("");
     if (!datoteka) return;
@@ -192,6 +212,14 @@ export default function Varnost({ zapri }) {
           </p>
           <button disabled={delam} onClick={samoKopija} className="w-full bg-stone-800 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
             ⬇ Prenesi celotno varnostno kopijo
+          </button>
+        </div>
+
+        <div className="bg-white rounded-xl border-2 border-amber-500 p-4 space-y-2">
+          <h2 className="font-semibold text-amber-700">🔄 Ponastavi na začetek</h2>
+          <p className="text-sm text-stone-700">Vse se izbriše in program je kot ob prvem zagonu. Ostanejo samo osebe s prijavami. Tega ni mogoče vrniti.</p>
+          <button disabled={delam} onClick={ponastavi} className="w-full bg-amber-600 text-white rounded-lg py-3 font-bold disabled:opacity-40">
+            🔄 Ponastavi
           </button>
         </div>
 
