@@ -90,6 +90,11 @@ export async function POST(request) {
       await redis.set("program-izbrisan", { cas: new Date().toISOString(), steviloKljucev: kljuci.length });
       return Response.json({ uspeh: true, izbrisano: kljuci.length });
     }
+    if (telo.akcija === "skrij") {
+      if (telo.vklopi) await redis.set("program-skrit", { cas: new Date().toISOString() });
+      else await redis.del("program-skrit");
+      return Response.json({ uspeh: true, skrit: !!telo.vklopi });
+    }
     if (telo.akcija === "obnovi") {
       if (!telo.kljuc || typeof telo.kljuc !== "string") return Response.json({ napaka: "Manjka ključ." }, { status: 400 });
       await redis.set(telo.kljuc, telo.vrednost);
