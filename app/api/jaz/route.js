@@ -26,6 +26,7 @@ export async function GET(request) {
       moduli: u.admin ? MODULI.map((x) => x.id) : u.moduli || [],
       seja: z.iat,
       zacetnoGeslo: !!u.zacetnoGeslo,
+      placila: u.admin ? "vse" : ["nakazilo", "gotovina"].includes(u.placila) ? u.placila : "vse",
     },
     { headers: { "Cache-Control": "no-store" } }
   );
