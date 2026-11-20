@@ -114,9 +114,9 @@ export default function Uporabniki() {
           <label className="flex items-center gap-2 text-sm mt-2">
             Vidi naročila:
             <select className="border rounded-lg px-2 py-1" value={nov.placila} onChange={(e) => setNov({ ...nov, placila: e.target.value })}>
-              <option value="vse">vsa (nakazilo in gotovina)</option>
+              <option value="vse">vsa (nakazilo in gotovinski račun)</option>
               <option value="nakazilo">samo 🏦 nakazilo</option>
-              <option value="gotovina">samo 💶 gotovina</option>
+              <option value="gotovina">samo 💶 gotovinski račun</option>
             </select>
           </label>
           <button onClick={dodaj} className="mt-3 bg-red-600 text-white font-semibold rounded-lg px-4 py-2">Dodaj osebo</button>
@@ -148,9 +148,9 @@ export default function Uporabniki() {
                 <label className="flex items-center gap-2 text-sm mt-2">
                   Vidi naročila:
                   <select className="border rounded-lg px-2 py-1" value={u.placila || "vse"} onChange={(e) => preklopi(u, "placila", e.target.value)}>
-                    <option value="vse">vsa (nakazilo in gotovina)</option>
+                    <option value="vse">vsa (nakazilo in gotovinski račun)</option>
                     <option value="nakazilo">samo 🏦 nakazilo</option>
-                    <option value="gotovina">samo 💶 gotovina</option>
+                    <option value="gotovina">samo 💶 gotovinski račun</option>
                   </select>
                 </label>
               </>
