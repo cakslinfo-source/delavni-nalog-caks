@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useOmejitevPlacil, ustrezaPlacilu, IzbiraPlacila, ZnackaPlacila, FilterPlacil } from "../lib/placila";
 
 const ADMIN_PIN = "1991";
 
@@ -221,6 +222,8 @@ function SlikaPregled({ referenca }) {
 }
 
 export default function Spomeniki() {
+  const omejitevPlacil = useOmejitevPlacil();
+  const [filterPlacilo, setFilterPlacilo] = useState("vse");
   useCeneVidne();
   const [spomeniki, setSpomeniki] = useState([]);
   const [nalaganje, setNalaganje] = useState(true);
@@ -385,7 +388,8 @@ export default function Spomeniki() {
   }
 
   const filtrirani = spomeniki.filter((n) => {
-    const ujemaFilter = filter.length === 0 || filter.includes(n.status);
+    if (!ustrezaPlacilu(n, omejitevPlacil !== "vse" ? omejitevPlacil : filterPlacilo, omejitevPlacil)) return false;
+    const ujemaFilter = filter.length === 0 || (n.vrsta === "ponudba" ? filter.includes("ponudbe") : filter.includes(n.status));
     const iskalniNiz = `${n.stranka?.ime || ""} ${n.lokacija || ""} ${n.stevilka || ""}`.toLowerCase();
     return ujemaFilter && iskalniNiz.includes(iskanje.toLowerCase());
   });
@@ -477,7 +481,7 @@ export default function Spomeniki() {
               Vsi
             </button>
             {STATUSI.map((s) => {
-              const st = spomeniki.filter((x) => x.status === s.id).length;
+              const st = spomeniki.filter((x) => x.vrsta !== "ponudba" && x.status === s.id).length;
               const aktiven = filter.includes(s.id);
               return (
                 <button
@@ -493,6 +497,17 @@ export default function Spomeniki() {
                 </button>
               );
             })}
+            <button
+              onClick={() => setFilter(filter.includes("ponudbe") ? filter.filter((x) => x !== "ponudbe") : [...filter, "ponudbe"])}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                filter.includes("ponudbe")
+                  ? "bg-pink-200 text-pink-900 border-pink-500 font-medium ring-1 ring-inset ring-current"
+                  : "bg-white text-pink-700 border-pink-300 hover:border-pink-500"
+              }`}
+            >
+              Ponudbe <span className="opacity-60">({spomeniki.filter((x) => x.vrsta === "ponudba").length})</span>
+            </button>
+            <FilterPlacil filter={filterPlacilo} setFilter={setFilterPlacilo} seznam={spomeniki} omejitev={omejitevPlacil} />
           </div>
           <input
             value={iskanje}
@@ -518,7 +533,7 @@ export default function Spomeniki() {
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <div className="font-bold">{n.stevilka}</div>
+                        <div className="font-bold flex items-center gap-1.5">{n.stevilka} <ZnackaPlacila nacin={n.nacinPlacila} /></div>
                         <div className="text-sm text-gray-600">{n.stranka?.ime}</div>
                         {n.lokacija && <div className="text-xs text-gray-400">{n.lokacija}</div>}
                       </div>
@@ -737,6 +752,8 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
   return (
     <div className="p-3 space-y-4">
       <h2 className="font-bold text-lg">{nal._urejanje ? `Urejanje ${nal.stevilka}` : "Nov vnos — spomenik"}</h2>
+
+      <IzbiraPlacila vrednost={nal.nacinPlacila || ""} nastavi={(v) => setNal((x) => ({ ...x, nacinPlacila: v }))} />
 
       {!nal._urejanje && (
         <div className="bg-white rounded-xl p-3">

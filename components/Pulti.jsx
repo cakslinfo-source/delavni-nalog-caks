@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { prenesiPDF, posljiPDF, odpriVOutlooku } from "../lib/pdf-ponudba";
+import { useOmejitevPlacil, ustrezaPlacilu, IzbiraPlacila, ZnackaPlacila, FilterPlacil } from "../lib/placila";
 
 // ===================== NASTAVITVE =====================
 
@@ -987,10 +988,14 @@ export default function Pulti() {
 // ===================== SEZNAM =====================
 
 function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
-  const filtrirani =
+  const omejitevPlacil = useOmejitevPlacil();
+  const [filterPlacilo, setFilterPlacilo] = useState("vse");
+  const aktivenFilterPlacila = omejitevPlacil !== "vse" ? omejitevPlacil : filterPlacilo;
+  const filtrirani = (
     filter.length === 0
       ? nalogi
-      : nalogi.filter((x) => (x.vrsta === "ponudba" ? filter.includes("ponudbe") : filter.includes(x.status)));
+      : nalogi.filter((x) => (x.vrsta === "ponudba" ? filter.includes("ponudbe") : filter.includes(x.status)))
+  ).filter((x) => ustrezaPlacilu(x, aktivenFilterPlacila, omejitevPlacil));
 
   return (
     <div className="p-3">
@@ -1034,6 +1039,7 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
         >
           Ponudbe <span className="opacity-60">({nalogi.filter((x) => x.vrsta === "ponudba").length})</span>
         </button>
+        <FilterPlacil filter={filterPlacilo} setFilter={setFilterPlacilo} seznam={nalogi} omejitev={omejitevPlacil} />
       </div>
 
       {filtrirani.length === 0 && (
@@ -1058,7 +1064,7 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="font-bold">{nal.stevilka}</div>
+                  <div className="font-bold flex items-center gap-1.5">{nal.stevilka} <ZnackaPlacila nacin={nal.nacinPlacila} /></div>
                   <div className="text-sm text-gray-600">{nal.stranka?.ime}</div>
                 </div>
                 <span
@@ -1130,6 +1136,8 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
       <h2 className="font-bold text-lg">
         {nal._urejanje ? `Urejanje ${nal.stevilka}` : "Nov vnos za pult"}
       </h2>
+
+      <IzbiraPlacila vrednost={nal.nacinPlacila || ""} nastavi={(v) => setNal((x) => ({ ...x, nacinPlacila: v }))} />
 
       {!nal._urejanje && (
         <div className="bg-white rounded-xl p-3">

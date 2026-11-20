@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, Fragment, Component } from "react";
 import { createPortal } from "react-dom";
-import { prenesiOsnutekEml } from "../lib/pdf-ponudba";
+import { prenesiOsnutekEml, prenesiPDF } from "../lib/pdf-ponudba";
+import { useOmejitevPlacil, ustrezaPlacilu, IzbiraPlacila, ZnackaPlacila, FilterPlacil } from "../lib/placila";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Hammer, Plus, Search, X, Phone, Mail, Calendar, ChevronRight, Trash2, Pencil, Check, ListPlus, FileText, Printer, Ruler, Lock, Unlock, Download, RefreshCw, Save, Tag } from "lucide-react";
 
@@ -550,7 +551,7 @@ const STATUS_HEX = {
 // Ponudba ni naročilo: v vsote (skupna vrednost, neplačano, po mesecih, po strankah) se šteje šele, ko je pretvorjena v delovni nalog.
 const jeBrezPonudbe = (x) => !x || x.vrsta !== "ponudba";
 
-const VERZIJA_APLIKACIJE = "2026-11-17-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
+const VERZIJA_APLIKACIJE = "2026-11-20-a · rezanje vgrajeno v to datoteko · Inventura · Nalepke polic · Brother QL";
 
 function opisNapake(napaka) {
   try {
@@ -1870,6 +1871,7 @@ function prazenObrazec() {
     status: "Sprejeto",
     opombe: "",
     oddal: "",
+    nacinPlacila: "",
     tip: "",
     utori: "",
     placano: "Ne",
@@ -2792,6 +2794,59 @@ function eur(x) {
   return (isNaN(n) ? 0 : n).toFixed(2) + " €";
 }
 
+// Zbere VSA neplačana naročila iz vseh modulov v en HTML (za PDF/tiskanje).
+function zgradiNeplacanaHTML({ police, pulti, spomeniki }) {
+  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const num = (v) => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isNaN(n) ? 0 : n; };
+  const dat = (v) => { if (!v) return ""; const d = new Date(v); return isNaN(d.getTime()) ? "" : d.toLocaleDateString("sl-SI"); };
+  const nacin = (n) => (n === "gotovina" ? "Gotovina" : n === "nakazilo" ? "Nakazilo" : "");
+  const vrstice = [];
+  (police || []).forEach((n) => vrstice.push({
+    modul: "Police", stevilka: n.stevilka, stranka: n.stranka, opis: n.opis,
+    datum: n.datumVnosa, rok: n.rok, nacin: n.nacinPlacila, znesek: num(n.cena),
+  }));
+  (pulti || []).forEach((p) => vrstice.push({
+    modul: "Pulti", stevilka: p.stevilka, stranka: (p.stranka && p.stranka.ime) || "", opis: "Pult",
+    datum: p.datum, rok: p.datumMontaze, nacin: p.nacinPlacila, znesek: num(p.ponudbenaCena),
+  }));
+  (spomeniki || []).forEach((s) => vrstice.push({
+    modul: "Spomenik", stevilka: s.stevilka, stranka: (s.stranka && s.stranka.ime) || "", opis: s.material || "Spomenik",
+    datum: s.datum, rok: s.montaza, nacin: s.nacinPlacila, znesek: num(s.cena),
+  }));
+  vrstice.sort((a, b) => String(a.stranka || "").localeCompare(String(b.stranka || ""), "sl") || String(a.datum || "").localeCompare(String(b.datum || "")));
+  const skupaj = vrstice.reduce((v, r) => v + r.znesek, 0);
+  const danes = new Date().toLocaleString("sl-SI");
+  const th = "text-align:left;padding:6px 8px;border-bottom:2px solid #1c1917;font-size:11px;text-transform:uppercase;color:#57534e;";
+  const td = "padding:5px 8px;border-bottom:1px solid #e7e5e4;vertical-align:top;";
+  const telo = vrstice.length
+    ? vrstice.map((r, i) =>
+        `<tr>` +
+        `<td style="${td}color:#a8a29e;">${i + 1}</td>` +
+        `<td style="${td}white-space:nowrap;">${esc(r.stevilka || "")}</td>` +
+        `<td style="${td}font-weight:600;">${esc(r.stranka || "—")}</td>` +
+        `<td style="${td}">${esc(r.opis || "")}</td>` +
+        `<td style="${td}white-space:nowrap;">${esc(dat(r.datum))}</td>` +
+        `<td style="${td}white-space:nowrap;">${esc(dat(r.rok))}</td>` +
+        `<td style="${td}white-space:nowrap;">${esc(nacin(r.nacin))}</td>` +
+        `<td style="${td}text-align:right;white-space:nowrap;font-weight:600;">${r.znesek ? r.znesek.toFixed(2).replace(".", ",") + " €" : "—"}</td>` +
+        `</tr>`
+      ).join("")
+    : `<tr><td colspan="8" style="${td}text-align:center;color:#78716c;">Ni neplačanih naročil. 🎉</td></tr>`;
+  return (
+    `<div style="width:794px;box-sizing:border-box;padding:32px 36px;font-family:Arial,Helvetica,sans-serif;color:#1c1917;">` +
+    `<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #dc2626;padding-bottom:8px;">` +
+    `<div><div style="font-size:20px;font-weight:700;">Neplačana naročila</div><div style="font-size:12px;color:#57534e;">Kamnoseštvo Čakš · 031 235 146</div></div>` +
+    `<div style="font-size:11px;color:#57534e;text-align:right;">Izpis: ${danes}</div></div>` +
+    `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:14px;"><thead><tr>` +
+    `<th style="${th}">#</th><th style="${th}">Številka</th><th style="${th}">Stranka</th><th style="${th}">Opis</th><th style="${th}">Datum</th><th style="${th}">Rok</th><th style="${th}">Plačilo</th><th style="${th}text-align:right;">Znesek</th>` +
+    `</tr></thead><tbody>${telo}</tbody>` +
+    (vrstice.length ? `<tfoot><tr><td colspan="7" style="padding:8px;text-align:right;font-weight:700;border-top:2px solid #1c1917;">SKUPAJ (${vrstice.length} naročil)</td><td style="padding:8px;text-align:right;font-weight:700;border-top:2px solid #1c1917;white-space:nowrap;">${skupaj.toFixed(2).replace(".", ",")} €</td></tr></tfoot>` : "") +
+    `</table>` +
+    `<p style="font-size:10px;color:#78716c;margin-top:12px;">Zneski so, kot so vpisani pri naročilu (Police in Spomeniki praviloma brez DDV, Pulti z DDV). Seznam je pripomoček za pregled terjatev, ne računovodski dokument.</p>` +
+    `</div>`
+  );
+}
+
 function strankaZaIme(nalog) {
   return (nalog.stranka || "").replace(/[\\/:*?"<>|]/g, "").trim();
 }
@@ -3223,7 +3278,11 @@ function DelovniNalogiGlavna() {
   }
   const [iskanje, setIskanje] = useState("");
   const [filterStatusi, setFilterStatusi] = useState([]);
+  const omejitevPlacil = useOmejitevPlacil();
+  const [filterPlacilo, setFilterPlacilo] = useState("vse");
+  const aktivenFilterPlacila = omejitevPlacil !== "vse" ? omejitevPlacil : filterPlacilo;
   const [pokaziSamoRacune, setPokaziSamoRacune] = useState(false);
+  const [delamNeplacanoPdf, setDelamNeplacanoPdf] = useState(false);
   const [shranjujem, setShranjujem] = useState(false);
   const [adminOdklenjen, setAdminOdklenjen] = useState(false);
   const [pokaziPinVnos, setPokaziPinVnos] = useState(false);
@@ -3944,6 +4003,10 @@ function DelovniNalogiGlavna() {
     await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, izvajalec } : n)));
   }
 
+  async function shraniNacinPlacila(id, nacinPlacila) {
+    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, nacinPlacila } : n)));
+  }
+
   async function shraniOddal(id, oddal) {
     await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, oddal } : n)));
   }
@@ -4052,6 +4115,7 @@ function DelovniNalogiGlavna() {
     rok: p.datumMontaze,
     datumVnosa: p.datum ? `${p.datum}T00:00:00.000Z` : new Date(Number(p.id) || Date.now()).toISOString(),
     placano: p.placano ? "Da" : "Ne",
+    nacinPlacila: p.nacinPlacila || "",
     _modul: "Pulti",
   }));
 
@@ -4065,6 +4129,7 @@ function DelovniNalogiGlavna() {
     rok: s.montaza,
     datumVnosa: s.datum ? `${s.datum}T00:00:00.000Z` : new Date(Number(s.id) || Date.now()).toISOString(),
     placano: s.placano === "Da" ? "Da" : "Ne",
+    nacinPlacila: s.nacinPlacila || "",
     _modul: "Spomenik",
   }));
 
@@ -4081,7 +4146,8 @@ function DelovniNalogiGlavna() {
       filterStatusi.length === 0 ||
       (n.vrsta === "ponudba" ? filterStatusi.includes("Ponudbe") : filterStatusi.includes(n.status));
     const ujemaRacun = !pokaziSamoRacune || n.racun === "poslati";
-    return ujemaIskanje && ujemaStatus && ujemaRacun;
+    const ujemaPlacilo = ustrezaPlacilu(n, aktivenFilterPlacila, omejitevPlacil);
+    return ujemaIskanje && ujemaStatus && ujemaRacun && ujemaPlacilo;
   });
 
   const steviloZaPoslatiRacun = nalogi.filter((n) => n.racun === "poslati").length;
@@ -4631,6 +4697,27 @@ function DelovniNalogiGlavna() {
                   </div>
                 )}
 
+                <div className="border-t border-stone-700 pt-3 mt-3">
+                  <button
+                    disabled={delamNeplacanoPdf}
+                    onClick={async () => {
+                      setDelamNeplacanoPdf(true);
+                      await prenesiPDF(
+                        zgradiNeplacanaHTML({
+                          police: nalogi.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && n.racun !== "poslati" && jeBrezPonudbe(n)),
+                          pulti: neplacaniPulti,
+                          spomeniki: neplacaniSpomeniki,
+                        }),
+                        `neplacana-narocila-${new Date().toISOString().slice(0, 10)}.pdf`
+                      );
+                      setDelamNeplacanoPdf(false);
+                    }}
+                    className="w-full bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
+                  >
+                    {delamNeplacanoPdf ? "Pripravljam PDF …" : "🖨 Natisni vsa neplačana naročila (PDF)"}
+                  </button>
+                </div>
+
                 {(() => {
                   const neplacana = nalogi.filter((n) => (n.placano || "Ne") !== "Da" && n.racun !== "poslan" && n.racun !== "poslati" && jeBrezPonudbe(n));
                   const skupajNeplacano = neplacana.reduce((v, n) => {
@@ -4913,6 +5000,8 @@ function DelovniNalogiGlavna() {
               >
                 Ponudbe ({steviloPonudbVseh})
               </button>
+              <span className="mx-1 text-stone-300 self-center">|</span>
+              <FilterPlacil filter={filterPlacilo} setFilter={setFilterPlacilo} seznam={[...nalogi, ...pultiZaSeznam, ...spomenikiZaSeznam]} omejitev={omejitevPlacil} />
               {steviloZaPoslatiRacun > 0 && (
                 <button
                   onClick={() => setPokaziSamoRacune((v) => !v)}
@@ -4982,6 +5071,7 @@ function DelovniNalogiGlavna() {
                             </span>
                           )}
                           <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
+                          <ZnackaPlacila nacin={n.nacinPlacila} />
                           {n.vrsta === "ponudba" && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-pink-600 text-white border border-pink-700 font-bold">
                               PONUDBA · ne izdelovati
@@ -5704,6 +5794,10 @@ function DelovniNalogiGlavna() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="mb-5">
+              <IzbiraPlacila temno vrednost={obrazec.nacinPlacila || ""} nastavi={(v) => setObrazec((o) => ({ ...o, nacinPlacila: v }))} />
             </div>
 
             <div className="bg-stone-100 border border-stone-300 rounded-lg px-4 py-3 mb-5">
@@ -6544,6 +6638,9 @@ function DelovniNalogiGlavna() {
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="mb-4">
+              <IzbiraPlacila temno samodejno={false} vrednost={aktivniNalog.nacinPlacila || ""} nastavi={(v) => { if (v !== (aktivniNalog.nacinPlacila || "")) shraniNacinPlacila(aktivniNalog.id, v); }} />
             </div>
             <div className="flex items-start justify-between mb-4">
               <div>
