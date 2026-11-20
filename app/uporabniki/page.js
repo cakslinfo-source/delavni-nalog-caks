@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Varnost from "../../components/Varnost";
 
-const PRAZNO = { ime: "", prikaz: "", geslo: "", moduli: [], adminFunkcije: false };
+const PRAZNO = { ime: "", prikaz: "", geslo: "", moduli: [], adminFunkcije: false, placila: "vse" };
 
 export default function Uporabniki() {
   const [seznam, setSeznam] = useState([]);
@@ -55,7 +55,7 @@ export default function Uporabniki() {
     preklopi(u, "moduli", ima ? u.moduli.filter((m) => m !== id) : [...(u.moduli || []), id]);
   }
   function shrani(u) {
-    posli({ akcija: "uredi", ime: u.ime, prikaz: u.prikaz, aktiven: u.aktiven !== false, adminFunkcije: !!u.adminFunkcije, moduli: u.moduli || [], geslo: novoGeslo[u.ime] || "" }, `Shranjeno: ${u.prikaz || u.ime}.`).then((ok) => {
+    posli({ akcija: "uredi", ime: u.ime, prikaz: u.prikaz, aktiven: u.aktiven !== false, adminFunkcije: !!u.adminFunkcije, moduli: u.moduli || [], placila: u.placila || "vse", geslo: novoGeslo[u.ime] || "" }, `Shranjeno: ${u.prikaz || u.ime}.`).then((ok) => {
       if (ok) setNovoGeslo({ ...novoGeslo, [u.ime]: "" });
     });
   }
@@ -111,6 +111,14 @@ export default function Uporabniki() {
             <input type="checkbox" checked={nov.adminFunkcije} onChange={(e) => setNov({ ...nov, adminFunkcije: e.target.checked })} />
             Admin funkcije: cene, plačila in brisanje
           </label>
+          <label className="flex items-center gap-2 text-sm mt-2">
+            Vidi naročila:
+            <select className="border rounded-lg px-2 py-1" value={nov.placila} onChange={(e) => setNov({ ...nov, placila: e.target.value })}>
+              <option value="vse">vsa (nakazilo in gotovina)</option>
+              <option value="nakazilo">samo 🏦 nakazilo</option>
+              <option value="gotovina">samo 💶 gotovina</option>
+            </select>
+          </label>
           <button onClick={dodaj} className="mt-3 bg-red-600 text-white font-semibold rounded-lg px-4 py-2">Dodaj osebo</button>
         </div>
 
@@ -136,6 +144,14 @@ export default function Uporabniki() {
                 <label className="flex items-center gap-1.5 text-sm mt-2">
                   <input type="checkbox" checked={!!u.adminFunkcije} onChange={(e) => preklopi(u, "adminFunkcije", e.target.checked)} />
                   Admin funkcije: cene, plačila in brisanje
+                </label>
+                <label className="flex items-center gap-2 text-sm mt-2">
+                  Vidi naročila:
+                  <select className="border rounded-lg px-2 py-1" value={u.placila || "vse"} onChange={(e) => preklopi(u, "placila", e.target.value)}>
+                    <option value="vse">vsa (nakazilo in gotovina)</option>
+                    <option value="nakazilo">samo 🏦 nakazilo</option>
+                    <option value="gotovina">samo 💶 gotovina</option>
+                  </select>
                 </label>
               </>
             )}
