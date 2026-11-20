@@ -51,6 +51,7 @@ export async function POST(request) {
   const seznam = await preberi();
   const idx = seznam.findIndex((x) => x && x.ime === ime);
   const moduli = Array.isArray(t.moduli) ? t.moduli.filter((m) => veljavniModuli.includes(m)) : [];
+  const placila = ["nakazilo", "gotovina"].includes(t.placila) ? t.placila : "vse";
 
   if (t.akcija === "dodaj") {
     if (idx >= 0) return Response.json({ napaka: "To uporabniško ime že obstaja." }, { status: 400 });
@@ -67,6 +68,7 @@ export async function POST(request) {
       admin: false,
       adminFunkcije: !!t.adminFunkcije,
       moduli,
+      placila,
       ustvarjen: new Date().toISOString(),
     });
   } else if (t.akcija === "uredi") {
@@ -77,6 +79,7 @@ export async function POST(request) {
       u.aktiven = t.aktiven !== false;
       u.adminFunkcije = !!t.adminFunkcije;
       u.moduli = moduli;
+      u.placila = placila;
     }
     if (t.geslo) {
       const geslo = String(t.geslo);
