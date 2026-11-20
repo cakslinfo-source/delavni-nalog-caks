@@ -533,7 +533,7 @@ export default function Spomeniki() {
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <div className="font-bold flex items-center gap-1.5">{n.stevilka} <ZnackaPlacila nacin={n.nacinPlacila} /></div>
+                        <div className="font-bold flex items-center gap-1.5">{n.stevilka} <ZnackaPlacila nacin={n.nacinPlacila} stRacuna={n.stRacuna} /></div>
                         <div className="text-sm text-gray-600">{n.stranka?.ime}</div>
                         {n.lokacija && <div className="text-xs text-gray-400">{n.lokacija}</div>}
                       </div>
@@ -753,7 +753,12 @@ function Obrazec({ zacetni, shrani, preklici, shranjujem }) {
     <div className="p-3 space-y-4">
       <h2 className="font-bold text-lg">{nal._urejanje ? `Urejanje ${nal.stevilka}` : "Nov vnos — spomenik"}</h2>
 
-      <IzbiraPlacila vrednost={nal.nacinPlacila || ""} nastavi={(v) => setNal((x) => ({ ...x, nacinPlacila: v }))} />
+      <IzbiraPlacila
+        vrednost={nal.nacinPlacila || ""}
+        nastavi={(v) => setNal((x) => ({ ...x, nacinPlacila: v, stRacuna: v ? x.stRacuna || "" : "" }))}
+        stRacuna={nal.stRacuna || ""}
+        nastaviStRacuna={(v) => setNal((x) => ({ ...x, stRacuna: v }))}
+      />
 
       {!nal._urejanje && (
         <div className="bg-white rounded-xl p-3">

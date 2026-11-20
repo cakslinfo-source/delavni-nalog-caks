@@ -1872,6 +1872,7 @@ function prazenObrazec() {
     opombe: "",
     oddal: "",
     nacinPlacila: "",
+    stRacuna: "",
     tip: "",
     utori: "",
     placano: "Ne",
@@ -2799,7 +2800,7 @@ function zgradiNeplacanaHTML({ police, pulti, spomeniki }) {
   const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const num = (v) => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isNaN(n) ? 0 : n; };
   const dat = (v) => { if (!v) return ""; const d = new Date(v); return isNaN(d.getTime()) ? "" : d.toLocaleDateString("sl-SI"); };
-  const nacin = (n) => (n === "gotovina" ? "Gotovina" : n === "nakazilo" ? "Nakazilo" : "");
+  const nacin = (n) => (n === "gotovina" ? "Gotovinski račun" : n === "nakazilo" ? "Nakazilo" : "");
   const vrstice = [];
   (police || []).forEach((n) => vrstice.push({
     modul: "Police", stevilka: n.stevilka, stranka: n.stranka, opis: n.opis,
@@ -4004,7 +4005,14 @@ function DelovniNalogiGlavna() {
   }
 
   async function shraniNacinPlacila(id, nacinPlacila) {
-    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, nacinPlacila } : n)));
+    // če način plačila odstranimo, se počisti tudi številka računa
+    await posodobiNaloge((os) =>
+      os.map((n) => (n.id === id ? { ...n, nacinPlacila, stRacuna: nacinPlacila ? n.stRacuna || "" : "" } : n))
+    );
+  }
+
+  async function shraniStRacuna(id, stRacuna) {
+    await posodobiNaloge((os) => os.map((n) => (n.id === id ? { ...n, stRacuna } : n)));
   }
 
   async function shraniOddal(id, oddal) {
@@ -5071,7 +5079,7 @@ function DelovniNalogiGlavna() {
                             </span>
                           )}
                           <span className="text-xs font-semibold text-stone-400">{n.stevilka}</span>
-                          <ZnackaPlacila nacin={n.nacinPlacila} />
+                          <ZnackaPlacila nacin={n.nacinPlacila} stRacuna={n.stRacuna} />
                           {n.vrsta === "ponudba" && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-pink-600 text-white border border-pink-700 font-bold">
                               PONUDBA · ne izdelovati
@@ -5797,7 +5805,13 @@ function DelovniNalogiGlavna() {
             </div>
 
             <div className="mb-5">
-              <IzbiraPlacila temno vrednost={obrazec.nacinPlacila || ""} nastavi={(v) => setObrazec((o) => ({ ...o, nacinPlacila: v }))} />
+              <IzbiraPlacila
+                temno
+                vrednost={obrazec.nacinPlacila || ""}
+                nastavi={(v) => setObrazec((o) => ({ ...o, nacinPlacila: v, stRacuna: v ? o.stRacuna || "" : "" }))}
+                stRacuna={obrazec.stRacuna || ""}
+                nastaviStRacuna={(v) => setObrazec((o) => ({ ...o, stRacuna: v }))}
+              />
             </div>
 
             <div className="bg-stone-100 border border-stone-300 rounded-lg px-4 py-3 mb-5">
@@ -6640,7 +6654,15 @@ function DelovniNalogiGlavna() {
               </div>
             </div>
             <div className="mb-4">
-              <IzbiraPlacila temno samodejno={false} vrednost={aktivniNalog.nacinPlacila || ""} nastavi={(v) => { if (v !== (aktivniNalog.nacinPlacila || "")) shraniNacinPlacila(aktivniNalog.id, v); }} />
+              <IzbiraPlacila
+                temno
+                samodejno={false}
+                vrednost={aktivniNalog.nacinPlacila || ""}
+                nastavi={(v) => { if (v !== (aktivniNalog.nacinPlacila || "")) shraniNacinPlacila(aktivniNalog.id, v); }}
+                stRacuna={aktivniNalog.stRacuna || ""}
+                nastaviStRacuna={(v) => shraniStRacuna(aktivniNalog.id, v)}
+                shraniObIzgubiFokusa
+              />
             </div>
             <div className="flex items-start justify-between mb-4">
               <div>

@@ -1064,7 +1064,7 @@ function Seznam({ nalogi, cenik, filter, setFilter, odpri }) {
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="font-bold flex items-center gap-1.5">{nal.stevilka} <ZnackaPlacila nacin={nal.nacinPlacila} /></div>
+                  <div className="font-bold flex items-center gap-1.5">{nal.stevilka} <ZnackaPlacila nacin={nal.nacinPlacila} stRacuna={nal.stRacuna} /></div>
                   <div className="text-sm text-gray-600">{nal.stranka?.ime}</div>
                 </div>
                 <span
@@ -1137,7 +1137,12 @@ function Obrazec({ zacetni, cenik, shrani, preklici, strankeBaza }) {
         {nal._urejanje ? `Urejanje ${nal.stevilka}` : "Nov vnos za pult"}
       </h2>
 
-      <IzbiraPlacila vrednost={nal.nacinPlacila || ""} nastavi={(v) => setNal((x) => ({ ...x, nacinPlacila: v }))} />
+      <IzbiraPlacila
+        vrednost={nal.nacinPlacila || ""}
+        nastavi={(v) => setNal((x) => ({ ...x, nacinPlacila: v, stRacuna: v ? x.stRacuna || "" : "" }))}
+        stRacuna={nal.stRacuna || ""}
+        nastaviStRacuna={(v) => setNal((x) => ({ ...x, stRacuna: v }))}
+      />
 
       {!nal._urejanje && (
         <div className="bg-white rounded-xl p-3">
